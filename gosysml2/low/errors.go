@@ -21,6 +21,11 @@ func (e *SyntaxError) Error() string {
 	return fmt.Sprintf("%s:%d:%d: %s", e.Source, e.Line, e.Column, e.Message)
 }
 
+// Unwrap returns nil since SyntaxError doesn't wrap another error.
+func (e *SyntaxError) Unwrap() error {
+	return nil
+}
+
 // ErrorCollector collects syntax errors during lexing and parsing.
 // It implements antlr.ErrorListener for integration with ANTLR.
 type ErrorCollector struct {
@@ -94,7 +99,10 @@ func (e *ParseErrors) Error() string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%d error(s):\n", len(e.LexerErrors)+len(e.ParserErrors)))
+	totalErrors := len(e.LexerErrors) + len(e.ParserErrors)
+	sb.Grow(totalErrors * 50)
+
+	sb.WriteString(fmt.Sprintf("%d error(s):\n", totalErrors))
 
 	for _, err := range e.LexerErrors {
 		sb.WriteString("  ")
@@ -108,4 +116,40 @@ func (e *ParseErrors) Error() string {
 	}
 
 	return sb.String()
+}
+
+// Err returns the ParseErrors as an error if there are any errors,
+// otherwise returns nil. This enables idiomatic error handling:
+//
+//	if err := result.Err(); err != nil {
+//		return err
+//	}
+func (e *ParseErrors) Err() error {
+	if !e.HasErrors() {
+		return nil
+	}
+	return e
+}
+
+// Unwrap returns a joined error containing all syntax errors.
+// This allows errors.Is and errors.As to work with ParseErrors.
+func (e *ParseErrors) Unwrap() []error {
+	all := e.All()
+	errs := make([]error, len(all))
+	for i, err := range all {
+		errs[i] = err
+	}
+	return errs
+}
+
+// UnwrapError returns the first error if there's only one error,
+// otherwise returns nil. This allows errors.Is to work with single errors.
+func (e *ParseErrors) UnwrapError() error {
+	if len(e.LexerErrors) == 1 && len(e.ParserErrors) == 0 {
+		return e.LexerErrors[0]
+	}
+	if len(e.LexerErrors) == 0 && len(e.ParserErrors) == 1 {
+		return e.ParserErrors[0]
+	}
+	return nil
 }
