@@ -1,6 +1,7 @@
 package sysml
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,6 +13,28 @@ import (
 	"github.com/dVoo/gosysml2/internal/parser"
 	"github.com/dVoo/gosysml2/low"
 )
+
+// childAdder is implemented by elements that can hold children.
+type childAdder interface {
+	AddChild(child Element)
+}
+
+// locationFromContext extracts a Location from an ANTLR context.
+// This helper eliminates repetitive location extraction code in Enter* methods.
+func locationFromContext(ctx interface {
+	GetStart() antlr.Token
+	GetStop() antlr.Token
+}) Location {
+	loc := Location{
+		Line:   ctx.GetStart().GetLine(),
+		Column: ctx.GetStart().GetColumn(),
+	}
+	if ctx.GetStop() != nil {
+		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndColumn = ctx.GetStop().GetColumn()
+	}
+	return loc
+}
 
 // ParseResult contains the result of parsing SysML input.
 type ParseResult struct {
@@ -55,7 +78,7 @@ func ParseFile(filename string, opts ...ParseOption) *ParseResult {
 				Errors: []*Error{{
 					Line:    0,
 					Column:  0,
-					Message: err.Error(),
+					Message: fmt.Errorf("reading %s: %w", filename, err).Error(),
 				}},
 				Source: filename,
 			},
@@ -104,7 +127,7 @@ func ParseReader(r io.Reader, source string, opts ...ParseOption) *ParseResult {
 				Errors: []*Error{{
 					Line:    0,
 					Column:  0,
-					Message: err.Error(),
+					Message: fmt.Errorf("reading from %s: %w", source, err).Error(),
 				}},
 				Source: source,
 			},
@@ -151,7 +174,7 @@ func ParseDirectory(dir string, opts ...ParseOption) ([]*ParseResult, error) {
 
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return err
+			return fmt.Errorf("walking %s: %w", path, err)
 		}
 		if d.IsDir() || !strings.HasSuffix(strings.ToLower(path), ".sysml") {
 			return nil
@@ -161,8 +184,11 @@ func ParseDirectory(dir string, opts ...ParseOption) ([]*ParseResult, error) {
 		results = append(results, result)
 		return nil
 	})
+	if err != nil {
+		return nil, fmt.Errorf("walking directory %s: %w", dir, err)
+	}
 
-	return results, err
+	return results, nil
 }
 
 // ParseDirectoryParallel parses all .sysml files in a directory using multiple workers.
@@ -177,7 +203,7 @@ func ParseDirectoryParallel(dir string, workers int, opts ...ParseOption) ([]*Pa
 	var files []string
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return err
+			return fmt.Errorf("walking %s: %w", path, err)
 		}
 		if d.IsDir() || !strings.HasSuffix(strings.ToLower(path), ".sysml") {
 			return nil
@@ -186,7 +212,7 @@ func ParseDirectoryParallel(dir string, workers int, opts ...ParseOption) ([]*Pa
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("walking directory %s: %w", dir, err)
 	}
 
 	results := make([]*ParseResult, len(files))
@@ -218,7 +244,7 @@ func ParseDirectoryStream(dir string, handler func(*ParseResult) error, opts ...
 
 	return filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return err
+			return fmt.Errorf("walking %s: %w", path, err)
 		}
 		if d.IsDir() || !strings.HasSuffix(strings.ToLower(path), ".sysml") {
 			return nil
@@ -244,7 +270,11 @@ func buildModel(tree parser.IEntryRuleRootNamespaceContext) *Model {
 	}
 
 	model := NewModel()
-	builder := &modelBuilder{model: model}
+	builder := &modelBuilder{
+		model:        model,
+		elementStack: make([]Element, 0, 16),
+		packageStack: make([]*Package, 0, 8),
+	}
 	antlr.ParseTreeWalkerDefault.Walk(builder, tree)
 
 	// Build index and resolve references
@@ -274,6 +304,18 @@ func (b *modelBuilder) getCurrentParent() Element {
 	return b.currentPkg
 }
 
+// addToParent adds an element to the current parent with proper type handling.
+// This helper eliminates ~200 lines of repetitive switch statements in Enter* methods.
+func (b *modelBuilder) addToParent(elem Element) {
+	parent := b.getCurrentParent()
+	if parent == nil {
+		return
+	}
+	if container, ok := parent.(childAdder); ok {
+		container.AddChild(elem)
+	}
+}
+
 func (b *modelBuilder) EnterPackage_(ctx *parser.Package_Context) {
 	name := ""
 	if ctx.PackageDeclaration() != nil {
@@ -282,16 +324,7 @@ func (b *modelBuilder) EnterPackage_(ctx *parser.Package_Context) {
 		}
 	}
 
-	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
-		Column: ctx.GetStart().GetColumn(),
-	}
-	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
-		loc.EndColumn = ctx.GetStop().GetColumn()
-	}
-
-	pkg := NewPackage(name, loc)
+	pkg := NewPackage(name, locationFromContext(ctx))
 
 	if b.currentPkg != nil {
 		pkg.parent = b.currentPkg
@@ -329,33 +362,9 @@ func (b *modelBuilder) EnterPartDefinition(ctx *parser.PartDefinitionContext) {
 		}
 	}
 
-	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
-		Column: ctx.GetStart().GetColumn(),
-	}
-
-	part := NewPart(name, loc, true)
-
-	// Add to current parent (checks element stack first, then package)
-	if len(b.elementStack) > 0 {
-		// We're inside another element (Package, Part, Port, etc.)
-		parent := b.elementStack[len(b.elementStack)-1]
-		part.parent = parent
-		switch p := parent.(type) {
-		case *Package:
-			p.AddChild(part)
-		case *Part:
-			p.AddChild(part)
-		case *Port:
-			p.AddChild(part)
-		default:
-			// Parent type doesn't support nested parts
-		}
-	} else if b.currentPkg != nil {
-		// We're at package level (shouldn't happen if package pushed to stack)
-		part.parent = b.currentPkg
-		b.currentPkg.AddChild(part)
-	}
+	part := NewPart(name, locationFromContext(ctx), true)
+	part.parent = b.getCurrentParent()
+	b.addToParent(part)
 
 	// Push part onto stack for nested elements (parts can have attributes, ports, etc.)
 	b.elementStack = append(b.elementStack, part)
@@ -375,33 +384,9 @@ func (b *modelBuilder) EnterPartUsage(ctx *parser.PartUsageContext) {
 		}
 	}
 
-	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
-		Column: ctx.GetStart().GetColumn(),
-	}
-
-	part := NewPart(name, loc, false)
-
-	// Add to current parent (checks element stack first, then package)
-	if len(b.elementStack) > 0 {
-		// We're inside another element (Package, Part, Port, etc.)
-		parent := b.elementStack[len(b.elementStack)-1]
-		part.parent = parent
-		switch p := parent.(type) {
-		case *Package:
-			p.AddChild(part)
-		case *Part:
-			p.AddChild(part)
-		case *Port:
-			p.AddChild(part)
-		default:
-			// Parent type doesn't support nested parts
-		}
-	} else if b.currentPkg != nil {
-		// We're at package level (shouldn't happen if package pushed to stack)
-		part.parent = b.currentPkg
-		b.currentPkg.AddChild(part)
-	}
+	part := NewPart(name, locationFromContext(ctx), false)
+	part.parent = b.getCurrentParent()
+	b.addToParent(part)
 
 	// Push part onto stack for nested elements (parts can have attributes, ports, etc.)
 	b.elementStack = append(b.elementStack, part)
@@ -421,21 +406,9 @@ func (b *modelBuilder) EnterItemDefinition(ctx *parser.ItemDefinitionContext) {
 		}
 	}
 
-	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
-		Column: ctx.GetStart().GetColumn(),
-	}
-	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
-		loc.EndColumn = ctx.GetStop().GetColumn()
-	}
-
-	item := NewItem(name, loc, true)
-
-	if b.currentPkg != nil {
-		item.parent = b.currentPkg
-		b.currentPkg.AddChild(item)
-	}
+	item := NewItem(name, locationFromContext(ctx), true)
+	item.parent = b.getCurrentParent()
+	b.addToParent(item)
 }
 
 func (b *modelBuilder) EnterItemUsage(ctx *parser.ItemUsageContext) {
@@ -487,21 +460,9 @@ func (b *modelBuilder) EnterRequirementDefinition(ctx *parser.RequirementDefinit
 		}
 	}
 
-	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
-		Column: ctx.GetStart().GetColumn(),
-	}
-	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
-		loc.EndColumn = ctx.GetStop().GetColumn()
-	}
-
-	req := NewRequirement(name, loc, true)
-
-	if b.currentPkg != nil {
-		req.parent = b.currentPkg
-		b.currentPkg.AddChild(req)
-	}
+	req := NewRequirement(name, locationFromContext(ctx), true)
+	req.parent = b.getCurrentParent()
+	b.addToParent(req)
 
 	// Push requirement onto stack for nested elements
 	b.elementStack = append(b.elementStack, req)
@@ -521,21 +482,9 @@ func (b *modelBuilder) EnterRequirementUsage(ctx *parser.RequirementUsageContext
 		}
 	}
 
-	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
-		Column: ctx.GetStart().GetColumn(),
-	}
-	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
-		loc.EndColumn = ctx.GetStop().GetColumn()
-	}
-
-	req := NewRequirement(name, loc, false)
-
-	if b.currentPkg != nil {
-		req.parent = b.currentPkg
-		b.currentPkg.AddChild(req)
-	}
+	req := NewRequirement(name, locationFromContext(ctx), false)
+	req.parent = b.getCurrentParent()
+	b.addToParent(req)
 
 	// Push requirement onto stack for nested elements
 	b.elementStack = append(b.elementStack, req)
@@ -555,21 +504,9 @@ func (b *modelBuilder) EnterVerificationCaseDefinition(ctx *parser.VerificationC
 		}
 	}
 
-	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
-		Column: ctx.GetStart().GetColumn(),
-	}
-	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
-		loc.EndColumn = ctx.GetStop().GetColumn()
-	}
-
-	ver := NewVerification(name, loc, true)
-
-	if b.currentPkg != nil {
-		ver.parent = b.currentPkg
-		b.currentPkg.AddChild(ver)
-	}
+	ver := NewVerification(name, locationFromContext(ctx), true)
+	ver.parent = b.getCurrentParent()
+	b.addToParent(ver)
 
 	// Push verification onto stack for nested elements
 	b.elementStack = append(b.elementStack, ver)
@@ -589,21 +526,9 @@ func (b *modelBuilder) EnterVerificationCaseUsage(ctx *parser.VerificationCaseUs
 		}
 	}
 
-	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
-		Column: ctx.GetStart().GetColumn(),
-	}
-	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
-		loc.EndColumn = ctx.GetStop().GetColumn()
-	}
-
-	ver := NewVerification(name, loc, false)
-
-	if b.currentPkg != nil {
-		ver.parent = b.currentPkg
-		b.currentPkg.AddChild(ver)
-	}
+	ver := NewVerification(name, locationFromContext(ctx), false)
+	ver.parent = b.getCurrentParent()
+	b.addToParent(ver)
 
 	// Push verification onto stack for nested elements
 	b.elementStack = append(b.elementStack, ver)
@@ -623,17 +548,9 @@ func (b *modelBuilder) EnterConcernDefinition(ctx *parser.ConcernDefinitionConte
 		}
 	}
 
-	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
-		Column: ctx.GetStart().GetColumn(),
-	}
-
-	concern := NewConcern(name, loc, true)
-
-	if b.currentPkg != nil {
-		concern.parent = b.currentPkg
-		b.currentPkg.AddChild(concern)
-	}
+	concern := NewConcern(name, locationFromContext(ctx), true)
+	concern.parent = b.getCurrentParent()
+	b.addToParent(concern)
 }
 
 func (b *modelBuilder) EnterConcernUsage(ctx *parser.ConcernUsageContext) {
@@ -644,17 +561,9 @@ func (b *modelBuilder) EnterConcernUsage(ctx *parser.ConcernUsageContext) {
 		}
 	}
 
-	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
-		Column: ctx.GetStart().GetColumn(),
-	}
-
-	concern := NewConcern(name, loc, false)
-
-	if b.currentPkg != nil {
-		concern.parent = b.currentPkg
-		b.currentPkg.AddChild(concern)
-	}
+	concern := NewConcern(name, locationFromContext(ctx), false)
+	concern.parent = b.getCurrentParent()
+	b.addToParent(concern)
 }
 
 func (b *modelBuilder) EnterUseCaseDefinition(ctx *parser.UseCaseDefinitionContext) {

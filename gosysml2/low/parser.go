@@ -1,6 +1,9 @@
 package low
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/antlr4-go/antlr/v4"
 	"github.com/dVoo/gosysml2/internal/parser"
 )
@@ -12,6 +15,7 @@ type Parser struct {
 	lexerErrors  *ErrorCollector
 	parserErrors *ErrorCollector
 	tokens       *antlr.CommonTokenStream
+	ctx          context.Context
 }
 
 // ParseOption configures parser behavior.
@@ -19,6 +23,7 @@ type ParseOption func(*parserConfig)
 
 type parserConfig struct {
 	buildParseTree bool
+	ctx            context.Context
 }
 
 // WithParseTree enables parse tree construction.
@@ -26,6 +31,14 @@ type parserConfig struct {
 func WithParseTree(build bool) ParseOption {
 	return func(c *parserConfig) {
 		c.buildParseTree = build
+	}
+}
+
+// WithContext sets the context for cancellation support.
+// If not provided, context.Background() is used.
+func WithContext(ctx context.Context) ParseOption {
+	return func(c *parserConfig) {
+		c.ctx = ctx
 	}
 }
 
@@ -44,7 +57,7 @@ func NewParserFromBytes(input []byte, opts ...ParseOption) *Parser {
 // NewParserFromLexer creates a parser from an existing lexer.
 // This allows reusing a lexer or inspecting tokens before parsing.
 func NewParserFromLexer(lexer *Lexer, opts ...ParseOption) *Parser {
-	cfg := &parserConfig{buildParseTree: true}
+	cfg := &parserConfig{buildParseTree: true, ctx: context.Background()}
 	for _, opt := range opts {
 		opt(cfg)
 	}
@@ -64,12 +77,23 @@ func NewParserFromLexer(lexer *Lexer, opts ...ParseOption) *Parser {
 		lexerErrors:  lexer.errors,
 		parserErrors: parserErrors,
 		tokens:       tokens,
+		ctx:          cfg.ctx,
 	}
 }
 
 // ParseRootNamespace parses the input as a complete SysML root namespace.
 // This is the main entry point for parsing SysML files.
+// Respects context cancellation if a context was provided.
 func (p *Parser) ParseRootNamespace() parser.IEntryRuleRootNamespaceContext {
+	// Check for context cancellation before parsing
+	if p.ctx != nil {
+		select {
+		case <-p.ctx.Done():
+			// Context cancelled - return nil (caller should check p.ctx.Err())
+			return nil
+		default:
+		}
+	}
 	return p.parser.EntryRuleRootNamespace()
 }
 
@@ -106,11 +130,36 @@ func (p *Parser) Inner() *parser.SysMLv2Parser {
 	return p.parser
 }
 
+// Context returns the parser's context for cancellation checking.
+func (p *Parser) Context() context.Context {
+	return p.ctx
+}
+
 // Parse is a convenience function that parses input and returns the parse tree and errors.
 func Parse(input string, opts ...ParseOption) (parser.IEntryRuleRootNamespaceContext, *ParseErrors) {
 	p := NewParser(input, opts...)
 	tree := p.ParseRootNamespace()
 	return tree, p.Errors()
+}
+
+// ParseWithContext is a convenience function that parses input with context support.
+// Returns wrapped errors for better error tracing.
+func ParseWithContext(ctx context.Context, input string, opts ...ParseOption) (parser.IEntryRuleRootNamespaceContext, error) {
+	opts = append(opts, WithContext(ctx))
+	p := NewParser(input, opts...)
+
+	// Check for context cancellation before parsing
+	select {
+	case <-ctx.Done():
+		return nil, fmt.Errorf("parsing cancelled: %w", ctx.Err())
+	default:
+	}
+
+	tree := p.ParseRootNamespace()
+	if err := p.Errors().Err(); err != nil {
+		return tree, fmt.Errorf("parsing input: %w", err)
+	}
+	return tree, nil
 }
 
 // ParseBytes is like Parse but accepts []byte input.
