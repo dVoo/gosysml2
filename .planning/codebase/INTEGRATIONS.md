@@ -1,63 +1,61 @@
 # External Integrations
 
-**Analysis Date:** 2026-01-30
+**Analysis Date:** 2026-02-05
 
 ## APIs & External Services
 
-**None detected.**
+**None.**
 
-The codebase does not integrate with external APIs or SaaS platforms. This is a language parser and grammar specification repository focused on SysML v2 and KerML syntax.
+This is a self-contained library and CLI tool suite. No external API calls are made.
 
 ## Data Storage
 
 **Databases:**
-- None - This is a stateless parser library with no persistent storage
+- Not applicable - No database integration
 
 **File Storage:**
-- Local filesystem only - Codebase reads `.sysml` files from local file system
-  - `sysml.ParseFile()` - Reads SysML files
-  - `sysml.ParseDirectory()` - Reads all `.sysml` files from directory
-  - `sysml.ParseDirectoryParallel()` - Parallel file reading
-  - `sysml.ParseDirectoryStream()` - Streaming file processing
-  - Located in `gosysml2/sysml/parse.go`
+- Local filesystem only
+- Input: Reads `.sysml` files from local paths
+- Output: Console/stdout only
 
 **Caching:**
-- None - No caching layer implemented
-- Parse results are ephemeral and returned directly to caller
+- None
 
 ## Authentication & Identity
 
 **Auth Provider:**
-- None - This is an open-source language parser with no authentication requirements
+- Not applicable - No authentication required
 
 ## Monitoring & Observability
 
 **Error Tracking:**
-- None - No error tracking service integration
+- None
 
 **Logs:**
-- Console/stdout logging via Go standard library
-- Error collection mechanism in `gosysml2/sysml/errors.go`
-- Parse errors include source location (line, column) for debugging
-- Located in `gosysml2/sysml/errors.go`
+- Console output only
+- Tools write analysis results to stdout
 
 ## CI/CD & Deployment
 
 **Hosting:**
-- GitHub (public repository, no deployment infrastructure)
-- Module hosted at `github.com/dVoo/gosysml2`
+- Not applicable - Library and CLI tools
 
 **CI Pipeline:**
-- Not detected - No GitHub Actions, GitLab CI, or other CI service configuration
-- Manual testing via `go test` commands
+- None detected
+- No `.github/workflows/` or similar CI configuration
+
+**Distribution:**
+- Go module: `github.com/dVoo/gosysml2`
+- Can be imported as Go library
+- CLI tools built from source with `go build`
 
 ## Environment Configuration
 
 **Required env vars:**
-- None - No environment variables required
+- None
 
 **Secrets location:**
-- None - No secrets management needed
+- Not applicable - No secrets required
 
 ## Webhooks & Callbacks
 
@@ -67,38 +65,26 @@ The codebase does not integrate with external APIs or SaaS platforms. This is a 
 **Outgoing:**
 - None
 
-## Test Data Integration
+## Network Dependencies
 
-**Test Files:**
-- SysML test files in `testdata/` and `docs/testdata/` (46 `.sysml` files)
-- Test coverage files in `gosysml2/sysml/*.go` (integration tests, unit tests)
-- Test files use standard Go `testing` package with no external test framework
+**None.**
 
-**Grammar Reference Data:**
-- BNF specifications in `docs/bnf/`:
-  - `KerML-textual-bnf.kebnf` - Reference grammar
-  - `SysML-textual-bnf.kebnf` - Reference grammar
-  - `SysML-graphical-bnf.kgbnf` - Graphical notation grammar
-- Rendered HTML documentation from BNF files
-- SVG diagrams for graphical notation (284 files in `docs/bnf/images/`)
+The codebase is completely offline-capable:
+- Parses local SysML files only
+- No HTTP client usage
+- No network-dependent imports
 
-## Standard Library Dependencies
+## File Format Dependencies
 
-**Go Standard Library:**
-- `io`, `os`, `path/filepath` - File I/O operations
-- `sync`, `runtime` - Concurrency and threading
-- `strings` - String manipulation
+**Input Formats:**
+- SysML v2 text files (`.sysml` extension)
+- Parsed using ANTLR4-generated parsers
 
-**No external Go packages required except:**
-- `github.com/antlr4-go/antlr/v4` - ANTLR4 Go runtime (single external dependency)
-
-## Build Tool Integration
-
-**Code Generation:**
-- ANTLR4 generates Go parser files from grammar specifications
-- No code generation from external APIs
-- Grammar files are source-controlled; generated code is in `code/parser/` and `gosysml2/internal/parser/`
+**Grammar Sources:**
+- Based on OMG SysML v2 specification
+- BNF specifications in `docs/bnf/`
+- ANTLR4 grammars in `code/*.g4`
 
 ---
 
-*Integration audit: 2026-01-30*
+*Integration audit: 2026-02-05*

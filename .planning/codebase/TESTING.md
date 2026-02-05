@@ -1,75 +1,83 @@
 # Testing Patterns
 
-**Analysis Date:** 2026-01-30
+**Analysis Date:** 2026-02-05
 
 ## Test Framework
 
 **Runner:**
-- Go standard `testing` package (no external test framework)
-- Run tests with `go test ./...` across the module
-
-**Assertion Library:**
-- Manual assertions using `testing.T` methods: `t.Fatalf()`, `t.Errorf()`, `t.Fatal()`, `t.Error()`
-- No external assertion library (testify, assert, etc.)
+- Standard Go testing (`testing` package)
+- No external test framework (no testify, ginkgo, etc.)
+- Go version: 1.22
 
 **Run Commands:**
+
 ```bash
-# Run all tests in a package
-go test ./gosysml2/sysml
+# Run all tests
+go test ./...
 
-# Run tests in low-level parser
-go test ./gosysml2/low
+# Run tests with verbose output
+go test -v ./...
 
-# Run specific test by name
-go test ./gosysml2/sysml -run TestParseString
+# Run tests for specific package
+go test ./gosysml2/sysml/...
+go test ./gosysml2/low/...
 
-# Watch mode (requires external tool, not configured)
-# Manual: watch -n 2 'go test ./...'
+# Run specific test
+go test -run TestParseString ./gosysml2/sysml/...
 
-# Coverage
-go test ./gosysml2/sysml -cover
-go test ./gosysml2/... -coverprofile=coverage.out && go tool cover -html=coverage.out
+# Run tests with coverage
+go test -cover ./...
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
 ```
+
+**No Test Configuration Files:**
+- No `jest.config.*`, `vitest.config.*`, or equivalent
+- Configuration through standard Go test flags
 
 ## Test File Organization
 
 **Location:**
-- Co-located with source files in same package directory
-- `parse_test.go` alongside `parse.go` in `gosysml2/sysml/`
-- `visitor_test.go` alongside `visitor.go` in `gosysml2/sysml/`
-- `parser_test.go` alongside `parser.go` in `gosysml2/low/`
-- `integration_test.go` in `gosysml2/sysml/` for cross-module scenarios
-
-**Naming:**
-- `*_test.go` suffix following Go standard
-- Test functions prefixed with `Test` followed by capitalized subject: `TestParseString`, `TestParseStringWithErrors`, `TestWalk`, `TestFindByKind`
-- Helper functions may be prefixed with lowercase or Test prefix depending on scope
+- Tests are co-located with source files (same directory)
+- Test files use `*_test.go` naming convention
 
 **Structure:**
+
 ```
 gosysml2/
 ├── sysml/
-│   ├── parse.go
-│   ├── parse_test.go           # Tests for ParseString, ParseFile, ParseBytes, etc.
-│   ├── visitor.go
-│   ├── visitor_test.go         # Tests for FindRequirements, FindVerifications, etc.
-│   ├── integration_test.go     # Tests parsing testdata files
-│   ├── model.go
-│   └── errors.go
-└── low/
-    ├── parser.go
-    ├── parser_test.go          # Tests for low-level parser
-    ├── lexer.go
-    └── errors.go
+│   ├── parse.go           # Source
+│   ├── parse_test.go      # Unit tests
+│   ├── visitor.go         # Source
+│   ├── visitor_test.go    # Unit tests
+│   ├── model.go           # Source (no tests - data structures only)
+│   ├── errors.go          # Source (no tests)
+│   └── integration_test.go # Integration tests
+├── low/
+│   ├── parser.go          # Source
+│   ├── parser_test.go     # Unit tests
+│   ├── lexer.go           # Source
+│   └── errors.go          # Source
+└── examples/
+    └── main.go            # Example code (no tests)
 ```
+
+**Test Data:**
+- SysML test input embedded as raw string literals
+- External test data in `../../testdata/` directory
+- Test files use `.sysml` extension
 
 ## Test Structure
 
-**Suite Organization:**
-Tests use Go's standard table-driven test pattern where applicable, individual test functions for integration/behavior tests.
+**Basic Test Pattern:**
 
-**Basic pattern from `parse_test.go`:**
 ```go
+package sysml
+
+import (
+	"testing"
+)
+
 func TestParseString(t *testing.T) {
 	input := `
 package TestPackage {
@@ -93,36 +101,16 @@ package TestPackage {
 	if len(result.Model.Packages) != 1 {
 		t.Errorf("expected 1 package, got %d", len(result.Model.Packages))
 	}
-
-	pkg := result.Model.Packages[0]
-	if pkg.Name() != "TestPackage" {
-		t.Errorf("expected package name 'TestPackage', got '%s'", pkg.Name())
-	}
 }
 ```
 
-**Patterns:**
-- **Setup:** Input data defined inline as string literals (SysML syntax embedded in Go strings)
-- **Teardown:** Implicit through Go's garbage collection; no explicit cleanup
-- **Assertions:** Direct comparisons with `if` statements followed by `t.Errorf()` or `t.Fatalf()`
-- **Success cases:** Call function, check result, verify expected values
-- **Error cases:** Check `result.Success()` returns `false`, verify `result.Errors` is populated
-- **Assertions for nil:** Explicit `if X == nil` or `if X != nil` checks
-
-## Mocking
-
-**Framework:** No external mocking library used; simple stubbing with test fixtures
-
-**Patterns:**
-Embed test input data directly in test functions as SysML string literals:
+**Error Testing Pattern:**
 
 ```go
 func TestParseStringWithErrors(t *testing.T) {
 	input := `
 package Broken {
-    part def Vehicle {
-        invalid syntax here!!!
-    }
+    @@@ invalid syntax here!!!
 }
 `
 
@@ -140,134 +128,8 @@ package Broken {
 }
 ```
 
-**What to Mock:**
-- File system operations tested with actual `filepath.WalkDir` and real test files (see integration tests)
-- ANTLR parser behavior tested directly through public API
+**Panic Testing Pattern:**
 
-**What NOT to Mock:**
-- Parser internals (tested through public API)
-- Tree walking and model building (integration tested)
-- Error collection (tested with known error inputs)
-
-## Fixtures and Fixtures and Factories
-
-**Test Data:**
-Test data embedded directly in test functions as inline string literals:
-
-```go
-func TestWalk(t *testing.T) {
-	input := `
-package P1 {
-    package P2 {
-        part def A;
-    }
-    part def B;
-}
-`
-
-	result := ParseString(input)
-	if !result.Success() {
-		t.Fatalf("parse failed: %s", result.Errors)
-	}
-	// ... test continues
-}
-```
-
-**Testdata directory:**
-- `testdata/simple/` contains 34+ `.sysml` files covering language features:
-  - `ActionTest.sysml`, `AliasTest.sysml`, `AllocationTest.sysml`, `AnalysisTest.sysml`
-  - `AssignmentTest.sysml`, `CalculationTest.sysml`, `CommentTest.sysml`, `ConjugationTest.sysml`
-  - `ConnectionTest.sysml`, `ConstraintTest.sysml`, etc.
-- `testdata/Vehicle Example/` contains realistic example models:
-  - `SysML v2 Spec Annex A SimpleVehicleModel.sysml`
-  - `VehicleDefinitions.sysml`, `VehicleUsages.sysml`, `VehicleIndividuals.sysml`
-
-**Location:**
-- Testdata files at project root: `testdata/simple/*.sysml` and `testdata/Vehicle Example/*.sysml`
-- Accessed from tests using relative paths: `../../testdata`
-- Integration tests use `filepath.WalkDir()` to load and parse all `.sysml` files
-
-## Coverage
-
-**Requirements:** No explicit code coverage requirements configured
-
-**View Coverage:**
-```bash
-# Generate coverage report
-go test ./gosysml2/sysml -coverprofile=coverage.out
-
-# View in HTML
-go tool cover -html=coverage.out
-
-# Show coverage for specific function
-go tool cover -html=coverage.out -o coverage.html
-```
-
-## Test Types
-
-**Unit Tests:**
-- **Scope:** Individual functions and methods
-- **Location:** `parse_test.go`, `visitor_test.go`, `parser_test.go`
-- **Approach:** Parse simple inline SysML strings, verify result structure, check error handling
-- **Examples:**
-  - `TestParseString` - basic parsing
-  - `TestParseStringWithErrors` - error collection
-  - `TestValidate` - validation without model building
-  - `TestFindByKind` - element filtering
-  - `TestCounter` - visitor pattern usage
-  - `TestEmptyInput` - edge case handling
-
-**Integration Tests:**
-- **Scope:** Full parsing pipeline with real testdata files
-- **Location:** `integration_test.go` in `gosysml2/sysml/`
-- **Approach:**
-  - Walk testdata directory
-  - Parse each `.sysml` file using `ParseFile()`
-  - Collect pass/fail statistics
-  - Report failures with line/column details
-- **Examples:**
-  - `TestParseTestdataFiles` - parses 30+ test files, reports pass/fail counts
-  - `TestValidateTestdataFiles` - validates files without building full model
-- **Coverage:** Tests against real SysML examples from spec and complex vehicle model
-
-**E2E Tests:**
-- **Framework:** Not explicitly present; integration tests serve this purpose
-- **Behavior:** Tests parse complete realistic models (`Vehicle Example` directory) and verify parsing succeeds
-
-## Common Patterns
-
-**Async Testing:**
-Testing does not use goroutines or async patterns. All tests are synchronous.
-
-**Error Testing:**
-```go
-func TestParseStringWithErrors(t *testing.T) {
-	input := `
-package Broken {
-    part def Vehicle {
-        invalid syntax here!!!
-    }
-}
-`
-
-	result := ParseString(input)
-
-	// Check Success() method
-	if result.Success() {
-		t.Error("expected parse to fail")
-	}
-
-	// Check Errors is populated
-	if result.Errors == nil || !result.Errors.HasErrors() {
-		t.Error("expected errors to be present")
-	}
-
-	// Verify error details
-	t.Logf("Got expected errors: %s", result.Errors)
-}
-```
-
-**Panic Testing:**
 ```go
 func TestMustParseStringPanic(t *testing.T) {
 	defer func() {
@@ -280,7 +142,10 @@ func TestMustParseStringPanic(t *testing.T) {
 }
 ```
 
-**Skipable Tests:**
+**Table-Driven Test Pattern:**
+
+Tests iterate over SysML files in testdata directory:
+
 ```go
 func TestParseTestdataFiles(t *testing.T) {
 	testdataDir := "../../testdata"
@@ -288,11 +153,138 @@ func TestParseTestdataFiles(t *testing.T) {
 	if _, err := os.Stat(testdataDir); os.IsNotExist(err) {
 		t.Skip("testdata directory not found")
 	}
-	// ... test continues
+
+	var files []string
+	err := filepath.WalkDir(testdataDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && strings.HasSuffix(path, ".sysml") {
+			files = append(files, path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("failed to walk testdata: %v", err)
+	}
+
+	passed := 0
+	failed := 0
+
+	for _, file := range files {
+		result := ParseFile(file)
+		name := filepath.Base(file)
+
+		if result.Success() {
+			passed++
+			t.Logf("  PASS: %s", name)
+		} else {
+			failed++
+			t.Logf("  FAIL: %s - %s", name, result.Errors.First().Message)
+		}
+	}
+
+	t.Logf("\nSummary: %d passed, %d failed out of %d files", passed, failed, len(files))
+
+	if failed > 0 {
+		t.Errorf("%d files failed to parse", failed)
+	}
 }
 ```
 
-**Visitor Pattern Testing:**
+**Subtest Pattern:**
+
+```go
+func TestParseIndividualFiles(t *testing.T) {
+	testdataDir := "../../testdata"
+
+	files, err := findSysMLFiles(testdataDir)
+	if err != nil {
+		t.Fatalf("failed to find test files: %v", err)
+	}
+
+	for _, file := range files {
+		// Create test name from relative path
+		relPath, _ := filepath.Rel(testdataDir, file)
+		testName := strings.TrimSuffix(relPath, ".sysml")
+		testName = strings.ReplaceAll(testName, string(filepath.Separator), "_")
+
+		t.Run(testName, func(t *testing.T) {
+			result := parseSysMLFile(file)
+
+			if !result.Success() {
+				t.Errorf("parsing failed:\n%s", strings.Join(result.Errors, "\n"))
+			} else {
+				t.Logf("parsed successfully (%d tokens)", result.TokenCount)
+			}
+		})
+	}
+}
+```
+
+## Assertion Patterns
+
+**Fatal vs Error:**
+- Use `t.Fatalf` when the test cannot continue (e.g., parse failed, model is nil)
+- Use `t.Errorf` for individual assertion failures (continues testing other cases)
+
+```go
+result := ParseString(input)
+if !result.Success() {
+	t.Fatalf("Failed to parse: %v", result.Errors)  // Fatal - can't continue
+}
+
+reqs := FindRequirements(result.Model)
+if len(reqs) != 3 {
+	t.Errorf("Expected 3 requirements, got %d", len(reqs))  // Error - can continue
+}
+```
+
+**Common Assertions:**
+
+```go
+// Success check
+if !result.Success() {
+	t.Fatalf("parse failed: %s", result.Errors)
+}
+
+// Nil check
+if result.Model == nil {
+	t.Fatal("model is nil")
+}
+
+// Length check
+if len(parts) != 2 {
+	t.Errorf("Expected 2 parts, got %d", len(parts))
+}
+
+// Equality check
+if pkg.Name() != "TestPackage" {
+	t.Errorf("expected package name 'TestPackage', got '%s'", pkg.Name())
+}
+
+// Boolean check
+if !ref.IsResolved() {
+	t.Error("Expected ref to be unresolved initially")
+}
+
+// Map key existence
+if !names["SafetyRequirement"] {
+	t.Error("Expected to find SafetyRequirement")
+}
+```
+
+## Mocking
+
+**No Mocking Framework:**
+- Tests use real SysML input strings
+- No external mocking library (no gomock, mockery, etc.)
+- Integration-style testing with actual parser
+
+**Test Doubles:**
+- `BaseVisitor` provides a no-op visitor implementation for testing
+- Counter visitor used to test visitor pattern:
+
 ```go
 func TestCounter(t *testing.T) {
 	input := `
@@ -313,40 +305,196 @@ package P {
 	Visit(result.Model, counter)
 
 	t.Logf("Counts: %v", counter.Counts)
+	t.Logf("Total: %d", counter.Total())
+
 	if counter.Total() == 0 {
 		t.Error("expected some elements to be counted")
 	}
 }
 ```
 
-## Test Data Organization
+## Test Data
 
-**Embedded test data:**
-- SysML syntax embedded directly in test functions as multi-line strings
-- Simple structures: 3-20 lines per test case
-- Complex structures: 50+ lines with nested packages and elements
+**Inline Test Data:**
 
-**External test data:**
-- 34+ SysML files in `testdata/simple/` directory (one per language feature)
-- Realistic examples in `testdata/Vehicle Example/` (4 files: definitions, usages, individuals, spec example)
-- Files used by `integration_test.go` to validate parser against real specifications
+```go
+input := `
+package TestPackage {
+    part def Vehicle {
+        part engine : Engine;
+    }
+    part def Engine;
+}
+`
+```
 
-**Test file locations from codebase:**
-- `testdata/simple/ActionTest.sysml`
-- `testdata/simple/AliasTest.sysml`
-- `testdata/simple/AllocationTest.sysml`
-- `testdata/simple/AnalysisTest.sysml`
-- `testdata/simple/AssignmentTest.sysml`
-- `testdata/simple/CalculationTest.sysml`
-- `testdata/simple/CommentTest.sysml`
-- `testdata/simple/ConjugationTest.sysml`
-- `testdata/simple/ConnectionTest.sysml`
-- `testdata/simple/ConstraintTest.sysml`
-- `testdata/Vehicle Example/SysML v2 Spec Annex A SimpleVehicleModel.sysml`
-- `testdata/Vehicle Example/VehicleDefinitions.sysml`
-- `testdata/Vehicle Example/VehicleUsages.sysml`
-- `testdata/Vehicle Example/VehicleIndividuals.sysml`
+**External Test Files:**
+- Location: `../../testdata/` (relative to test file)
+- Format: `.sysml` files containing valid and complex SysML v2 syntax
+- Organized in subdirectories by category:
+  - `Import Tests/`
+  - `Requirements Examples/`
+  - `Variability Examples/`
+  - `simple/`
+
+**Test Data Helper:**
+
+```go
+func findSysMLFiles(root string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && strings.HasSuffix(path, ".sysml") {
+			files = append(files, path)
+		}
+		return nil
+	})
+	return files, err
+}
+```
+
+## Test Types
+
+**Unit Tests:**
+- Test individual functions in isolation
+- Examples: `TestParseString`, `TestValidate`, `TestWalk`
+- Location: `*_test.go` files alongside source
+
+**Integration Tests:**
+- Test parsing of real SysML files from testdata
+- Examples: `TestParseTestdataFiles`, `TestValidateTestdataFiles`
+- Location: `integration_test.go`
+
+**Error Tests:**
+- Verify error handling and messages
+- Examples: `TestParseStringWithErrors`, `TestMustParseStringPanic`
+
+**API Tests:**
+- Test both high-level and low-level APIs
+- High-level: `TestParseString`, `TestFindRequirements`
+- Low-level: `TestParse`, `TestLexer`, `TestParser`
+
+## Coverage
+
+**No Enforced Coverage Target:**
+- No coverage configuration files
+- Coverage reports generated manually with `go test -cover`
+
+**View Coverage:**
+
+```bash
+# Generate coverage report
+go test -coverprofile=coverage.out ./...
+
+# View in terminal
+go tool cover -func=coverage.out
+
+# View in browser
+go tool cover -html=coverage.out
+```
+
+## Common Test Patterns
+
+**Setup Pattern:**
+
+```go
+func TestCounterWithVerification(t *testing.T) {
+	input := `
+		package TestPackage {
+			part def Vehicle;
+			part def Engine;
+			requirement def SafetyReq;
+			verification def TestVer;
+		}
+	`
+
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("Failed to parse: %v", result.Errors)
+	}
+
+	// Test-specific code...
+}
+```
+
+**Collection Testing:**
+
+```go
+// Build map from results for easier assertions
+names := make(map[string]bool)
+for _, req := range reqs {
+	names[req.Name()] = true
+}
+
+if !names["SafetyRequirement"] {
+	t.Error("Expected to find SafetyRequirement")
+}
+```
+
+**Depth Testing:**
+
+```go
+func TestWalkWithDepth(t *testing.T) {
+	depths := make(map[string]int)
+	Walk(result.Model, func(elem Element, depth int) bool {
+		depths[elem.Name()] = depth
+		return true
+	})
+
+	if depths["OuterPackage"] != 0 {
+		t.Errorf("Expected OuterPackage at depth 0, got %d", depths["OuterPackage"])
+	}
+}
+```
+
+**Skip Pattern:**
+
+```go
+func TestParseTestdataFiles(t *testing.T) {
+	testdataDir := "../../testdata"
+
+	if _, err := os.Stat(testdataDir); os.IsNotExist(err) {
+		t.Skip("testdata directory not found")
+	}
+	// ...
+}
+```
+
+## Debug Output
+
+Use `t.Logf` for test debugging information:
+
+```go
+t.Logf("Found %d SysML test files", len(files))
+t.Logf("  PASS: %s", name)
+t.Logf("  FAIL: %s - %s", name, result.Errors.First().Message)
+t.Logf("\nSummary: %d passed, %d failed out of %d files", passed, failed, len(files))
+```
+
+## Test Utilities
+
+**Custom Error Listener (in tests):**
+
+```go
+// ErrorListener collects parsing errors
+type ErrorListener struct {
+	*antlr.DefaultErrorListener
+	Errors []string
+}
+
+func NewErrorListener() *ErrorListener {
+	return &ErrorListener{
+		Errors: make([]string, 0),
+	}
+}
+
+func (l *ErrorListener) SyntaxError(recognizer antlr.Recognizer, offendingSymbol interface{}, line, column int, msg string, e antlr.RecognitionException) {
+	l.Errors = append(l.Errors, fmt.Sprintf("line %d:%d %s", line, column, msg))
+}
+```
 
 ---
 
-*Testing analysis: 2026-01-30*
+*Testing analysis: 2026-02-05*

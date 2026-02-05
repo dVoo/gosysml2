@@ -1,219 +1,324 @@
 # Architecture
 
-**Analysis Date:** 2026-01-30
+**Analysis Date:** 2026-02-05
 
 ## Pattern Overview
 
-**Overall:** Multi-layered grammar-driven parser architecture with separation between low-level parsing and high-level model abstraction.
+**Overall:** Layered Parser Architecture with Visitor Pattern
+
+This is a SysML v2 parser library implemented in Go. It uses ANTLR4 for grammar-based parsing and implements a layered architecture that separates low-level parsing from high-level model construction.
 
 **Key Characteristics:**
-- ANTLR4-based lexer/parser generation from grammar specifications
-- Two-tier API design: low-level (parse trees) and high-level (idiomatic Go objects)
-- Visitor pattern for model traversal
-- Type-safe element references with automatic resolution
-- Parallel and streaming parsing support for large repositories
+- **ANTLR4-generated parser** for SysML v2 grammar recognition
+- **Two-tier API design**: Low-level direct access and high-level developer-friendly interface
+- **Visitor pattern** for model traversal and processing
+- **Reference resolution** system for cross-element relationships
+- **Lazy token consumption** for memory-efficient parsing of large files
 
 ## Layers
 
-**Grammar Layer:**
-- Purpose: Define SysML v2 and KerML syntax rules in ANTLR format
-- Location: `code/SysMLv2Lexer.g4`, `code/KerMLParser.g4`, `code/SysMLv2Parser.g4`
-- Contains: Lexical and parser rules defining all SysML v2 and KerML constructs
-- Depends on: None (foundational)
-- Used by: ANTLR code generation targeting multiple languages (Go, Java, etc.)
+### Layer 1: Generated Parser (internal/parser)
 
-**Documentation Layer:**
-- Purpose: Provide BNF/EBNF specifications and rendered grammar documentation
-- Location: `docs/bnf/` with `.kebnf`, `.kgbnf` files and HTML renderings
-- Contains: Formal grammar specifications with OMG specification clause references
-- Depends on: Grammar files (for documentation alignment)
-- Used by: Specification compliance and reference
+- **Purpose:** ANTLR-generated lexer and parser for SysML v2 grammar
+- **Location:** `gosysml2/internal/parser/`
+- **Contains:** Generated Go code from ANTLR grammar (lexer, parser, listener interfaces)
+- **Depends on:** `github.com/antlr4-go/antlr/v4`
+- **Used by:** `gosysml2/low` package
 
-**Low-Level Parser Layer (`low` package):**
-- Purpose: Direct access to ANTLR-generated lexer, parser, and parse trees
-- Location: `gosysml2/low/`
-- Contains:
-  - `lexer.go`: Wrapper around ANTLR lexer with error collection
-  - `parser.go`: Wrapper around ANTLR parser with token stream management
-  - `errors.go`: Error collection and reporting for lexer/parser
-  - `*_test.go`: Low-level parsing tests
-- Depends on: `gosysml2/internal/parser/` (ANTLR-generated code)
-- Used by: High-level API layer and applications needing raw parse trees
+**Key files:**
+- `sysmlv2_lexer.go` - Generated lexer (~86KB, ANTLR)
+- `sysmlv2_parser.go` - Generated parser (~2MB, main grammar implementation)
+- `sysmlv2parser_listener.go` - Listener interface definitions
+- `sysmlv2parser_base_listener.go` - Base listener implementation
 
-**ANTLR Generated Layer:**
-- Purpose: Lexer and parser implementation generated from grammar files
-- Location: `gosysml2/internal/parser/`
-- Contains:
-  - `sysmlv2_lexer.go`: Generated lexer (~1300 lines)
-  - `sysmlv2_parser.go`: Generated parser (~80k lines)
-  - `sysmlv2parser_listener.go`: ANTLR listener interface
-  - `sysmlv2parser_base_listener.go`: Base listener implementation
-- Depends on: ANTLR runtime library (`github.com/antlr4-go/antlr/v4`)
-- Used by: `low` package
+### Layer 2: Low-Level API (low)
 
-**High-Level Model Layer (`sysml` package):**
-- Purpose: Idiomatic Go abstraction over parse trees with semantic model
-- Location: `gosysml2/sysml/`
-- Contains:
-  - `model.go`: Element types, kinds, references, and model structure (~1672 lines)
-  - `parse.go`: Parsing entry points and orchestration (~612 lines)
-  - `visitor.go`: Visitor pattern for model traversal (~374 lines)
-  - `errors.go`: Error conversion and reporting
-  - `*_test.go`: Integration tests
-- Depends on: `low` package, ANTLR runtime
-- Used by: Applications consuming SysML models
+- **Purpose:** Thin wrapper around ANTLR parser providing direct access with error collection
+- **Location:** `gosysml2/low/`
+- **Contains:** Lexer wrapper, Parser wrapper, Error types
+- **Depends on:** `internal/parser`, `antlr4-go/antlr/v4`
+- **Used by:** `gosysml2/sysml`, CLI tools
 
-**Test/Example Layer:**
-- Purpose: Validate parsing and demonstrate API usage
-- Location: `gosysml2/examples/`, `testdata/`
-- Contains:
-  - `examples/main.go`: Complete API usage examples
-  - `testdata/`: 34 `.sysml` test files covering all language features
-- Depends on: `sysml` and `low` packages
-- Used by: Developers and validation
-
-## Data Flow
-
-**Single File Parsing (High-Level):**
-
-1. Application calls `sysml.ParseFile(path)` or `sysml.ParseString(input)`
-2. High-level parser delegates to `low.Parse(input)`
-3. Lexer tokenizes input → Parser builds ANTLR parse tree
-4. Errors collected and converted to `ParseError` structures
-5. Parse tree passed to `buildModel()` function
-6. Visitor traverses tree, creating `Element` objects with typed fields
-7. References resolved (qualified names → object pointers)
-8. `ParseResult` returned with `Model`, `Errors`, and optional `Tree`
-
-**Directory Parsing (Parallel Mode):**
-
-1. Application calls `sysml.ParseDirectoryParallel(dir, workers)`
-2. Walker finds all `.sysml` files in directory
-3. File list distributed across worker goroutines
-4. Each worker calls `ParseFile()` independently
-5. Results collected in slice
-6. Optional: `WithDiscardTree()` reduces memory per worker by ~30%
-
-**Model Traversal (Visitor Pattern):**
-
-1. Application calls `sysml.Visit(model, visitor)` or `sysml.Walk(model, func)`
-2. Traversal iterates `model.Elements` (top-level packages)
-3. For each element, dispatcher calls appropriate `Visitor.Visit*()` method
-4. Visitor returns `bool`: `true` to recurse into children, `false` to skip
-5. Children accessed via `Element.Children()` interface
-6. Walk completes depth-first traversal
-
-**Reference Resolution:**
-
-1. During parse tree traversal, qualified names stored as `Ref[T]` with name only
-2. After all elements parsed, `ResolveReferences()` called
-3. Index built via `BuildIndex()` mapping qualified names → elements
-4. For each reference, lookup performs `FindByQualifiedName()` search
-5. Reference marked `resolved` if found; remains unresolved otherwise
-6. Safe navigation: `ref.IsResolved()` checks before `ref.Resolved()` access
-
-**State Management:**
-
-- Parse tree is immutable after construction
-- Model elements are mutable (can add/remove children after parsing)
-- References are resolved once; no automatic updates if element moves
-- Error collection happens during lexing and parsing phases
-- Memory optimization: `WithDiscardTree()` discards tree after model built
-
-## Key Abstractions
-
-**Element Interface:**
-- Purpose: Unified interface for all SysML model elements
-- Examples: `Package`, `Part`, `Requirement`, `Verification`, `Action`
-- Pattern: All elements implement `Element` interface with methods: `Kind()`, `Name()`, `QualifiedName()`, `Location()`, `Parent()`, `Children()`, `Documentation()`
-
-**Ref[T] Generic Type:**
-- Purpose: Type-safe, nullable references to elements
-- Pattern:
-  - Unresolved: `Ref{name: "Engine", resolved: nil}`
-  - Resolved: `Ref{name: "Engine", resolved: *Part}`
-  - Check before use: `if ref.IsResolved() { elem := ref.Resolved() }`
-
-**ParseResult:**
-- Purpose: Container for parsing outcome with model and errors
-- Pattern: Always check `result.Success()` before accessing `result.Model`
-- Includes: `Model`, `Errors`, `Tree` (optional), `Source` (file path)
-
-**ElementKind:**
-- Purpose: Discriminate element types at runtime (instead of reflection)
-- Pattern: Use `elem.Kind()` for type checks and dispatch
-- Examples: `KindPart`, `KindRequirement`, `KindVerification`, etc.
-
-**Location:**
-- Purpose: Track source position for error reporting and debugging
-- Fields: `Line`, `Column`, `EndLine`, `EndColumn`
-- Pattern: Available on all elements via `elem.Location()`
-
-## Entry Points
-
-**Command-Line Parsing (via examples):**
-- Location: `gosysml2/examples/main.go`
-- Triggers: `go run examples/main.go`
-- Responsibilities:
-  - Demonstrate both high and low-level APIs
-  - Show model traversal via visitor
-  - Show element counting and searching
-
-**Library API Entry Points:**
-- `sysml.ParseString(input, opts)` - Parse SysML text
-- `sysml.ParseFile(path, opts)` - Parse SysML file
-- `sysml.ParseDirectory(dir, opts)` - Sequential directory parsing
-- `sysml.ParseDirectoryParallel(dir, workers, opts)` - Parallel parsing
-- `sysml.ParseDirectoryStream(dir, handler, opts)` - Streaming parsing
-- `low.Parse(input)` - Raw parse tree (performance critical)
-
-## Error Handling
-
-**Strategy:** Error collection during lexing/parsing, conversion to domain types, no exceptions (panic reserved for internal bugs only).
-
-**Patterns:**
-
-**Lexer/Parser Errors:**
+**Key abstractions:**
 ```go
-result := sysml.ParseFile("model.sysml")
-if !result.Success() {
-    for _, err := range result.Errors.Errors {
-        fmt.Printf("Line %d, Col %d: %s\n", err.Line, err.Column, err.Message)
-    }
+// Parser wraps ANTLR parser with configuration options
+type Parser struct {
+    parser       *parser.SysMLv2Parser
+    lexerErrors  *ErrorCollector
+    parserErrors *ErrorCollector
+}
+
+// Lexer wraps ANTLR lexer with error collection
+type Lexer struct {
+    lexer  *parser.SysMLv2Lexer
+    errors *ErrorCollector
+}
+
+// ErrorCollector implements antlr.ErrorListener
+type ErrorCollector struct {
+    errors []*SyntaxError
 }
 ```
 
-**Error Types:**
-- `ParseError`: Collection of `Error` structs with line/column/message
-- `Error`: Single lexical, syntactic, or semantic error
-- Multiple errors collected per parse (not fail-fast)
+**Main entry points:**
+- `low.Parse(input)` - Parse string to AST
+- `low.ParseBytes(input)` - Parse byte slice to AST
+- `low.Validate(input)` - Validate without building parse tree
+- `low.NewParser(input)` - Create configurable parser
 
-**Reference Resolution Errors:**
-- Unresolved references do NOT generate errors
-- Applications check `ref.IsResolved()` and handle gracefully
-- No exception thrown for missing elements
+### Layer 3: High-Level API (sysml)
+
+- **Purpose:** Developer-friendly model construction and manipulation
+- **Location:** `gosysml2/sysml/`
+- **Contains:** Domain model types, parsing facade, visitor pattern, reference resolution
+- **Depends on:** `gosysml2/low`, `gosysml2/internal/parser`
+- **Used by:** Applications, CLI tools, tests
+
+**Key abstractions:**
+
+**Element hierarchy:**
+```go
+// Element is the base interface for all SysML elements
+type Element interface {
+    Kind() ElementKind
+    Name() string
+    QualifiedName() string
+    Location() Location
+    Parent() Element
+    Children() []Element
+    Documentation() string
+}
+
+// Definition marks definition elements
+type Definition interface {
+    Element
+    isDefinition()
+}
+
+// Usage marks usage elements
+type Usage interface {
+    Element
+    Type() Element
+    isUsage()
+}
+```
+
+**Reference system:**
+```go
+// Ref represents a reference that may be resolved or unresolved
+type Ref[T Element] struct {
+    name     string
+    resolved T
+}
+```
+
+**Model root:**
+```go
+type Model struct {
+    Packages     []*Package
+    Imports      []*Import
+    Comments     []*Comment
+    Elements     []Element
+    elementIndex map[string]Element // For O(1) qualified name lookup
+}
+```
+
+### Layer 4: CLI Tools (cmd)
+
+- **Purpose:** Command-line utilities for testing and verification
+- **Location:** `cmd/*/`
+- **Contains:** Standalone executables for various testing purposes
+
+**Tools:**
+- `cmd/verify-parser/` - Parser completeness verification (parse tree analysis)
+- `cmd/verify-completeness/` - Model extraction verification (element stats, unresolved refs)
+- `cmd/test-low-level/` - Low-level API testing
+- `cmd/test-attrs/` - Attribute parsing tests
+- `cmd/test-requirement-attributes/` - Requirement attribute tests
+
+## Data Flow
+
+### Parse Flow (High-Level API)
+
+```
+1. Input (string/file/bytes)
+   |
+   v
+2. low.Parse() / low.ParseBytes()
+   |
+   v
+3. ANTLR Lexer -> Token Stream
+   |
+   v
+4. ANTLR Parser -> Parse Tree
+   |
+   v
+5. modelBuilder (listener) -> Model
+   |
+   v
+6. Model.BuildIndex() -> elementIndex
+   |
+   v
+7. Model.ResolveReferences() -> resolved Ref[T]
+   |
+   v
+8. ParseResult{Model, Errors, Tree}
+```
+
+### Visitor Flow
+
+```
+1. Visit(model, visitor)
+   |
+   v
+2. For each top-level element:
+   visitElement(elem, visitor)
+   |
+   v
+3. Type switch on element:
+   - Call specific VisitXxx() method
+   - Returns bool (continue?)
+   |
+   v
+4. If continue, recurse to children
+```
+
+## Key Abstractions
+
+### Element Types
+
+**Core structural elements:**
+- `Package` - Namespace container with typed child accessors
+- `Part` - Part definition/usage with attributes and nested parts
+- `Item` - Item definition/usage
+- `Attribute` - Typed attributes with optional default values
+- `Port` - Port definition/usage with direction
+
+**Behavioral elements:**
+- `Action` - Action definition/usage
+- `State` - State definition/usage with transitions
+- `Transition` - State machine transitions
+- `Connection` - Connection between elements
+
+**Requirements:**
+- `Requirement` - Requirement definition/usage with constraints
+- `RequirementConstraint` - assume/require constraints
+- `Verification` - Verification case definition/usage
+- `Concern` - Stakeholder concern
+
+**Analysis:**
+- `UseCase` - Use case definition/usage
+- `AnalysisCase` - Analysis case definition/usage
+- `Calculation` - Calculation definition/usage
+- `Constraint` - Constraint definition/usage
+
+**Views:**
+- `View` - View definition/usage exposing elements
+- `Viewpoint` - Viewpoint definition with concerns
+
+### Reference Resolution
+
+Two-phase resolution system:
+
+**Phase 1 (Parsing):** Store unresolved references as strings
+- `unresolvedDerivedFrom []string`
+- `unresolvedSatisfiedBy []string`
+- `unresolvedSubject string`
+- etc.
+
+**Phase 2 (Resolution):** Resolve using elementIndex
+```go
+func (m *Model) ResolveReferences() {
+    m.Walk(func(elem Element) bool {
+        switch e := elem.(type) {
+        case *Requirement:
+            m.resolveRequirementRefs(e)
+        // ... other types
+        }
+        return true
+    })
+}
+```
+
+Resolution strategy:
+1. Direct qualified name lookup in `elementIndex`
+2. Relative lookup walking up parent chain
+3. Simple name lookup in any package
+
+## Entry Points
+
+### Library Entry Points
+
+**High-level parsing:**
+- `gosysml2/sysml.ParseString(input)` - Parse from string
+- `gosysml2/sysml.ParseFile(filename)` - Parse from file
+- `gosysml2/sysml.ParseBytes(input, source)` - Parse from bytes
+- `gosysml2/sysml.ParseDirectory(dir)` - Parse all .sysml files
+- `gosysml2/sysml.ParseDirectoryParallel(dir, workers)` - Parallel parsing
+- `gosysml2/sysml.ParseDirectoryStream(dir, handler)` - Streaming parse
+
+**Validation:**
+- `gosysml2/sysml.Validate(input)` - Validate without building model
+- `gosysml2/sysml.ValidateFile(filename)` - Validate file
+
+**Low-level parsing:**
+- `gosysml2/low.Parse(input)` - Parse to AST
+- `gosysml2/low.ParseBytes(input)` - Parse bytes to AST
+- `gosysml2/low.Validate(input)` - Validation only
+
+### Application Entry Points
+
+**Example:**
+- `gosysml2/examples/main.go` - Library usage examples
+
+**CLI tools:**
+- `cmd/verify-parser/main.go` - Parse tree analysis
+- `cmd/verify-completeness/main.go` - Model completeness check
+
+## Error Handling
+
+**Strategy:** Error collection with continuation
+
+**Patterns:**
+- ANTLR error listeners collect all errors without stopping
+- `ParseResult` contains both Model and Errors
+- `Success()` method checks if errors exist
+- Low-level errors converted to high-level user-friendly errors
+
+**Error types:**
+```go
+// Low-level
+type SyntaxError struct {
+    Line, Column int
+    Message      string
+    Source       string // "lexer" or "parser"
+}
+
+// High-level
+type Error struct {
+    Line, Column int
+    Message      string
+    Context      string
+}
+```
 
 ## Cross-Cutting Concerns
 
-**Logging:** No structured logging built-in. Applications use standard `fmt` or `log` packages.
+**Logging:** None - errors returned explicitly
 
-**Validation:**
-- Syntactic validation automatic during parsing
-- Semantic validation (reference resolution) automatic post-parse
-- No explicit validation API (all required validation done on parse)
+**Validation:** Grammar-based via ANTLR, no additional semantic validation
 
-**Authentication:** Not applicable (parser is stateless, no network/IO except file reading).
+**Authentication:** Not applicable (library code)
+
+**Memory Management:**
+- `WithDiscardTree()` option to free parse tree after model building
+- `ParseDirectoryStream()` for memory-efficient batch processing
+- Lazy token stream consumption in low-level parser
 
 **Concurrency:**
-- `ParseDirectoryParallel()` uses worker goroutines for I/O parallelism
-- Safe: Each goroutine parses independently, no shared state during parsing
-- Unsafe: Modifying a single model from multiple goroutines
-
-**Memory Optimization:**
-- `WithDiscardTree()` option discards ANTLR parse tree after model built (~30% reduction)
-- Recommended for large repositories (>100MB)
-- Trade-off: Cannot access raw parse tree if discarded
+- `ParseDirectoryParallel()` uses worker pool pattern
+- Thread-safe for read operations on Model (no writes after construction)
 
 ---
 
-*Architecture analysis: 2026-01-30*
+*Architecture analysis: 2026-02-05*

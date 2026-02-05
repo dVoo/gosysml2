@@ -1,67 +1,69 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-01-30
+**Analysis Date:** 2026-02-05
+
+## Overview
+
+This is a Go 1.22 codebase implementing a SysML v2 parser with a dual-layer API design. The project follows standard Go conventions with additional patterns for ANTLR-generated code organization.
 
 ## Naming Patterns
 
 **Files:**
-- Snake_case for files with underscores (e.g., `sysml_lexer.go`, `sysml_parser.go`)
-- Descriptive names corresponding to package scope (e.g., `parse.go`, `model.go`, `visitor.go`, `errors.go`)
-- Test files suffixed with `_test.go` (e.g., `parse_test.go`, `integration_test.go`, `visitor_test.go`)
-- ANTLR-generated files prefixed with tool output (e.g., `sysmlv2_lexer.go`, `sysmlv2_parser.go`)
+- Source files use `snake_case.go`: `parse.go`, `model.go`, `visitor.go`
+- Test files use `*_test.go` suffix: `parse_test.go`, `visitor_test.go`
+- Generated ANTLR files use PascalCase with `SysMLv2` prefix: `sysmlv2_parser.go`, `sysmlv2_lexer.go`
+
+**Packages:**
+- Package names are lowercase, single words: `sysml`, `low`, `parser`
+- The main API package is `sysml` (high-level)
+- The low-level package is `low` (direct ANTLR access)
+- Generated parser code is in `internal/parser`
 
 **Functions:**
-- PascalCase for exported functions: `ParseString`, `ParseFile`, `ParseBytes`, `MustParseFile`, `Validate`
-- camelCase for unexported helper functions: `parseWithSource`, `buildModel`, `extractName`, `walkElement`, `visitElement`
-- Constructor functions use `New*` prefix: `NewPackage()`, `NewPart()`, `NewRequirement()`, `NewModel()`
-- Receiver methods use same casing as functions
-- Boolean accessor methods use `Has*` or `Is*` prefixes: `HasErrors()`, `IsDefinition`, `IsResolved()`
-
-**Variables:**
-- Short names in local scope: `i`, `err`, `pkg`, `req`, `ver`, `elem`
-- Descriptive names for package-level variables and struct fields: `elementIndex`, `unresolvedSubject`, `DerivedFrom`, `SatisfiedBy`
-- Private struct fields are lowercase: `model`, `currentPkg`, `elementStack`, `children`, `packages`, `parts`
-- Public struct fields are PascalCase: `Model`, `Errors`, `Tree`, `Source`, `IsDefinition`, `TypeRef`
-- Error variables: `err` (short form in local scope), descriptive names for error types: `ParseError`, `SyntaxError`, `Error`
+- Public functions use PascalCase: `ParseString()`, `FindRequirements()`
+- Private functions use camelCase: `buildModel()`, `extractName()`
+- Constructor functions use `New` prefix: `NewParser()`, `NewRequirement()`
+- Getter methods match field name without `Get` prefix: `Name()`, `Kind()`, `Children()`
+- Boolean methods use `Has*` or `Is*` prefixes: `HasErrors()`, `IsResolved()`
 
 **Types:**
-- PascalCase for all types (structs, interfaces, type aliases): `ParseResult`, `ParseError`, `ParseOption`, `Visitor`, `Element`, `Model`, `Package`, `Part`, `Requirement`
-- Constants use PascalCase with Kind/Method prefixes: `KindPackage`, `KindPart`, `KindRequirement`, `VerificationMethodTest`, `PortDirectionIn`
-- Interface names follow Go convention (no `I` prefix despite ANTLR-generated code using it): `Element`, `Visitor`, `Definition`, `Usage`
+- Interfaces use noun names: `Element`, `Definition`, `Usage`, `Visitor`
+- Structs use noun names: `Package`, `Requirement`, `ParseResult`
+- Pointer receivers for methods that modify state
+- Value receivers for read-only methods
+
+**Constants:**
+- Use PascalCase for exported constants: `KindPackage`, `KindRequirement`
+- Use iota for sequential constants in type enumerations
+
+**Variables:**
+- Short names in local scope: `pkg`, `req`, `err`
+- Avoid single-letter names except for common patterns: `i`, `ok`, `t`
+- Acronyms in all caps: `ID`, `QN` (for Qualified Name)
 
 ## Code Style
 
 **Formatting:**
-- Uses standard Go formatting (gofmt defaults)
-- 80-120 character line length observed in practice
-- Tab indentation (Go standard)
-- Braces on same line (Go standard)
+- Standard `gofmt` formatting - no custom rules detected
+- No `.prettierrc` or custom formatting configuration
+- No linting configuration files (`.eslintrc`, etc.) detected
 
-**Linting:**
-- No explicit linting configuration files found; uses Go standard conventions
-- Follows Go idiomatic patterns for error handling and return types
-- Receivers on type methods are typically short (1-2 characters): `(p *Package)`, `(m *Model)`, `(b *modelBuilder)`
+**Line Length:**
+- Generally under 100 characters
+- Long function signatures wrap at parameter boundaries
 
-## Import Organization
+**Import Organization:**
 
-**Order:**
-1. Standard library imports (`io`, `os`, `path/filepath`, `strings`, `sync`, `fmt`, `testing`)
-2. Third-party imports (`github.com/antlr4-go/antlr/v4`, `github.com/dVoo/gosysml2/internal/parser`, `github.com/dVoo/gosysml2/low`)
-3. Local package imports (when in different packages within same module)
+Standard Go grouping:
+1. Standard library imports
+2. Third-party imports (ANTLR)
+3. Local/internal imports
 
-**Path Aliases:**
-- No aliases used; fully qualified paths throughout
-- Imports from `github.com/dVoo/gosysml2` prefix packages like `low` and `internal/parser`
-
-**Example from `parse.go`:**
 ```go
 import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strings"
-	"sync"
 
 	"github.com/antlr4-go/antlr/v4"
 	"github.com/dVoo/gosysml2/internal/parser"
@@ -69,63 +71,170 @@ import (
 )
 ```
 
+**No Blank Imports:**
+- Unused imports are not present (enforced by Go compiler)
+
 ## Error Handling
 
-**Patterns:**
-- Errors returned as second return value in tuples: `(result T, err error)` or `(tree ParseTree, errors ParseErrors)`
-- Error types are custom structs that implement `error` interface: `ParseError`, `SyntaxError`, `ParseErrors`
-- `HasErrors()` method used to check if error collection contains errors
-- `Success()` method on result types: `ParseResult.Success()` returns `true` if no errors
-- Wrapped errors with context using custom error types that include `Source`, `Line`, `Column`, `Message`
-- Errors collected during parsing/lexing into `ErrorCollector` which implements `antlr.ErrorListener`
-- Early returns on error: File I/O errors returned immediately with wrapped message
+**Error Types:**
+- Custom error structs in each package:
+  - `sysml.Error` - User-friendly error with line/column
+  - `low.SyntaxError` - Low-level syntax error from lexer/parser
+  - `ParseError` - Aggregates multiple errors
 
-**Example from `parse.go`:**
+**Error Patterns:**
+
 ```go
-if !result.Success() {
-    return &ParseResult{
-        Errors: &ParseError{
-            Errors: []*Error{{
-                Line:    0,
-                Column:  0,
-                Message: err.Error(),
-            }},
-            Source: filename,
-        },
-        Source: filename,
-    }
+// Return error as value
+func (r *ParseResult) Success() bool {
+	return r.Errors == nil || !r.Errors.HasErrors()
+}
+
+// Early return on error with context
+func ParseFile(filename string, opts ...ParseOption) *ParseResult {
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		return &ParseResult{
+			Errors: &ParseError{
+				Errors: []*Error{{
+					Line:    0,
+					Column:  0,
+					Message: err.Error(),
+				}},
+				Source: filename,
+			},
+			Source: filename,
+		}
+	}
+	return parseWithSource(string(content), filename, opts...)
 }
 ```
 
-## Logging
+**Panic Usage:**
+- `MustParseString()` and `MustParseFile()` panic on error
+- Convention: `Must` prefix indicates panic on failure
+- Used only in convenience functions, not in library code
 
-**Framework:** Uses standard `testing.T` for test logging; no runtime logging framework observed
+```go
+func MustParseString(input string) *Model {
+	result := ParseString(input)
+	if !result.Success() {
+		panic(result.Errors)
+	}
+	return result.Model
+}
+```
 
-**Patterns:**
-- `t.Fatalf()` for fatal test failures that stop execution
-- `t.Errorf()` for non-fatal test failures
-- `t.Logf()` for informational logging in tests
-- `t.Error()` for simple error reporting
-- `t.Skip()` to skip tests when preconditions not met
-- Comments used for documentation, not for runtime behavior explanation
+## Architecture Patterns
+
+**Dual-Layer API Design:**
+
+1. **High-Level API** (`sysml` package):
+   - `ParseString()`, `ParseFile()`, `ParseDirectory()`
+   - Returns domain model (`*Model`, `*Package`, `*Requirement`)
+   - User-friendly error messages
+
+2. **Low-Level API** (`low` package):
+   - Direct access to ANTLR lexer/parser
+   - Performance-focused with minimal overhead
+   - Raw parse tree access
+
+**Visitor Pattern:**
+
+```go
+// Interface definition in visitor.go
+type Visitor interface {
+	VisitPackage(pkg *Package) bool
+	VisitPart(part *Part) bool
+	VisitRequirement(req *Requirement) bool
+	// ... more methods
+}
+
+// BaseVisitor provides default implementations
+type BaseVisitor struct{}
+func (BaseVisitor) VisitPackage(pkg *Package) bool { return true }
+```
+
+**Functional Options Pattern:**
+
+```go
+type ParseOption func(*parseConfig)
+
+func WithDiscardTree() ParseOption {
+	return func(c *parseConfig) {
+		c.discardTree = true
+	}
+}
+
+func ParseString(input string, opts ...ParseOption) *ParseResult {
+	cfg := &parseConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	// ... use cfg
+}
+```
+
+**Type Embedding:**
+
+```go
+// Base element embedded in concrete types
+type baseElement struct {
+	kind     ElementKind
+	name     string
+	location Location
+	parent   Element
+	children []Element
+}
+
+type Package struct {
+	baseElement
+	IsLibrary bool
+}
+```
+
+**Interface Segregation:**
+
+```go
+// Element is the base interface
+type Element interface {
+	Kind() ElementKind
+	Name() string
+	QualifiedName() string
+	Location() Location
+	Parent() Element
+	Children() []Element
+}
+
+// Definition marker interface
+type Definition interface {
+	Element
+	isDefinition()
+}
+```
 
 ## Comments
 
-**When to Comment:**
-- Function comments for all exported functions (Go standard doc comment pattern)
-- Type comments for all exported types explaining their purpose
-- Inline comments for non-obvious logic (e.g., "Removed tokens.Fill() - let ANTLR consume tokens lazily")
-- Inline comments for performance considerations and workarounds
-- Comments on constants and struct fields that aren't self-documenting
+**Package Documentation:**
 
-**GoDoc/Doc Comments:**
-- All exported functions preceded by comment: `// FunctionName does something`
-- All exported types preceded by comment: `// TypeName represents...`
-- All exported struct fields lack doc comments (relying on field names being descriptive)
-- Package-level doc comments at top: `// Package sysml provides...`
-- Examples use inline comments and test cases to document behavior
+```go
+// Package sysml provides a high-level, developer-friendly API for working with SysML v2 models.
+// This package offers convenient functions for parsing, traversing, and manipulating SysML content.
+package sysml
+```
 
-**Example from `parse.go`:**
+**Function Documentation:**
+
+```go
+// ParseString parses a SysML string and returns a high-level model.
+func ParseString(input string, opts ...ParseOption) *ParseResult
+
+// MustParseString parses a SysML string and panics if there are errors.
+func MustParseString(input string) *Model
+```
+
+**Type Documentation:**
+
 ```go
 // ParseResult contains the result of parsing SysML input.
 type ParseResult struct {
@@ -134,48 +243,65 @@ type ParseResult struct {
 	Tree   antlr.Tree  // The raw parse tree (for advanced use)
 	Source string      // Source file path or identifier
 }
+```
 
-// Success returns true if parsing was successful (no errors).
-func (r *ParseResult) Success() bool {
-	return r.Errors == nil || !r.Errors.HasErrors()
+## File Organization
+
+**Within a Package:**
+- Types and interfaces first
+- Constructor functions (`New*`) next
+- Methods grouped by receiver type
+- Helper functions at end
+
+**Example structure in model.go:**
+1. Kind constants (`ElementKind`)
+2. Core interfaces (`Element`, `Definition`, `Usage`)
+3. Base struct (`baseElement`)
+4. Concrete types (`Package`, `Part`, `Requirement`)
+5. Model struct with methods
+6. Resolution methods
+
+## Concurrency Patterns
+
+**Worker Pool for Parallel Parsing:**
+
+```go
+func ParseDirectoryParallel(dir string, workers int, opts ...ParseOption) ([]*ParseResult, error) {
+	if workers <= 0 {
+		workers = runtime.NumCPU()
+	}
+	
+	results := make([]*ParseResult, len(files))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, workers) // Semaphore for limiting concurrency
+
+	for i, file := range files {
+		wg.Add(1)
+		sem <- struct{}{} // Acquire
+
+		go func(idx int, path string) {
+			defer wg.Done()
+			defer func() { <-sem }() // Release
+
+			results[idx] = ParseFile(path, opts...)
+		}(i, file)
+	}
+
+	wg.Wait()
+	return results, nil
 }
 ```
 
-## Function Design
+## Testing Conventions
 
-**Size:** Functions generally 5-50 lines; tree-walking and parsing logic can reach 50-100 lines with clear purpose
+See `TESTING.md` for detailed testing patterns.
 
-**Parameters:**
-- Constructors take essential fields: `NewPackage(name string, loc Location)`
-- Parse functions take input with variadic options: `ParseString(input string, opts ...ParseOption)`
-- Options pattern used: `ParseOption func(*parseConfig)` for flexible configuration
-- Visitor methods take typed elements: `VisitPackage(pkg *Package) bool`
-
-**Return Values:**
-- Single value for successful operations: `ParseRootNamespace() parser.IEntryRuleRootNamespaceContext`
-- Tuple returns for fallible operations: `(result T, err error)`
-- Pointer receivers for methods that modify state: `(r *ParseResult)`, `(m *Model)`
-- Value receivers for immutable types: `(k ElementKind) String() string`
-
-## Module Design
-
-**Exports:**
-- Clear public API in package-level exported types and functions
-- Lowercase private helpers and internal builders: `parseConfig`, `modelBuilder`, `extractName`
-- Two-package architecture: `low` (direct ANTLR) and `sysml` (high-level API)
-
-**Barrel Files:**
-- `visitor.go` exports multiple visitor types and functions: `Visitor` interface, `BaseVisitor`, `Visit()`, `Walk()`, `Filter()`, `FindByKind()`, `FindByName()`, `FindPackages()`, etc.
-- `model.go` exports model navigation and building: `Model`, `Package`, `Element` interfaces, all element types (`Part`, `Requirement`, `Verification`, etc.)
-- `parse.go` exports parsing entry points and configuration
-- `errors.go` exports error types and formatting
-
-**Private Implementation Details:**
-- ANTLR parser integration hidden in `low` package
-- `modelBuilder` is unexported but documented as the tree walker
-- Reference resolution methods private: `resolveRequirementRefs()`, `resolvePartRefs()`, `findElement()`
-- Tree construction details private in `parseWithSource()`, `buildModel()`
+Key conventions:
+- Tests use descriptive names: `TestParseString`, `TestParseStringWithErrors`
+- Test data embedded as raw strings with backticks
+- Use `t.Fatalf` for fatal errors, `t.Errorf` for non-fatal
+- `t.Logf` for debugging output
 
 ---
 
-*Convention analysis: 2026-01-30*
+*Convention analysis: 2026-02-05*
