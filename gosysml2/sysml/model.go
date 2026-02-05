@@ -1,0 +1,2014 @@
+package sysml
+
+// ElementKind represents the kind of a SysML element.
+type ElementKind int
+
+const (
+	KindUnknown ElementKind = iota
+	KindPackage
+	KindPart
+	KindItem
+	KindPort
+	KindAttribute
+	KindConnection
+	KindInterface
+	KindAllocation
+	KindAction
+	KindState
+	KindTransition
+	KindConstraint
+	KindRequirement
+	KindConcern
+	KindUseCase
+	KindVerification
+	KindAnalysis
+	KindView
+	KindViewpoint
+	KindComment
+	KindDoc
+	KindMetadata
+	KindImport
+	KindAlias
+	KindDependency
+	KindFlow
+	KindEnumeration
+	KindEnumerationValue
+	KindCalculation
+)
+
+// String returns the string representation of the element kind.
+func (k ElementKind) String() string {
+	switch k {
+	case KindPackage:
+		return "package"
+	case KindPart:
+		return "part"
+	case KindItem:
+		return "item"
+	case KindPort:
+		return "port"
+	case KindAttribute:
+		return "attribute"
+	case KindConnection:
+		return "connection"
+	case KindInterface:
+		return "interface"
+	case KindAllocation:
+		return "allocation"
+	case KindAction:
+		return "action"
+	case KindState:
+		return "state"
+	case KindConstraint:
+		return "constraint"
+	case KindRequirement:
+		return "requirement"
+	case KindConcern:
+		return "concern"
+	case KindUseCase:
+		return "use case"
+	case KindVerification:
+		return "verification"
+	case KindAnalysis:
+		return "analysis"
+	case KindView:
+		return "view"
+	case KindViewpoint:
+		return "viewpoint"
+	case KindComment:
+		return "comment"
+	case KindDoc:
+		return "doc"
+	case KindMetadata:
+		return "metadata"
+	case KindImport:
+		return "import"
+	case KindAlias:
+		return "alias"
+	case KindDependency:
+		return "dependency"
+	case KindFlow:
+		return "flow"
+	case KindEnumeration:
+		return "enumeration"
+	case KindEnumerationValue:
+		return "enumeration value"
+	case KindCalculation:
+		return "calculation"
+	case KindTransition:
+		return "transition"
+	default:
+		return "unknown"
+	}
+}
+
+// Location represents a source location in the input.
+type Location struct {
+	Line      int
+	Column    int
+	EndLine   int
+	EndColumn int
+}
+
+// Ref represents a reference to another element.
+// It can be either resolved (pointing to an actual element) or unresolved (just a name).
+type Ref[T Element] struct {
+	name     string // The reference name (qualified or simple)
+	resolved T      // The resolved element (nil if unresolved)
+}
+
+// NewRef creates a new unresolved reference.
+func NewRef[T Element](name string) Ref[T] {
+	return Ref[T]{name: name}
+}
+
+// Name returns the reference name.
+func (r Ref[T]) Name() string {
+	return r.name
+}
+
+// Resolved returns the resolved element, or nil if unresolved.
+func (r Ref[T]) Resolved() T {
+	return r.resolved
+}
+
+// IsResolved returns true if the reference has been resolved.
+func (r Ref[T]) IsResolved() bool {
+	// Check if resolved is non-nil (for interface types)
+	var zero T
+	return any(r.resolved) != any(zero)
+}
+
+// Resolve sets the resolved element.
+func (r *Ref[T]) Resolve(elem T) {
+	r.resolved = elem
+}
+
+// Element is the base interface for all SysML elements.
+type Element interface {
+	// Kind returns the kind of this element.
+	Kind() ElementKind
+
+	// Name returns the name of this element, or empty string if unnamed.
+	Name() string
+
+	// QualifiedName returns the fully qualified name of this element.
+	QualifiedName() string
+
+	// Location returns the source location of this element.
+	Location() Location
+
+	// Parent returns the parent element, or nil for root elements.
+	Parent() Element
+
+	// Children returns the child elements.
+	Children() []Element
+
+	// SetParent sets the parent element.
+	SetParent(parent Element)
+
+	// Documentation returns the documentation string for this element.
+	Documentation() string
+}
+
+// Definition is the interface for definition elements (e.g., part def, requirement def).
+type Definition interface {
+	Element
+	isDefinition()
+}
+
+// Usage is the interface for usage elements (e.g., part usage, requirement usage).
+type Usage interface {
+	Element
+	// Type returns a reference to the definition this usage is typed by.
+	Type() Element
+	isUsage()
+}
+
+// baseElement provides common implementation for all elements.
+type baseElement struct {
+	kind          ElementKind
+	name          string
+	location      Location
+	parent        Element
+	children      []Element
+	documentation string
+}
+
+func (e *baseElement) Kind() ElementKind   { return e.kind }
+func (e *baseElement) Name() string        { return e.name }
+func (e *baseElement) Location() Location  { return e.location }
+func (e *baseElement) Parent() Element     { return e.parent }
+func (e *baseElement) Children() []Element { return e.children }
+func (e *baseElement) SetParent(p Element) { e.parent = p }
+func (e *baseElement) Documentation() string { return e.documentation }
+
+func (e *baseElement) SetDocumentation(doc string) {
+	e.documentation = doc
+}
+
+func (e *baseElement) QualifiedName() string {
+	if e.parent == nil {
+		return e.name
+	}
+	parentQN := e.parent.QualifiedName()
+	if parentQN == "" {
+		return e.name
+	}
+	return parentQN + "::" + e.name
+}
+
+func (e *baseElement) addChild(child Element) {
+	e.children = append(e.children, child)
+	child.SetParent(e)
+}
+
+// Package represents a SysML package.
+type Package struct {
+	baseElement
+	IsLibrary bool
+
+	// Typed accessors for children
+	packages     []*Package
+	parts        []*Part
+	requirements []*Requirement
+	actions      []*Action
+	imports      []*Import
+	items        []*Item
+	states       []*State
+	connections  []*Connection
+	interfaces   []*Interface
+	allocations  []*Allocation
+	views        []*View
+	viewpoints   []*Viewpoint
+	calculations []*Calculation
+	enumerations []*Enumeration
+	constraints  []*Constraint
+}
+
+// NewPackage creates a new Package element.
+func NewPackage(name string, loc Location) *Package {
+	return &Package{
+		baseElement: baseElement{
+			kind:     KindPackage,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		packages:     make([]*Package, 0),
+		parts:        make([]*Part, 0),
+		requirements: make([]*Requirement, 0),
+		actions:      make([]*Action, 0),
+		imports:      make([]*Import, 0),
+		items:        make([]*Item, 0),
+		states:       make([]*State, 0),
+		connections:  make([]*Connection, 0),
+		interfaces:   make([]*Interface, 0),
+		allocations:  make([]*Allocation, 0),
+		views:        make([]*View, 0),
+		viewpoints:   make([]*Viewpoint, 0),
+		calculations: make([]*Calculation, 0),
+		enumerations: make([]*Enumeration, 0),
+		constraints:  make([]*Constraint, 0),
+	}
+}
+
+// AddChild adds a child element to the package with proper type tracking.
+func (p *Package) AddChild(child Element) {
+	p.baseElement.addChild(child)
+
+	// Track by type for type-safe access
+	switch c := child.(type) {
+	case *Package:
+		p.packages = append(p.packages, c)
+	case *Part:
+		p.parts = append(p.parts, c)
+	case *Requirement:
+		p.requirements = append(p.requirements, c)
+	case *Action:
+		p.actions = append(p.actions, c)
+	case *Import:
+		p.imports = append(p.imports, c)
+	case *Item:
+		p.items = append(p.items, c)
+	case *State:
+		p.states = append(p.states, c)
+	case *Connection:
+		p.connections = append(p.connections, c)
+	case *Interface:
+		p.interfaces = append(p.interfaces, c)
+	case *Allocation:
+		p.allocations = append(p.allocations, c)
+	case *View:
+		p.views = append(p.views, c)
+	case *Viewpoint:
+		p.viewpoints = append(p.viewpoints, c)
+	case *Calculation:
+		p.calculations = append(p.calculations, c)
+	case *Enumeration:
+		p.enumerations = append(p.enumerations, c)
+	case *Constraint:
+		p.constraints = append(p.constraints, c)
+	}
+}
+
+// Packages returns all direct child packages.
+func (p *Package) Packages() []*Package { return p.packages }
+
+// Parts returns all direct child parts.
+func (p *Package) Parts() []*Part { return p.parts }
+
+// Requirements returns all direct child requirements.
+func (p *Package) Requirements() []*Requirement { return p.requirements }
+
+// Actions returns all direct child actions.
+func (p *Package) Actions() []*Action { return p.actions }
+
+// Imports returns all direct child imports.
+func (p *Package) Imports() []*Import { return p.imports }
+
+// Attribute represents a SysML attribute with name, type, and optional value.
+type Attribute struct {
+	baseElement
+	IsDefinition bool
+	TypeRef      Ref[Element] // Reference to the attribute type
+	DefaultValue string       // Default value expression (as string for now)
+	IsReadOnly   bool
+	IsDerived    bool
+}
+
+// NewAttribute creates a new Attribute element.
+func NewAttribute(name string, loc Location, isDefinition bool) *Attribute {
+	return &Attribute{
+		baseElement: baseElement{
+			kind:     KindAttribute,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition: isDefinition,
+	}
+}
+
+func (a *Attribute) isDefinition() {}
+func (a *Attribute) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (a *Attribute) Type() Element {
+	return a.TypeRef.Resolved()
+}
+
+// Part represents a SysML part definition or usage.
+type Part struct {
+	baseElement
+	IsDefinition bool
+	TypeRef      Ref[*Part] // Reference to the part definition (for usages)
+
+	// Typed children
+	attributes []*Attribute
+	parts      []*Part
+	ports      []*Port
+}
+
+func (p *Part) isDefinition() {}
+func (p *Part) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (p *Part) Type() Element {
+	return p.TypeRef.Resolved()
+}
+
+// NewPart creates a new Part element.
+func NewPart(name string, loc Location, isDefinition bool) *Part {
+	return &Part{
+		baseElement: baseElement{
+			kind:     KindPart,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition: isDefinition,
+		attributes:   make([]*Attribute, 0),
+		parts:        make([]*Part, 0),
+		ports:        make([]*Port, 0),
+	}
+}
+
+// AddChild adds a child element with type tracking.
+func (p *Part) AddChild(child Element) {
+	p.baseElement.addChild(child)
+
+	switch c := child.(type) {
+	case *Attribute:
+		p.attributes = append(p.attributes, c)
+	case *Part:
+		p.parts = append(p.parts, c)
+	case *Port:
+		p.ports = append(p.ports, c)
+	}
+}
+
+// Attributes returns all attributes of this part.
+func (p *Part) Attributes() []*Attribute { return p.attributes }
+
+// Parts returns all nested parts.
+func (p *Part) Parts() []*Part { return p.parts }
+
+// Ports returns all ports.
+func (p *Part) Ports() []*Port { return p.ports }
+
+// Port represents a SysML port definition or usage.
+type Port struct {
+	baseElement
+	IsDefinition bool
+	TypeRef      Ref[*Port]
+	Direction    PortDirection
+
+	// Typed children
+	ports []*Port
+	parts []*Part
+}
+
+// PortDirection indicates the direction of a port.
+type PortDirection int
+
+const (
+	PortDirectionNone PortDirection = iota
+	PortDirectionIn
+	PortDirectionOut
+	PortDirectionInOut
+)
+
+func (p *Port) isDefinition() {}
+func (p *Port) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (p *Port) Type() Element {
+	return p.TypeRef.Resolved()
+}
+
+// NewPort creates a new Port element.
+func NewPort(name string, loc Location, isDefinition bool) *Port {
+	return &Port{
+		baseElement: baseElement{
+			kind:     KindPort,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition: isDefinition,
+		ports:        make([]*Port, 0),
+		parts:        make([]*Part, 0),
+	}
+}
+
+// AddChild adds a child element with type tracking.
+func (p *Port) AddChild(child Element) {
+	p.baseElement.addChild(child)
+
+	switch c := child.(type) {
+	case *Port:
+		p.ports = append(p.ports, c)
+	case *Part:
+		p.parts = append(p.parts, c)
+	}
+}
+
+// Ports returns nested ports.
+func (p *Port) Ports() []*Port { return p.ports }
+
+// Parts returns nested parts.
+func (p *Port) Parts() []*Part { return p.parts }
+
+// RequirementConstraint represents a constraint within a requirement (assume or require).
+type RequirementConstraint struct {
+	baseElement
+	IsAssume   bool   // true for assume, false for require
+	Expression string // The constraint expression
+}
+
+// NewRequirementConstraint creates a new constraint.
+func NewRequirementConstraint(loc Location, isAssume bool, expr string) *RequirementConstraint {
+	return &RequirementConstraint{
+		baseElement: baseElement{
+			kind:     KindConstraint,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsAssume:   isAssume,
+		Expression: expr,
+	}
+}
+
+// Constraint represents a SysML constraint definition or usage.
+type Constraint struct {
+	baseElement
+	IsDefinition bool
+	TypeRef      Ref[*Constraint]
+	Expression   string // Constraint expression
+
+	// Typed children
+	constraints []*Constraint
+}
+
+func (c *Constraint) isDefinition() {}
+func (c *Constraint) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (c *Constraint) Type() Element {
+	return c.TypeRef.Resolved()
+}
+
+// NewConstraint creates a new Constraint element.
+func NewConstraint(name string, loc Location, isDefinition bool) *Constraint {
+	return &Constraint{
+		baseElement: baseElement{
+			kind:     KindConstraint,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition: isDefinition,
+		constraints:  make([]*Constraint, 0),
+	}
+}
+
+// AddChild adds a child element with type tracking.
+func (c *Constraint) AddChild(child Element) {
+	c.baseElement.addChild(child)
+
+	if nested, ok := child.(*Constraint); ok {
+		c.constraints = append(c.constraints, nested)
+	}
+}
+
+// Constraints returns nested constraints.
+func (c *Constraint) Constraints() []*Constraint { return c.constraints }
+
+// Requirement represents a SysML requirement definition or usage.
+type Requirement struct {
+	baseElement
+	IsDefinition  bool
+	TypeRef       Ref[*Requirement] // Reference to the requirement definition (for usages)
+	RequirementID string            // Optional requirement ID (e.g., "REQ-001")
+
+	// Subject
+	Subject Ref[Element] // Reference to the subject element
+
+	// Relationships with real references
+	DerivedFrom  []*Requirement   // Requirements this is derived from
+	DerivedReqs  []*Requirement   // Requirements derived from this one (inverse)
+	SatisfiedBy  []Element        // Elements that satisfy this requirement
+	VerifiedBy   []*Verification  // Verification cases that verify this
+
+	// Constraints
+	Assumptions []*RequirementConstraint // assume constraints
+	Constraints []*RequirementConstraint // require constraints
+
+	// Nested requirements
+	requirements []*Requirement
+
+	// Unresolved references (used during parsing, before resolution)
+	unresolvedDerivedFrom []string
+	unresolvedSatisfiedBy []string
+	unresolvedVerifiedBy  []string
+	unresolvedSubject     string
+}
+
+func (r *Requirement) isDefinition() {}
+func (r *Requirement) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (r *Requirement) Type() Element {
+	return r.TypeRef.Resolved()
+}
+
+// NewRequirement creates a new Requirement element.
+func NewRequirement(name string, loc Location, isDefinition bool) *Requirement {
+	return &Requirement{
+		baseElement: baseElement{
+			kind:     KindRequirement,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition:          isDefinition,
+		DerivedFrom:           make([]*Requirement, 0),
+		DerivedReqs:           make([]*Requirement, 0),
+		SatisfiedBy:           make([]Element, 0),
+		VerifiedBy:            make([]*Verification, 0),
+		Assumptions:           make([]*RequirementConstraint, 0),
+		Constraints:           make([]*RequirementConstraint, 0),
+		requirements:          make([]*Requirement, 0),
+		unresolvedDerivedFrom: make([]string, 0),
+		unresolvedSatisfiedBy: make([]string, 0),
+		unresolvedVerifiedBy:  make([]string, 0),
+	}
+}
+
+// AddChild adds a child element with type tracking.
+func (r *Requirement) AddChild(child Element) {
+	r.baseElement.addChild(child)
+
+	switch c := child.(type) {
+	case *Requirement:
+		r.requirements = append(r.requirements, c)
+	case *RequirementConstraint:
+		if c.IsAssume {
+			r.Assumptions = append(r.Assumptions, c)
+		} else {
+			r.Constraints = append(r.Constraints, c)
+		}
+	}
+}
+
+// Requirements returns nested requirements.
+func (r *Requirement) Requirements() []*Requirement { return r.requirements }
+
+// Text returns the documentation text (requirement text).
+func (r *Requirement) Text() string { return r.documentation }
+
+// AddUnresolvedDerivedFrom adds an unresolved derivation reference.
+func (r *Requirement) AddUnresolvedDerivedFrom(ref string) {
+	r.unresolvedDerivedFrom = append(r.unresolvedDerivedFrom, ref)
+}
+
+// AddUnresolvedSatisfiedBy adds an unresolved satisfaction reference.
+func (r *Requirement) AddUnresolvedSatisfiedBy(ref string) {
+	r.unresolvedSatisfiedBy = append(r.unresolvedSatisfiedBy, ref)
+}
+
+// AddUnresolvedVerifiedBy adds an unresolved verification reference.
+func (r *Requirement) AddUnresolvedVerifiedBy(ref string) {
+	r.unresolvedVerifiedBy = append(r.unresolvedVerifiedBy, ref)
+}
+
+// SetUnresolvedSubject sets the unresolved subject reference.
+func (r *Requirement) SetUnresolvedSubject(ref string) {
+	r.unresolvedSubject = ref
+}
+
+// UnresolvedReferences returns all unresolved reference names for debugging.
+func (r *Requirement) UnresolvedReferences() (derivedFrom, satisfiedBy, verifiedBy []string, subject string) {
+	return r.unresolvedDerivedFrom, r.unresolvedSatisfiedBy, r.unresolvedVerifiedBy, r.unresolvedSubject
+}
+
+// Action represents a SysML action definition or usage.
+type Action struct {
+	baseElement
+	IsDefinition bool
+	TypeRef      Ref[*Action]
+
+	// Typed children
+	actions []*Action
+}
+
+func (a *Action) isDefinition() {}
+func (a *Action) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (a *Action) Type() Element {
+	return a.TypeRef.Resolved()
+}
+
+// NewAction creates a new Action element.
+func NewAction(name string, loc Location, isDefinition bool) *Action {
+	return &Action{
+		baseElement: baseElement{
+			kind:     KindAction,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition: isDefinition,
+		actions:      make([]*Action, 0),
+	}
+}
+
+// AddChild adds a child element with type tracking.
+func (a *Action) AddChild(child Element) {
+	a.baseElement.addChild(child)
+
+	if c, ok := child.(*Action); ok {
+		a.actions = append(a.actions, c)
+	}
+}
+
+// Actions returns nested actions.
+func (a *Action) Actions() []*Action { return a.actions }
+
+// Verification represents a SysML verification case definition or usage.
+type Verification struct {
+	baseElement
+	IsDefinition bool
+	TypeRef      Ref[*Verification]
+
+	// Subject being verified
+	Subject Ref[Element]
+
+	// The requirement being verified (resolved reference)
+	VerifiedRequirement *Requirement
+
+	// Verification method
+	Method VerificationMethod
+
+	// Actions in the verification
+	actions []*Action
+
+	// Unresolved references
+	unresolvedSubject     string
+	unresolvedRequirement string
+}
+
+// VerificationMethod represents the method used for verification.
+type VerificationMethod int
+
+const (
+	VerificationMethodUnspecified VerificationMethod = iota
+	VerificationMethodTest
+	VerificationMethodAnalysis
+	VerificationMethodInspection
+	VerificationMethodDemonstration
+)
+
+func (v VerificationMethod) String() string {
+	switch v {
+	case VerificationMethodTest:
+		return "test"
+	case VerificationMethodAnalysis:
+		return "analysis"
+	case VerificationMethodInspection:
+		return "inspection"
+	case VerificationMethodDemonstration:
+		return "demonstration"
+	default:
+		return "unspecified"
+	}
+}
+
+func (v *Verification) isDefinition() {}
+func (v *Verification) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (v *Verification) Type() Element {
+	return v.TypeRef.Resolved()
+}
+
+// NewVerification creates a new Verification element.
+func NewVerification(name string, loc Location, isDefinition bool) *Verification {
+	return &Verification{
+		baseElement: baseElement{
+			kind:     KindVerification,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition: isDefinition,
+		actions:      make([]*Action, 0),
+	}
+}
+
+// AddChild adds a child element with type tracking.
+func (v *Verification) AddChild(child Element) {
+	v.baseElement.addChild(child)
+
+	if c, ok := child.(*Action); ok {
+		v.actions = append(v.actions, c)
+	}
+}
+
+// Actions returns the actions in this verification.
+func (v *Verification) Actions() []*Action { return v.actions }
+
+// SetUnresolvedRequirement sets the unresolved requirement reference.
+func (v *Verification) SetUnresolvedRequirement(ref string) {
+	v.unresolvedRequirement = ref
+}
+
+// SetUnresolvedSubject sets the unresolved subject reference.
+func (v *Verification) SetUnresolvedSubject(ref string) {
+	v.unresolvedSubject = ref
+}
+
+// Concern represents a SysML concern definition or usage.
+type Concern struct {
+	baseElement
+	IsDefinition bool
+	TypeRef      Ref[*Concern]
+
+	// Stakeholders (resolved references)
+	Stakeholders []Element
+
+	// Unresolved
+	unresolvedStakeholders []string
+}
+
+func (c *Concern) isDefinition() {}
+func (c *Concern) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (c *Concern) Type() Element {
+	return c.TypeRef.Resolved()
+}
+
+// NewConcern creates a new Concern element.
+func NewConcern(name string, loc Location, isDefinition bool) *Concern {
+	return &Concern{
+		baseElement: baseElement{
+			kind:     KindConcern,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition:           isDefinition,
+		Stakeholders:           make([]Element, 0),
+		unresolvedStakeholders: make([]string, 0),
+	}
+}
+
+// Text returns the documentation text (concern text).
+func (c *Concern) Text() string { return c.documentation }
+
+// UseCase represents a SysML use case definition or usage.
+type UseCase struct {
+	baseElement
+	IsDefinition bool
+	TypeRef      Ref[*UseCase]
+
+	// Subject (resolved reference)
+	Subject Ref[Element]
+
+	// Actors (resolved references)
+	Actors []Element
+
+	// Included use cases (resolved references)
+	IncludedUseCases []*UseCase
+
+	// Unresolved
+	unresolvedSubject      string
+	unresolvedActors       []string
+	unresolvedIncludedUseCases []string
+}
+
+func (u *UseCase) isDefinition() {}
+func (u *UseCase) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (u *UseCase) Type() Element {
+	return u.TypeRef.Resolved()
+}
+
+// NewUseCase creates a new UseCase element.
+func NewUseCase(name string, loc Location, isDefinition bool) *UseCase {
+	return &UseCase{
+		baseElement: baseElement{
+			kind:     KindUseCase,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition:              isDefinition,
+		Actors:                    make([]Element, 0),
+		IncludedUseCases:          make([]*UseCase, 0),
+		unresolvedActors:          make([]string, 0),
+		unresolvedIncludedUseCases: make([]string, 0),
+	}
+}
+
+// AnalysisCase represents a SysML analysis case definition or usage.
+type AnalysisCase struct {
+	baseElement
+	IsDefinition bool
+	TypeRef      Ref[*AnalysisCase]
+
+	// Subject (resolved reference)
+	Subject Ref[Element]
+
+	// Return type
+	ReturnType Ref[Element]
+
+	// Unresolved
+	unresolvedSubject    string
+	unresolvedReturnType string
+}
+
+func (a *AnalysisCase) isDefinition() {}
+func (a *AnalysisCase) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (a *AnalysisCase) Type() Element {
+	return a.TypeRef.Resolved()
+}
+
+// NewAnalysisCase creates a new AnalysisCase element.
+func NewAnalysisCase(name string, loc Location, isDefinition bool) *AnalysisCase {
+	return &AnalysisCase{
+		baseElement: baseElement{
+			kind:     KindAnalysis,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition: isDefinition,
+	}
+}
+
+// EnumerationValue represents a single value within an enumeration.
+type EnumerationValue struct {
+	baseElement
+}
+
+// NewEnumerationValue creates a new EnumerationValue element.
+func NewEnumerationValue(name string, loc Location) *EnumerationValue {
+	return &EnumerationValue{
+		baseElement: baseElement{
+			kind:     KindEnumerationValue,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+	}
+}
+
+// Enumeration represents a SysML enumeration definition or usage.
+type Enumeration struct {
+	baseElement
+	IsDefinition bool
+	TypeRef      Ref[*Enumeration]
+
+	// Enumerated values
+	values []*EnumerationValue
+}
+
+func (e *Enumeration) isDefinition() {}
+func (e *Enumeration) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (e *Enumeration) Type() Element {
+	return e.TypeRef.Resolved()
+}
+
+// NewEnumeration creates a new Enumeration element.
+func NewEnumeration(name string, loc Location, isDefinition bool) *Enumeration {
+	return &Enumeration{
+		baseElement: baseElement{
+			kind:     KindEnumeration,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition: isDefinition,
+		values:       make([]*EnumerationValue, 0),
+	}
+}
+
+// AddChild adds a child element with type tracking.
+func (e *Enumeration) AddChild(child Element) {
+	e.baseElement.addChild(child)
+
+	if v, ok := child.(*EnumerationValue); ok {
+		e.values = append(e.values, v)
+	}
+}
+
+// Values returns the enumeration values.
+func (e *Enumeration) Values() []*EnumerationValue { return e.values }
+
+// Item represents a SysML item definition or usage.
+type Item struct {
+	baseElement
+	IsDefinition bool
+	TypeRef      Ref[*Item]
+
+	// Typed children
+	attributes []*Attribute
+	items      []*Item
+}
+
+func (i *Item) isDefinition() {}
+func (i *Item) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (i *Item) Type() Element {
+	return i.TypeRef.Resolved()
+}
+
+// NewItem creates a new Item element.
+func NewItem(name string, loc Location, isDefinition bool) *Item {
+	return &Item{
+		baseElement: baseElement{
+			kind:     KindItem,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition: isDefinition,
+		attributes:   make([]*Attribute, 0),
+		items:        make([]*Item, 0),
+	}
+}
+
+// AddChild adds a child element with type tracking.
+func (i *Item) AddChild(child Element) {
+	i.baseElement.addChild(child)
+
+	switch c := child.(type) {
+	case *Attribute:
+		i.attributes = append(i.attributes, c)
+	case *Item:
+		i.items = append(i.items, c)
+	}
+}
+
+// Attributes returns all attributes of this item.
+func (i *Item) Attributes() []*Attribute { return i.attributes }
+
+// Items returns all nested items.
+func (i *Item) Items() []*Item { return i.items }
+
+// Calculation represents a SysML calculation definition or usage.
+type Calculation struct {
+	baseElement
+	IsDefinition bool
+	TypeRef      Ref[*Calculation]
+	ReturnType   Ref[Element] // Return type reference
+	Expression   string       // Calculation expression
+
+	unresolvedReturnType string
+}
+
+func (c *Calculation) isDefinition() {}
+func (c *Calculation) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (c *Calculation) Type() Element {
+	return c.TypeRef.Resolved()
+}
+
+// NewCalculation creates a new Calculation element.
+func NewCalculation(name string, loc Location, isDefinition bool) *Calculation {
+	return &Calculation{
+		baseElement: baseElement{
+			kind:     KindCalculation,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition: isDefinition,
+	}
+}
+
+// SetUnresolvedReturnType sets the unresolved return type reference.
+func (c *Calculation) SetUnresolvedReturnType(ref string) {
+	c.unresolvedReturnType = ref
+}
+
+// State represents a SysML state definition or usage.
+type State struct {
+	baseElement
+	IsDefinition bool
+	TypeRef      Ref[*State]
+
+	// Entry/do/exit actions
+	EntryAction *Action
+	DoAction    *Action
+	ExitAction  *Action
+
+	// Nested states and transitions
+	states      []*State
+	transitions []*Transition
+}
+
+func (s *State) isDefinition() {}
+func (s *State) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (s *State) Type() Element {
+	return s.TypeRef.Resolved()
+}
+
+// NewState creates a new State element.
+func NewState(name string, loc Location, isDefinition bool) *State {
+	return &State{
+		baseElement: baseElement{
+			kind:     KindState,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition: isDefinition,
+		states:       make([]*State, 0),
+		transitions:  make([]*Transition, 0),
+	}
+}
+
+// AddChild adds a child element with type tracking.
+func (s *State) AddChild(child Element) {
+	s.baseElement.addChild(child)
+
+	switch c := child.(type) {
+	case *State:
+		s.states = append(s.states, c)
+	case *Transition:
+		s.transitions = append(s.transitions, c)
+	}
+}
+
+// States returns nested states.
+func (s *State) States() []*State { return s.states }
+
+// Transitions returns transitions.
+func (s *State) Transitions() []*Transition { return s.transitions }
+
+// Transition represents a SysML transition usage.
+type Transition struct {
+	baseElement
+	Source       Ref[*State] // Source state reference
+	Target       Ref[*State] // Target state reference
+	TriggerExpr  string      // Trigger expression
+	GuardExpr    string      // Guard expression
+	EffectAction *Action     // Effect action
+
+	unresolvedSource string
+	unresolvedTarget string
+}
+
+// NewTransition creates a new Transition element.
+func NewTransition(name string, loc Location) *Transition {
+	return &Transition{
+		baseElement: baseElement{
+			kind:     KindTransition,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+	}
+}
+
+// SetUnresolvedSource sets the unresolved source state reference.
+func (t *Transition) SetUnresolvedSource(ref string) {
+	t.unresolvedSource = ref
+}
+
+// SetUnresolvedTarget sets the unresolved target state reference.
+func (t *Transition) SetUnresolvedTarget(ref string) {
+	t.unresolvedTarget = ref
+}
+
+// ConnectionEnd represents an endpoint of a connection.
+type ConnectionEnd struct {
+	baseElement
+	EndRef Ref[Element] // Reference to the connected element (Part/Port)
+
+	unresolvedEndRef string
+}
+
+// NewConnectionEnd creates a new ConnectionEnd element.
+func NewConnectionEnd(name string, loc Location) *ConnectionEnd {
+	return &ConnectionEnd{
+		baseElement: baseElement{
+			kind:     KindConnection,
+			name:     name,
+			location: loc,
+		},
+	}
+}
+
+// Connection represents a SysML connection definition or usage.
+type Connection struct {
+	baseElement
+	IsDefinition bool
+	TypeRef      Ref[*Connection]
+	Ends         []*ConnectionEnd // Connection endpoints
+
+	unresolvedEnds []string
+}
+
+func (c *Connection) isDefinition() {}
+func (c *Connection) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (c *Connection) Type() Element {
+	return c.TypeRef.Resolved()
+}
+
+// NewConnection creates a new Connection element.
+func NewConnection(name string, loc Location, isDefinition bool) *Connection {
+	return &Connection{
+		baseElement: baseElement{
+			kind:     KindConnection,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition:   isDefinition,
+		Ends:           make([]*ConnectionEnd, 0),
+		unresolvedEnds: make([]string, 0),
+	}
+}
+
+// AddUnresolvedEnd adds an unresolved end reference.
+func (c *Connection) AddUnresolvedEnd(ref string) {
+	c.unresolvedEnds = append(c.unresolvedEnds, ref)
+}
+
+// Interface represents a SysML interface definition or usage.
+type Interface struct {
+	baseElement
+	IsDefinition bool
+	TypeRef      Ref[*Interface]
+
+	// Typed children
+	ports []*Port
+}
+
+func (i *Interface) isDefinition() {}
+func (i *Interface) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (i *Interface) Type() Element {
+	return i.TypeRef.Resolved()
+}
+
+// NewInterface creates a new Interface element.
+func NewInterface(name string, loc Location, isDefinition bool) *Interface {
+	return &Interface{
+		baseElement: baseElement{
+			kind:     KindInterface,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition: isDefinition,
+		ports:        make([]*Port, 0),
+	}
+}
+
+// AddChild adds a child element with type tracking.
+func (i *Interface) AddChild(child Element) {
+	i.baseElement.addChild(child)
+
+	if p, ok := child.(*Port); ok {
+		i.ports = append(i.ports, p)
+	}
+}
+
+// Ports returns all ports.
+func (i *Interface) Ports() []*Port { return i.ports }
+
+// Allocation represents a SysML allocation definition or usage.
+type Allocation struct {
+	baseElement
+	IsDefinition bool
+	TypeRef      Ref[*Allocation]
+	Source       Ref[Element] // Allocated element
+	Target       Ref[Element] // Allocating element
+
+	unresolvedSource string
+	unresolvedTarget string
+}
+
+func (a *Allocation) isDefinition() {}
+func (a *Allocation) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (a *Allocation) Type() Element {
+	return a.TypeRef.Resolved()
+}
+
+// NewAllocation creates a new Allocation element.
+func NewAllocation(name string, loc Location, isDefinition bool) *Allocation {
+	return &Allocation{
+		baseElement: baseElement{
+			kind:     KindAllocation,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition: isDefinition,
+	}
+}
+
+// SetUnresolvedSource sets the unresolved source reference.
+func (a *Allocation) SetUnresolvedSource(ref string) {
+	a.unresolvedSource = ref
+}
+
+// SetUnresolvedTarget sets the unresolved target reference.
+func (a *Allocation) SetUnresolvedTarget(ref string) {
+	a.unresolvedTarget = ref
+}
+
+// Viewpoint represents a SysML viewpoint definition or usage.
+type Viewpoint struct {
+	baseElement
+	IsDefinition bool
+	TypeRef      Ref[*Viewpoint]
+	Concerns     []*Concern // Related concerns
+	Stakeholders []Element  // Related stakeholders
+
+	unresolvedConcerns     []string
+	unresolvedStakeholders []string
+}
+
+func (v *Viewpoint) isDefinition() {}
+func (v *Viewpoint) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (v *Viewpoint) Type() Element {
+	return v.TypeRef.Resolved()
+}
+
+// NewViewpoint creates a new Viewpoint element.
+func NewViewpoint(name string, loc Location, isDefinition bool) *Viewpoint {
+	return &Viewpoint{
+		baseElement: baseElement{
+			kind:     KindViewpoint,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition:           isDefinition,
+		Concerns:               make([]*Concern, 0),
+		Stakeholders:           make([]Element, 0),
+		unresolvedConcerns:     make([]string, 0),
+		unresolvedStakeholders: make([]string, 0),
+	}
+}
+
+// AddUnresolvedConcern adds an unresolved concern reference.
+func (v *Viewpoint) AddUnresolvedConcern(ref string) {
+	v.unresolvedConcerns = append(v.unresolvedConcerns, ref)
+}
+
+// AddUnresolvedStakeholder adds an unresolved stakeholder reference.
+func (v *Viewpoint) AddUnresolvedStakeholder(ref string) {
+	v.unresolvedStakeholders = append(v.unresolvedStakeholders, ref)
+}
+
+// View represents a SysML view definition or usage.
+type View struct {
+	baseElement
+	IsDefinition    bool
+	TypeRef         Ref[*View]
+	ExposedElements []Element       // Elements exposed by this view
+	Viewpoint       Ref[*Viewpoint] // Associated viewpoint
+
+	unresolvedExposedElements []string
+	unresolvedViewpoint       string
+}
+
+func (v *View) isDefinition() {}
+func (v *View) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (v *View) Type() Element {
+	return v.TypeRef.Resolved()
+}
+
+// NewView creates a new View element.
+func NewView(name string, loc Location, isDefinition bool) *View {
+	return &View{
+		baseElement: baseElement{
+			kind:     KindView,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition:              isDefinition,
+		ExposedElements:           make([]Element, 0),
+		unresolvedExposedElements: make([]string, 0),
+	}
+}
+
+// AddUnresolvedExposedElement adds an unresolved exposed element reference.
+func (v *View) AddUnresolvedExposedElement(ref string) {
+	v.unresolvedExposedElements = append(v.unresolvedExposedElements, ref)
+}
+
+// SetUnresolvedViewpoint sets the unresolved viewpoint reference.
+func (v *View) SetUnresolvedViewpoint(ref string) {
+	v.unresolvedViewpoint = ref
+}
+
+// Import represents a SysML import statement.
+type Import struct {
+	baseElement
+	ImportedNamespace string
+	IsRecursive       bool     // true for ::**
+	IsAll             bool     // true for ::*
+	ResolvedElement   Element  // The resolved imported element (if single import)
+}
+
+// NewImport creates a new Import element.
+func NewImport(namespace string, loc Location) *Import {
+	return &Import{
+		baseElement: baseElement{
+			kind:     KindImport,
+			name:     "",
+			location: loc,
+		},
+		ImportedNamespace: namespace,
+	}
+}
+
+// Comment represents a SysML comment.
+type Comment struct {
+	baseElement
+	Body   string
+	Locale string
+
+	// Elements this comment is about (resolved references)
+	About []Element
+}
+
+// NewComment creates a new Comment element.
+func NewComment(body string, loc Location) *Comment {
+	return &Comment{
+		baseElement: baseElement{
+			kind:     KindComment,
+			location: loc,
+		},
+		Body:  body,
+		About: make([]Element, 0),
+	}
+}
+
+// Doc represents inline documentation.
+type Doc struct {
+	baseElement
+	Body   string
+	Locale string
+}
+
+// NewDoc creates a new Doc element.
+func NewDoc(body string, loc Location) *Doc {
+	return &Doc{
+		baseElement: baseElement{
+			kind:     KindDoc,
+			location: loc,
+		},
+		Body: body,
+	}
+}
+
+// Model represents a complete SysML model (root namespace).
+type Model struct {
+	// Typed top-level element collections
+	Packages []*Package
+	Imports  []*Import
+	Comments []*Comment
+
+	// All top-level elements (for generic traversal)
+	Elements []Element
+
+	// Index for fast lookup by qualified name
+	elementIndex map[string]Element
+}
+
+// NewModel creates a new empty model.
+func NewModel() *Model {
+	return &Model{
+		Packages:     make([]*Package, 0),
+		Imports:      make([]*Import, 0),
+		Comments:     make([]*Comment, 0),
+		Elements:     make([]Element, 0),
+		elementIndex: make(map[string]Element),
+	}
+}
+
+// AddPackage adds a package to the model.
+func (m *Model) AddPackage(pkg *Package) {
+	m.Packages = append(m.Packages, pkg)
+	m.Elements = append(m.Elements, pkg)
+}
+
+// AddImport adds an import to the model.
+func (m *Model) AddImport(imp *Import) {
+	m.Imports = append(m.Imports, imp)
+	m.Elements = append(m.Elements, imp)
+}
+
+// AddComment adds a comment to the model.
+func (m *Model) AddComment(comment *Comment) {
+	m.Comments = append(m.Comments, comment)
+	m.Elements = append(m.Elements, comment)
+}
+
+// FindPackage finds a package by name.
+func (m *Model) FindPackage(name string) *Package {
+	for _, pkg := range m.Packages {
+		if pkg.Name() == name {
+			return pkg
+		}
+	}
+	return nil
+}
+
+// FindByQualifiedName finds an element by its fully qualified name.
+func (m *Model) FindByQualifiedName(qn string) Element {
+	return m.elementIndex[qn]
+}
+
+// BuildIndex builds the element index for fast lookups.
+// This should be called after parsing is complete.
+func (m *Model) BuildIndex() {
+	m.elementIndex = make(map[string]Element)
+	m.Walk(func(elem Element) bool {
+		qn := elem.QualifiedName()
+		if qn != "" {
+			m.elementIndex[qn] = elem
+		}
+		return true
+	})
+}
+
+// ResolveReferences resolves all element references in the model.
+// This should be called after parsing and BuildIndex.
+func (m *Model) ResolveReferences() {
+	m.Walk(func(elem Element) bool {
+		switch e := elem.(type) {
+		case *Requirement:
+			m.resolveRequirementRefs(e)
+		case *Verification:
+			m.resolveVerificationRefs(e)
+		case *Part:
+			m.resolvePartRefs(e)
+		case *Item:
+			m.resolveItemRefs(e)
+		case *UseCase:
+			m.resolveUseCaseRefs(e)
+		case *Concern:
+			m.resolveConcernRefs(e)
+		case *AnalysisCase:
+			m.resolveAnalysisCaseRefs(e)
+		case *Transition:
+			m.resolveTransitionRefs(e)
+		case *Connection:
+			m.resolveConnectionRefs(e)
+		case *Allocation:
+			m.resolveAllocationRefs(e)
+		case *View:
+			m.resolveViewRefs(e)
+		case *Viewpoint:
+			m.resolveViewpointRefs(e)
+		case *Calculation:
+			m.resolveCalculationRefs(e)
+		case *State:
+			m.resolveStateRefs(e)
+		case *Action:
+			m.resolveActionRefs(e)
+		case *Constraint:
+			m.resolveConstraintRefs(e)
+		case *Enumeration:
+			m.resolveEnumerationRefs(e)
+		case *Port:
+			m.resolvePortRefs(e)
+		case *Attribute:
+			m.resolveAttributeRefs(e)
+		case *Interface:
+			m.resolveInterfaceRefs(e)
+		}
+		return true
+	})
+}
+
+func (m *Model) resolveRequirementRefs(r *Requirement) {
+	// Resolve derived from
+	for _, name := range r.unresolvedDerivedFrom {
+		if elem := m.findElement(name, r); elem != nil {
+			if req, ok := elem.(*Requirement); ok {
+				r.DerivedFrom = append(r.DerivedFrom, req)
+				// Also set inverse relationship
+				req.DerivedReqs = append(req.DerivedReqs, r)
+			}
+		}
+	}
+
+	// Resolve satisfied by
+	for _, name := range r.unresolvedSatisfiedBy {
+		if elem := m.findElement(name, r); elem != nil {
+			r.SatisfiedBy = append(r.SatisfiedBy, elem)
+		}
+	}
+
+	// Resolve verified by
+	for _, name := range r.unresolvedVerifiedBy {
+		if elem := m.findElement(name, r); elem != nil {
+			if ver, ok := elem.(*Verification); ok {
+				r.VerifiedBy = append(r.VerifiedBy, ver)
+			}
+		}
+	}
+
+	// Resolve subject
+	if r.unresolvedSubject != "" {
+		if elem := m.findElement(r.unresolvedSubject, r); elem != nil {
+			r.Subject.Resolve(elem)
+		}
+	}
+
+	// Resolve type reference for usages
+	if !r.IsDefinition && r.TypeRef.name != "" {
+		if elem := m.findElement(r.TypeRef.name, r); elem != nil {
+			if req, ok := elem.(*Requirement); ok {
+				r.TypeRef.Resolve(req)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveVerificationRefs(v *Verification) {
+	// Resolve verified requirement
+	if v.unresolvedRequirement != "" {
+		if elem := m.findElement(v.unresolvedRequirement, v); elem != nil {
+			if req, ok := elem.(*Requirement); ok {
+				v.VerifiedRequirement = req
+				// Also set inverse relationship
+				req.VerifiedBy = append(req.VerifiedBy, v)
+			}
+		}
+	}
+
+	// Resolve subject
+	if v.unresolvedSubject != "" {
+		if elem := m.findElement(v.unresolvedSubject, v); elem != nil {
+			v.Subject.Resolve(elem)
+		}
+	}
+
+	// Resolve type reference
+	if !v.IsDefinition && v.TypeRef.name != "" {
+		if elem := m.findElement(v.TypeRef.name, v); elem != nil {
+			if ver, ok := elem.(*Verification); ok {
+				v.TypeRef.Resolve(ver)
+			}
+		}
+	}
+}
+
+func (m *Model) resolvePartRefs(p *Part) {
+	if !p.IsDefinition && p.TypeRef.name != "" {
+		if elem := m.findElement(p.TypeRef.name, p); elem != nil {
+			if part, ok := elem.(*Part); ok {
+				p.TypeRef.Resolve(part)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveUseCaseRefs(u *UseCase) {
+	// Resolve subject
+	if u.unresolvedSubject != "" {
+		if elem := m.findElement(u.unresolvedSubject, u); elem != nil {
+			u.Subject.Resolve(elem)
+		}
+	}
+
+	// Resolve actors
+	for _, name := range u.unresolvedActors {
+		if elem := m.findElement(name, u); elem != nil {
+			u.Actors = append(u.Actors, elem)
+		}
+	}
+
+	// Resolve included use cases
+	for _, name := range u.unresolvedIncludedUseCases {
+		if elem := m.findElement(name, u); elem != nil {
+			if uc, ok := elem.(*UseCase); ok {
+				u.IncludedUseCases = append(u.IncludedUseCases, uc)
+			}
+		}
+	}
+
+	// Resolve type reference
+	if !u.IsDefinition && u.TypeRef.name != "" {
+		if elem := m.findElement(u.TypeRef.name, u); elem != nil {
+			if uc, ok := elem.(*UseCase); ok {
+				u.TypeRef.Resolve(uc)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveConcernRefs(c *Concern) {
+	// Resolve stakeholders
+	for _, name := range c.unresolvedStakeholders {
+		if elem := m.findElement(name, c); elem != nil {
+			c.Stakeholders = append(c.Stakeholders, elem)
+		}
+	}
+
+	// Resolve type reference
+	if !c.IsDefinition && c.TypeRef.name != "" {
+		if elem := m.findElement(c.TypeRef.name, c); elem != nil {
+			if concern, ok := elem.(*Concern); ok {
+				c.TypeRef.Resolve(concern)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveAnalysisCaseRefs(a *AnalysisCase) {
+	// Resolve subject
+	if a.unresolvedSubject != "" {
+		if elem := m.findElement(a.unresolvedSubject, a); elem != nil {
+			a.Subject.Resolve(elem)
+		}
+	}
+
+	// Resolve return type
+	if a.unresolvedReturnType != "" {
+		if elem := m.findElement(a.unresolvedReturnType, a); elem != nil {
+			a.ReturnType.Resolve(elem)
+		}
+	}
+
+	// Resolve type reference
+	if !a.IsDefinition && a.TypeRef.name != "" {
+		if elem := m.findElement(a.TypeRef.name, a); elem != nil {
+			if ac, ok := elem.(*AnalysisCase); ok {
+				a.TypeRef.Resolve(ac)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveItemRefs(i *Item) {
+	if !i.IsDefinition && i.TypeRef.name != "" {
+		if elem := m.findElement(i.TypeRef.name, i); elem != nil {
+			if item, ok := elem.(*Item); ok {
+				i.TypeRef.Resolve(item)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveTransitionRefs(t *Transition) {
+	// Resolve source state
+	if t.unresolvedSource != "" {
+		if elem := m.findElement(t.unresolvedSource, t); elem != nil {
+			if state, ok := elem.(*State); ok {
+				t.Source.Resolve(state)
+			}
+		}
+	}
+
+	// Resolve target state
+	if t.unresolvedTarget != "" {
+		if elem := m.findElement(t.unresolvedTarget, t); elem != nil {
+			if state, ok := elem.(*State); ok {
+				t.Target.Resolve(state)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveConnectionRefs(c *Connection) {
+	// Resolve connection ends
+	for _, endRef := range c.unresolvedEnds {
+		if elem := m.findElement(endRef, c); elem != nil {
+			// Create a ConnectionEnd for this reference
+			end := NewConnectionEnd("", c.location)
+			end.EndRef.Resolve(elem)
+			c.Ends = append(c.Ends, end)
+		}
+	}
+
+	// Resolve type reference
+	if !c.IsDefinition && c.TypeRef.name != "" {
+		if elem := m.findElement(c.TypeRef.name, c); elem != nil {
+			if conn, ok := elem.(*Connection); ok {
+				c.TypeRef.Resolve(conn)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveAllocationRefs(a *Allocation) {
+	// Resolve source
+	if a.unresolvedSource != "" {
+		if elem := m.findElement(a.unresolvedSource, a); elem != nil {
+			a.Source.Resolve(elem)
+		}
+	}
+
+	// Resolve target
+	if a.unresolvedTarget != "" {
+		if elem := m.findElement(a.unresolvedTarget, a); elem != nil {
+			a.Target.Resolve(elem)
+		}
+	}
+
+	// Resolve type reference
+	if !a.IsDefinition && a.TypeRef.name != "" {
+		if elem := m.findElement(a.TypeRef.name, a); elem != nil {
+			if alloc, ok := elem.(*Allocation); ok {
+				a.TypeRef.Resolve(alloc)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveViewRefs(v *View) {
+	// Resolve exposed elements
+	for _, expRef := range v.unresolvedExposedElements {
+		if elem := m.findElement(expRef, v); elem != nil {
+			v.ExposedElements = append(v.ExposedElements, elem)
+		}
+	}
+
+	// Resolve viewpoint
+	if v.unresolvedViewpoint != "" {
+		if elem := m.findElement(v.unresolvedViewpoint, v); elem != nil {
+			if vp, ok := elem.(*Viewpoint); ok {
+				v.Viewpoint.Resolve(vp)
+			}
+		}
+	}
+
+	// Resolve type reference
+	if !v.IsDefinition && v.TypeRef.name != "" {
+		if elem := m.findElement(v.TypeRef.name, v); elem != nil {
+			if view, ok := elem.(*View); ok {
+				v.TypeRef.Resolve(view)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveViewpointRefs(v *Viewpoint) {
+	// Resolve concerns
+	for _, cRef := range v.unresolvedConcerns {
+		if elem := m.findElement(cRef, v); elem != nil {
+			if concern, ok := elem.(*Concern); ok {
+				v.Concerns = append(v.Concerns, concern)
+			}
+		}
+	}
+
+	// Resolve stakeholders
+	for _, sRef := range v.unresolvedStakeholders {
+		if elem := m.findElement(sRef, v); elem != nil {
+			v.Stakeholders = append(v.Stakeholders, elem)
+		}
+	}
+
+	// Resolve type reference
+	if !v.IsDefinition && v.TypeRef.name != "" {
+		if elem := m.findElement(v.TypeRef.name, v); elem != nil {
+			if vp, ok := elem.(*Viewpoint); ok {
+				v.TypeRef.Resolve(vp)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveCalculationRefs(c *Calculation) {
+	// Resolve return type
+	if c.unresolvedReturnType != "" {
+		if elem := m.findElement(c.unresolvedReturnType, c); elem != nil {
+			c.ReturnType.Resolve(elem)
+		}
+	}
+
+	// Resolve type reference
+	if !c.IsDefinition && c.TypeRef.name != "" {
+		if elem := m.findElement(c.TypeRef.name, c); elem != nil {
+			if calc, ok := elem.(*Calculation); ok {
+				c.TypeRef.Resolve(calc)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveStateRefs(s *State) {
+	// Resolve type reference
+	if !s.IsDefinition && s.TypeRef.name != "" {
+		if elem := m.findElement(s.TypeRef.name, s); elem != nil {
+			if state, ok := elem.(*State); ok {
+				s.TypeRef.Resolve(state)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveActionRefs(a *Action) {
+	// Resolve type reference
+	if !a.IsDefinition && a.TypeRef.name != "" {
+		if elem := m.findElement(a.TypeRef.name, a); elem != nil {
+			if action, ok := elem.(*Action); ok {
+				a.TypeRef.Resolve(action)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveConstraintRefs(c *Constraint) {
+	// Resolve type reference
+	if !c.IsDefinition && c.TypeRef.name != "" {
+		if elem := m.findElement(c.TypeRef.name, c); elem != nil {
+			if constraint, ok := elem.(*Constraint); ok {
+				c.TypeRef.Resolve(constraint)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveEnumerationRefs(e *Enumeration) {
+	// Resolve type reference
+	if !e.IsDefinition && e.TypeRef.name != "" {
+		if elem := m.findElement(e.TypeRef.name, e); elem != nil {
+			if enum, ok := elem.(*Enumeration); ok {
+				e.TypeRef.Resolve(enum)
+			}
+		}
+	}
+}
+
+func (m *Model) resolvePortRefs(p *Port) {
+	// Resolve type reference
+	if !p.IsDefinition && p.TypeRef.name != "" {
+		if elem := m.findElement(p.TypeRef.name, p); elem != nil {
+			if port, ok := elem.(*Port); ok {
+				p.TypeRef.Resolve(port)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveAttributeRefs(a *Attribute) {
+	// Resolve type reference
+	if a.TypeRef.name != "" {
+		if elem := m.findElement(a.TypeRef.name, a); elem != nil {
+			a.TypeRef.Resolve(elem)
+		}
+	}
+}
+
+func (m *Model) resolveInterfaceRefs(i *Interface) {
+	// Resolve type reference
+	if !i.IsDefinition && i.TypeRef.name != "" {
+		if elem := m.findElement(i.TypeRef.name, i); elem != nil {
+			if iface, ok := elem.(*Interface); ok {
+				i.TypeRef.Resolve(iface)
+			}
+		}
+	}
+}
+
+// findElement finds an element by name, considering scope.
+// It first tries qualified name lookup, then searches in parent scopes.
+func (m *Model) findElement(name string, context Element) Element {
+	// First try direct qualified name lookup
+	if elem := m.elementIndex[name]; elem != nil {
+		return elem
+	}
+
+	// Try relative to context
+	if context != nil {
+		// Walk up the parent chain
+		current := context.Parent()
+		for current != nil {
+			qn := current.QualifiedName()
+			if qn != "" {
+				fullQN := qn + "::" + name
+				if elem := m.elementIndex[fullQN]; elem != nil {
+					return elem
+				}
+			}
+			current = current.Parent()
+		}
+	}
+
+	// Try as simple name in any package
+	for _, pkg := range m.Packages {
+		fullQN := pkg.Name() + "::" + name
+		if elem := m.elementIndex[fullQN]; elem != nil {
+			return elem
+		}
+	}
+
+	return nil
+}
+
+// Walk visits all elements in the model depth-first.
+func (m *Model) Walk(fn func(Element) bool) {
+	for _, elem := range m.Elements {
+		if !walkElement(elem, fn) {
+			return
+		}
+	}
+}
+
+func walkElement(elem Element, fn func(Element) bool) bool {
+	if !fn(elem) {
+		return false
+	}
+	for _, child := range elem.Children() {
+		if !walkElement(child, fn) {
+			return false
+		}
+	}
+	return true
+}
