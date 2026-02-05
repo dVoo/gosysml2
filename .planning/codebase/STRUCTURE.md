@@ -5,281 +5,190 @@
 ## Directory Layout
 
 ```
-gosysml2/
-├── internal/
-│   └── parser/              # ANTLR-generated parser
-├── low/                     # Low-level API
-├── sysml/                   # High-level API
-└── examples/                # Usage examples
+gosysml2/                          # Main library module
+├── examples/                      # Example usage code
+│   └── main.go                   # Demo of both APIs
+├── internal/                      # Internal implementation
+│   └── parser/                   # ANTLR-generated parser
+│       ├── sysmlv2_lexer.go     # Generated lexer (~85KB)
+│       ├── sysmlv2_parser.go    # Generated parser (~2.1MB)
+│       ├── sysmlv2parser_listener.go      # Generated listener interface
+│       ├── sysmlv2parser_base_listener.go # Generated base listener
+│       ├── SysMLv2Lexer.interp   # ANTLR interpreter data
+│       ├── SysMLv2Parser.interp  # ANTLR interpreter data
+│       ├── SysMLv2Lexer.tokens   # Token definitions
+│       └── SysMLv2Parser.tokens  # Token definitions
+├── low/                          # Low-level API package
+│   ├── lexer.go                 # Lexer wrapper
+│   ├── parser.go                # Parser wrapper
+│   ├── errors.go                # Error types and collection
+│   └── parser_test.go           # Low-level parser tests
+├── sysml/                        # High-level API package
+│   ├── model.go                 # Domain model types (~2000 lines)
+│   ├── parse.go                 # Parsing functions (~1700 lines)
+│   ├── visitor.go               # Visitor pattern implementation
+│   ├── errors.go                # High-level error types
+│   ├── parse_test.go            # Parse function tests
+│   ├── visitor_test.go          # Visitor tests
+│   └── integration_test.go      # Integration tests
+├── go.mod                       # Go module definition
+├── go.sum                       # Go module checksums
+├── README.md                    # Documentation
+└── PERFORMANCE.md               # Performance documentation
 
-code/
-└── parser/                  # Standalone parser module
+testdata/                          # Test data files (outside module)
+├── simple/                       # Simple test cases
+├── Vehicle Example/              # Vehicle model examples
+├── Requirements Examples/        # Requirements test cases
+├── Variability Examples/         # Variability test cases
+└── Import Tests/                 # Import test cases
 
-cmd/
-├── verify-completeness/     # Model verification tool
-├── verify-parser/           # Parser verification tool
-├── test-attrs/              # Attribute test tool
-├── test-low-level/          # Low-level API test tool
-└── test-requirement-attributes/  # Requirement test tool
+.planning/                         # Planning documentation
+├── codebase/                     # This directory
+│   ├── ARCHITECTURE.md
+│   └── STRUCTURE.md
+├── phases/                       # Implementation phases
+└── ROADMAP.md
 
-testdata/
-├── simple/                  # Basic feature tests (30+ files)
-├── Vehicle Example/         # Vehicle model examples
-├── Requirements Examples/   # Requirements modeling
-├── Import Tests/            # Import functionality tests
-└── Variability Examples/    # Variability modeling
+analysis/                          # Analysis documents
+├── ATTRIBUTE_FIX_SUMMARY.md
+├── EXAMPLE_VERIFICATION_ANALYSIS.md
+├── CUSTOM_ATTRIBUTES_ANALYSIS.md
+└── PARSER_COMPLETENESS_REPORT.md
 
-examples/                    # User example files
-├── test_example_req_verification.sysml
-├── test_corrected.sysml
-├── test_user_input.sysml
-└── test_req_custom.sysml
-
-docs/
-└── bnf/                     # BNF grammar documentation
+docs/                             # Documentation
+└── bnf/                         # BNF grammar documentation
 ```
 
 ## Directory Purposes
 
-### gosysml2/
+**`gosysml2/` (Library Root):**
+- Purpose: Go module root containing the library code
+- Contains: Source packages, examples, module files
+- Key files: `go.mod`, `go.sum`, `README.md`
 
-**Purpose:** Main library module
+**`gosysml2/internal/parser/`:**
+- Purpose: Auto-generated ANTLR4 parser code
+- Generated: Yes (from SysML v2 grammar)
+- Committed: Yes (for distribution without ANTLR dependency)
+- Do not edit manually - regenerate from grammar
 
-**Contains:**
-- `internal/parser/` - ANTLR-generated lexer and parser (~2.2MB generated code)
-- `low/` - Low-level parsing API with direct ANTLR access
-- `sysml/` - High-level model API with visitor pattern
-- `examples/` - Library usage examples
+**`gosysml2/low/`:**
+- Purpose: Low-level performance-oriented API
+- Audience: Advanced users needing parse tree access
+- Pattern: Thin wrappers around ANTLR with error collection
 
-**Key files:**
-- `go.mod` - Module definition (`github.com/dVoo/gosysml2`)
+**`gosysml2/sysml/`:**
+- Purpose: High-level developer-friendly API
+- Audience: Most library users
+- Pattern: Domain model with visitor pattern
 
-### gosysml2/internal/parser/
+**`gosysml2/examples/`:**
+- Purpose: Example usage demonstrating both APIs
+- Usage: Reference for library consumers
 
-**Purpose:** Generated parser code (should not be edited manually)
-
-**Contains:**
-- `sysmlv2_lexer.go` - Lexer (~86KB)
-- `sysmlv2_parser.go` - Parser (~2.1MB, main grammar implementation)
-- `sysmlv2parser_listener.go` - Listener interface
-- `sysmlv2parser_base_listener.go` - Base listener
-- `.interp`, `.tokens` files - ANTLR metadata
-
-**Pattern:** Generated from grammar, never edit directly
-
-### gosysml2/low/
-
-**Purpose:** Low-level API with minimal overhead
-
-**Contains:**
-- `lexer.go` - Lexer wrapper with error collection
-- `parser.go` - Parser wrapper with configuration
-- `errors.go` - Error types and collection
-- `parser_test.go` - Unit tests
-
-**Design:** Thin wrapper around ANTLR for performance-critical use cases
-
-### gosysml2/sysml/
-
-**Purpose:** High-level developer-friendly API
-
-**Contains:**
-- `model.go` - All domain types (Model, Package, Part, Requirement, etc.)
-- `parse.go` - Parsing facade and model builder (~1733 lines)
-- `visitor.go` - Visitor pattern implementation and traversal utilities
-- `errors.go` - User-friendly error types
-- `*_test.go` - Unit and integration tests
-
-**Design:** Rich domain model with reference resolution and traversal
-
-### cmd/
-
-**Purpose:** CLI tools for testing and verification
-
-**Pattern:** Each subdirectory is a standalone main package
-
-**Tools:**
-
-| Directory | Purpose | Key Function |
-|-----------|---------|--------------|
-| `verify-parser/` | Analyze parse tree coverage | Source coverage checking |
-| `verify-completeness/` | Verify model extraction | Element statistics, unresolved refs |
-| `test-low-level/` | Test low-level API | Token analysis |
-| `test-attrs/` | Test attribute parsing | Attribute extraction |
-| `test-requirement-attributes/` | Test requirements | Requirement attribute tests |
-
-### testdata/
-
-**Purpose:** SysML test files for validation
-
-**Structure:**
-- `simple/` - 30+ files testing individual features
-- `Vehicle Example/` - Complex multi-file vehicle model
-- `Requirements Examples/` - Requirements derivation, HSUV model
-- `Import Tests/` - Import functionality (alias, qualified, circular)
-- `Variability Examples/` - Variability modeling
-
-**Pattern:** Each `.sysml` file tests specific language features
-
-### examples/
-
-**Purpose:** User-facing example SysML files
-
-**Contains:**
-- Requirement verification examples
-- User input test cases
-- Corrected/validated models
-
-### docs/
-
-**Purpose:** Documentation assets
-
-**Contains:**
-- `bnf/` - BNF grammar specification and images
+**`testdata/`:**
+- Purpose: Test input files in SysML format
+- Structure: Organized by feature/example type
+- Usage: Integration tests, manual testing
 
 ## Key File Locations
 
-### Entry Points
+**Entry Points:**
+- `gosysml2/examples/main.go`: Example application
+- `gosysml2/sysml/parse.go`: High-level parsing API (line 1)
+- `gosysml2/low/parser.go`: Low-level parsing API (line 1)
 
-| Purpose | Path |
-|---------|------|
-| Library root | `gosysml2/sysml/parse.go` |
-| Example main | `gosysml2/examples/main.go` |
-| Parser verify | `cmd/verify-parser/main.go` |
-| Completeness verify | `cmd/verify-completeness/main.go` |
+**Configuration:**
+- `gosysml2/go.mod`: Module definition (Go 1.22, antlr4-go/antlr/v4)
 
-### Configuration
+**Core Logic:**
+- `gosysml2/sysml/model.go`: Domain model (~2000 lines)
+- `gosysml2/sysml/parse.go`: Parse functions and model builder (~1700 lines)
+- `gosysml2/sysml/visitor.go`: Visitor pattern (495 lines)
 
-| File | Purpose |
-|------|---------|
-| `go.mod` | Root module: `github.com/dVoo/sysmlv2-tools` |
-| `gosysml2/go.mod` | Library module: `github.com/dVoo/gosysml2` |
-| `code/parser/go.mod` | Standalone parser: `module verify` |
+**Testing:**
+- `gosysml2/sysml/parse_test.go`: Parse function tests
+- `gosysml2/sysml/visitor_test.go`: Visitor tests
+- `gosysml2/sysml/integration_test.go`: Integration tests
+- `gosysml2/low/parser_test.go`: Low-level parser tests
 
-### Core Logic
-
-| File | Responsibility |
-|------|----------------|
-| `gosysml2/sysml/model.go` | All domain types (lines ~2000+) |
-| `gosysml2/sysml/parse.go` | Parsing facade, model builder (lines ~1733) |
-| `gosysml2/sysml/visitor.go` | Visitor pattern, traversal (lines ~495) |
-| `gosysml2/low/parser.go` | Low-level parser wrapper |
-| `gosysml2/low/lexer.go` | Low-level lexer wrapper |
-| `gosysml2/low/errors.go` | Error types |
-
-### Testing
-
-| File | Type |
-|------|------|
-| `gosysml2/sysml/parse_test.go` | Unit tests for parsing |
-| `gosysml2/sysml/visitor_test.go` | Unit tests for visitor |
-| `gosysml2/sysml/integration_test.go` | Integration tests |
-| `gosysml2/low/parser_test.go` | Low-level parser tests |
+**Error Handling:**
+- `gosysml2/sysml/errors.go`: High-level errors
+- `gosysml2/low/errors.go`: Low-level errors
 
 ## Naming Conventions
 
-### Files
+**Files:**
+- Package name matches directory: `sysml/`, `low/`
+- Test files: `*_test.go` suffix
+- Generated files: Named by ANTLR generator
 
-| Pattern | Example | Purpose |
-|---------|---------|---------|
-| `*.go` | `model.go` | Implementation files |
-| `*_test.go` | `parse_test.go` | Test files |
-| `sysmlv2_*.go` | `sysmlv2_parser.go` | Generated files |
-| `main.go` | `main.go` | CLI entry points |
+**Types:**
+- Public types: PascalCase (`ParseResult`, `ElementKind`)
+- Private types: camelCase (`modelBuilder`, `baseElement`)
+- Interface suffix: None (`Element`, `Visitor`, `Definition`)
+- Generic types: `Ref[T]` pattern
 
-### Directories
+**Functions:**
+- Constructor pattern: `New` + Type (`NewModel()`, `NewPackage()`)
+- Parse functions: `Parse` + Input type (`ParseString()`, `ParseFile()`)
+- Find functions: `Find` + Element type (`FindParts()`, `FindRequirements()`)
+- Must functions: `Must` + Verb (`MustParseString()`) - panic on error
 
-| Pattern | Example | Purpose |
-|---------|---------|---------|
-| `cmd/<tool-name>/` | `cmd/verify-parser/` | CLI tools (kebab-case) |
-| `<category> Examples/` | `Requirements Examples/` | Test data (spaces allowed) |
-| `<feature> Tests/` | `Import Tests/` | Feature-specific tests |
-
-### Go Identifiers
-
-| Pattern | Example | Usage |
-|---------|---------|-------|
-| PascalCase | `PartDefinition`, `NewRequirement` | Exported types/functions |
-| camelCase | `elementStack`, `unresolvedSubject` | Unexported fields |
-| Kind prefix | `KindPackage`, `KindRequirement` | Element kind constants |
+**Variables:**
+- Stack tracking: `elementStack`, `packageStack`
+- Unresolved references: `unresolved` + Reference type (`unresolvedSubject`)
+- Collectors: plural nouns (`errors`, `tokens`)
 
 ## Where to Add New Code
 
-### New Element Type
+**New Element Type:**
+1. Add `ElementKind` constant in `sysml/model.go`
+2. Add `String()` case in `sysml/model.go`
+3. Create struct type in `sysml/model.go`
+4. Implement `Element` interface (embed `baseElement`)
+5. Add `isDefinition()` and/or `isUsage()` methods if applicable
+6. Add visitor method in `sysml/visitor.go` interface and `BaseVisitor`
+7. Add visit dispatch in `visitElement()` function
+8. Add find function in `sysml/visitor.go`
+9. Add builder methods in `sysml/parse.go` (in `modelBuilder`)
+10. Add reference resolution in `model.ResolveReferences()`
 
-1. **Add to `gosysml2/sysml/model.go`:**
-   - Add `KindXXX` constant to `ElementKind` enum
-   - Define struct type (embed `baseElement`)
-   - Implement `isDefinition()` and/or `isUsage()` if applicable
-   - Add `AddChild()` with type tracking
-   - Add accessor methods for typed children
+**New Parse Function:**
+- Add to `sysml/parse.go` near existing `Parse*` functions
+- Follow pattern: parse → build model → index → resolve → return
+- Add corresponding test in `sysml/parse_test.go`
 
-2. **Add to `gosysml2/sysml/parse.go`:**
-   - Add `EnterXxxDefinition()` method to `modelBuilder`
-   - Add `EnterXxxUsage()` method to `modelBuilder`
-   - Add `resolveXxxRefs()` method to `Model`
-   - Call resolver from `ResolveReferences()`
+**New Visitor:**
+- Embed `BaseVisitor` to only override methods of interest
+- Implement `Visitor` interface
+- Use `sysml.Visit()` or `sysml.Walk()` to traverse model
 
-3. **Add to `gosysml2/sysml/visitor.go`:**
-   - Add `VisitXxx()` to `Visitor` interface
-   - Add `VisitXxx()` to `BaseVisitor`
-   - Add case to `visitElement()`
-   - Add `FindXxx()` helper function
-   - Add to `Counter` visitor
-
-### New Parse Option
-
-1. **Add to `gosysml2/sysml/parse.go`:**
-   - Add field to `parseConfig` struct
-   - Create `WithXxx()` option function
-   - Use option in `parseWithSource()`
-
-### New CLI Tool
-
-1. **Create `cmd/<tool-name>/main.go`:**
-   - Use `package main`
-   - Import `github.com/dVoo/gosysml2/sysml`
-   - Handle command-line args
-   - Print results
-
-2. **Update root `go.mod`:**
-   - Add tool as dependency if needed
-
-### New Test Data
-
-1. **Add `.sysml` file to appropriate `testdata/` subdirectory:**
-   - `testdata/simple/` for single-feature tests
-   - `testdata/<Category> Examples/` for complex scenarios
+**New Test:**
+- Package tests: `sysml/*_test.go` or `low/*_test.go`
+- Test data: Add `.sysml` files to appropriate `testdata/` subdirectory
+- Follow naming: `Test` + FunctionName
 
 ## Special Directories
 
-### internal/
+**`internal/parser/`:**
+- Purpose: Auto-generated ANTLR4 code
+- Generated: Yes (via ANTLR tool)
+- Committed: Yes
+- Do not modify directly
 
-**Purpose:** Internal implementation details
+**`testdata/`:**
+- Purpose: Test fixtures
+- Generated: No
+- Committed: Yes
+- Format: Raw SysML v2 files
 
-**Characteristics:**
-- Go visibility: accessible only within module
-- Contains generated code (should not be edited)
-- Breaking changes OK (internal API)
-
-### cmd/
-
-**Purpose:** Standalone executables
-
-**Characteristics:**
-- Each subdirectory is independent `package main`
-- Built with `go build ./cmd/<name>/`
-- Not part of library API
-
-### testdata/
-
-**Purpose:** Test fixtures
-
-**Characteristics:**
-- SysML source files for testing
-- Organized by feature/semantic area
-- Referenced by tests using relative paths
-- Committed to repository
+**`.planning/`:**
+- Purpose: Planning and analysis documentation
+- Generated: No
+- Committed: Yes
+- Usage: GSD command integration
 
 ---
 

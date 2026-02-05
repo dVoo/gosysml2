@@ -2,57 +2,64 @@
 
 **Analysis Date:** 2026-02-05
 
+## Overview
+
+This is a **standalone parsing library** with no external service dependencies. It operates entirely within-process without requiring network access, databases, or external APIs.
+
 ## APIs & External Services
 
-**None.**
-
-This is a self-contained library and CLI tool suite. No external API calls are made.
+**None** - The library is self-contained.
 
 ## Data Storage
 
 **Databases:**
-- Not applicable - No database integration
+- None - In-memory model representation only
 
 **File Storage:**
 - Local filesystem only
-- Input: Reads `.sysml` files from local paths
-- Output: Console/stdout only
+  - Read: `ParseFile()`, `ParseDirectory()` in `gosysml2/sysml/parse.go`
+  - Input: `.sysml` files (SysML v2 textual syntax)
 
 **Caching:**
-- None
+- None - No external caching layer
+- In-memory element index built during parse (`Model.BuildIndex()`)
 
 ## Authentication & Identity
 
 **Auth Provider:**
-- Not applicable - No authentication required
+- None - No authentication required for library operation
 
 ## Monitoring & Observability
 
 **Error Tracking:**
-- None
+- Custom error collection via `ErrorCollector` (`gosysml2/low/errors.go`)
+- Structured error types: `SyntaxError`, `ParseError` (`gosysml2/sysml/errors.go`)
+- No external error tracking services
 
 **Logs:**
-- Console output only
-- Tools write analysis results to stdout
+- No logging framework - returns errors to caller
+- Example programs use `fmt.Println()` for demonstration only
 
 ## CI/CD & Deployment
 
 **Hosting:**
-- Not applicable - Library and CLI tools
+- GitHub (inferred from `.git/` structure)
 
 **CI Pipeline:**
-- None detected
-- No `.github/workflows/` or similar CI configuration
+- None detected - No GitHub Actions, GitLab CI, or other CI configuration found
 
-**Distribution:**
+**Package Distribution:**
 - Go module: `github.com/dVoo/gosysml2`
-- Can be imported as Go library
-- CLI tools built from source with `go build`
+- Published via Go module proxy (standard Go mechanism)
 
 ## Environment Configuration
 
 **Required env vars:**
 - None
+
+**Optional env vars:**
+- `GOPROXY` - Standard Go module proxy configuration
+- `GOPATH` - Standard Go workspace (if not using modules)
 
 **Secrets location:**
 - Not applicable - No secrets required
@@ -65,25 +72,26 @@ This is a self-contained library and CLI tool suite. No external API calls are m
 **Outgoing:**
 - None
 
-## Network Dependencies
+## Integration Points
 
-**None.**
+**Library Consumers:**
+- Applications import `github.com/dVoo/gosysml2/sysml` for high-level API
+- Applications import `github.com/dVoo/gosysml2/low` for low-level API
 
-The codebase is completely offline-capable:
-- Parses local SysML files only
-- No HTTP client usage
-- No network-dependent imports
+**Example Integration:**
+```go
+import "github.com/dVoo/gosysml2/sysml"
 
-## File Format Dependencies
+result := sysml.ParseFile("model.sysml")
+if !result.Success() {
+    // Handle errors locally
+}
+```
 
-**Input Formats:**
-- SysML v2 text files (`.sysml` extension)
-- Parsed using ANTLR4-generated parsers
-
-**Grammar Sources:**
-- Based on OMG SysML v2 specification
-- BNF specifications in `docs/bnf/`
-- ANTLR4 grammars in `code/*.g4`
+**CLI Tools:** (referenced in README, not in `gosysml2/` module)
+- `cmd/verify-completeness` - Model analysis
+- `cmd/test-attrs` - Requirement attribute testing
+- `cmd/verify-parser` - Parser verification
 
 ---
 

@@ -4,264 +4,397 @@
 
 ## Tech Debt
 
-### 1. Parent Assignment Bug in Model Builder
-- **Issue:** Attributes inside requirements/verifications are added to package instead of their containing element due to not checking `elementStack`
-- **Files:** `gosysml2/sysml/parse.go` (lines 844-895, 897-963)
-- **Impact:** Broken parent-child relationships. Can't navigate `requirement.Children()` to find its attributes
-- **Fix approach:** Update `EnterAttributeDefinition()` and `EnterAttributeUsage()` to check `elementStack` before falling back to `currentPkg`
-- **Reference:** See `analysis/CUSTOM_ATTRIBUTES_ANALYSIS.md` for detailed analysis
+### Incomplete Model Extraction for Parsed Elements
 
-### 2. Memory Efficiency - Critical Issue
-- **Issue:** Parser loads entire input into memory before processing. Parse trees retained indefinitely for large files
-- **Files:** `gosysml2/low/parser.go:53`, `gosysml2/sysml/parse.go:64-95`
-- **Impact:** Cannot parse repositories >500MB-1GB on typical systems. Each file multiplied by 30-50x memory factor
-- **Fix approach:**
-  1. ✅ Implemented: Remove `tokens.Fill()` - saves 30-50% memory
-  2. ✅ Available: Use `WithDiscardTree()` option - saves additional 20-40% memory
-  3. ✅ Implemented: `ParseDirectoryStream()` - processes files sequentially with GC between files
-  4. Long term: SAX-style event streaming for mega-repositories (>1GB)
+**Issue:** The ANTLR4 parser successfully parses all SysML v2 syntax constructs, but the high-level model builder (`gosysml2/sysml/parse.go`) doesn't extract all elements from the parse tree.
 
-### 3. Missing Comment/Documentation Extraction
-- **Issue:** Model types `Comment` and `Doc` exist but no listener methods implemented to extract them from parse tree
-- **Files:** `gosysml2/sysml/model.go` (lines 1415-1453), `gosysml2/sysml/parse.go` (no EnterComment_/EnterDocumentation methods)
-- **Impact:** Comments and documentation are parsed by ANTLR but never appear in high-level model
-- **Fix approach:** Implement `EnterComment_()` and `EnterDocumentation()` methods in modelBuilder
-- **Reference:** See `analysis/PARSER_COMPLETENESS_REPORT.md`
+**Files:**
+- `gosysml2/sysml/parse.go` (1733 lines)
+- `gosysml2/sysml/model.go` (2014 lines)
 
-### 4. ANTLR Generated Code Contains TODOs
-- **Issue:** ANTLR-generated parser has intentional TODO comments for unused variables that cause compiler warnings
-- **Files:** `gosysml2/internal/parser/sysmlv2_lexer.go` (lines 21, 1085), `gosysml2/internal/parser/sysmlv2_parser.go` (line 59892)
-- **Impact:** Compiler warnings about unused variables; EOF string not properly initialized
-- **Fix approach:** These are in generated code - regenerate with updated ANTLR or post-process to clean up
+**Impact:** High - Users cannot access comments, documentation, and metadata even though they are parsed.
 
-### 5. Duplicate Parser Code in Two Locations
-- **Issue:** Same ANTLR-generated parser exists in both `/code/parser/` and `/gosysml2/internal/parser/`
-- **Files:** `code/parser/*.go`, `gosysml2/internal/parser/*.go`
-- **Impact:** Code duplication (~175KB), maintenance burden, risk of version drift
-- **Fix approach:** Consolidate to single location; `code/` appears to be standalone, `gosysml2/` is the library
+**Missing Extraction Methods:**
+| Element Type | Grammar Support | Model Type | Extraction Status |
+|-------------|----------------|------------|-------------------|
+| Comments | ✓ | `Comment` struct | **NOT extracted** |
+| Documentation (`doc`) | ✓ | `Doc` struct | **NOT extracted** |
+| Metadata | ✓ | `KindMetadata` | **NOT extracted** |
+| Verification subjects | ✓ | `Subject` field | **NOT extracted** |
+| Verification methods | ✓ | `Method` field | Always "unspecified" |
+| Satisfy relationships | ✓ | Not in model | **NOT extracted** |
+| Attribute values | ✓ | `DefaultValue` field | **NOT extracted** |
 
-### 6. Reference Resolution - Fragile
-- **Issue:** Many element types store unresolved references as string arrays resolved only after full model construction. No caching of results
-- **Files:** `gosysml2/sysml/model.go:481-562`, `gosysml2/sysml/model.go:1576-1993`
-- **Impact:** O(n²) reference resolution for large models. Unresolved references silently fail
-- **Fix approach:** Cache resolution results; add logging for unresolved references; two-pass validation
+**Fix approach:** Add listener methods to `modelBuilder`:
+```go
+func (b *modelBuilder) EnterComment_(ctx *parser.Comment_Context) { ... }
+func (b *modelBuilder) EnterDocumentation(ctx *parser.DocumentationContext) { ... }
+```
 
-### 7. Missing Verification Elements
-- **Issue:** Verification subjects and methods are not extracted (always shows "unspecified")
-- **Files:** `gosysml2/sysml/parse.go` (EnterVerificationCaseDefinition, EnterVerificationCaseUsage)
-- **Impact:** Incomplete verification case modeling
-- **Fix approach:** Add extraction logic for subject member and objective clause
+### Attribute Parent Assignment Bug
+
+**Issue:** Attributes inside requirements/verifications are incorrectly added to the package instead of their containing element.
+
+**Files:**
+- `gosysml2/sysml/parse.go` (lines 844-963 - `EnterAttributeDefinition`, `EnterAttributeUsage`)
+
+**Problem Code:**
+```go
+// Always adds to currentPkg, doesn't check elementStack
+if b.currentPkg != nil {
+    attr.parent = b.currentPkg          // WRONG
+    b.currentPkg.AddChild(attr)         // WRONG
+}
+```
+
+**Impact:** Medium - Cannot traverse `requirement.Children()` to find its attributes.
+
+**Workaround:** Search all attributes and filter by location proximity.
+
+**Fix approach:** Check `elementStack` before falling back to `currentPkg`:
+```go
+if len(b.elementStack) > 0 {
+    parent := b.elementStack[len(b.elementStack)-1]
+    attr.parent = parent
+    parent.AddChild(attr)
+} else if b.currentPkg != nil {
+    // ... existing package logic
+}
+```
+
+### Attribute Redefinition Syntax Loses Names
+
+**Issue:** Using `:>>` (redefines) syntax causes attribute names to be lost.
+
+**Example:**
+```sysml
+attribute :>> maxLatency_ms = 200;
+```
+
+**Result:** Attribute has no name (shows as `<unnamed>`)
+
+**Files:**
+- `gosysml2/sysml/parse.go` (lines 897-963)
+
+**Impact:** Low - Partially fixed but edge cases may remain.
+
+**Current mitigation:** `extractRedefinitionName()` helper exists but may not cover all cases.
 
 ## Known Bugs
 
-### 1. Attribute Parent Assignment Bug
-- **Symptoms:** Attributes appear at package level instead of nested under their containing requirement/verification
-- **Files:** `gosysml2/sysml/parse.go` lines 844-963
-- **Trigger:** Parse any requirement or verification with custom attributes
-- **Workaround:** Use location-based filtering to find attributes near their intended parent
-- **Code pattern:**
-  ```go
-  // Current (buggy) - always adds to currentPkg
-  if b.currentPkg != nil {
-      attr.parent = b.currentPkg
-      b.currentPkg.AddChild(attr)
-  }
-  
-  // Should be - check elementStack first
-  if len(b.elementStack) > 0 {
-      parent := b.elementStack[len(b.elementStack)-1]
-      attr.parent = parent
-      parent.AddChild(attr)
-  } else if b.currentPkg != nil {
-      // ...
-  }
-  ```
+### Verification Method Always "unspecified"
 
-### 2. ItemDefinition/ItemUsage Missing Element Stack Push
-- **Symptoms:** Items cannot have nested elements because they don't push themselves to elementStack
-- **Files:** `gosysml2/sysml/parse.go` lines 416-464
-- **Impact:** Items defined inside items won't have correct parent; deeper nesting broken
-- **Safe modification:** Add Exit methods and push/pop from elementStack
+**Issue:** Verification cases don't extract their method (test/analysis/inspection/demonstration).
 
-### 3. Port Direction Not Extracted
-- **Symptoms:** All ports have `PortDirectionNone` regardless of declared direction (`in`, `out`, `inout`)
-- **Files:** `gosysml2/sysml/parse.go` (EnterPortDefinition, EnterPortUsage)
-- **Impact:** Can't determine port directionality for analysis
+**Files:**
+- `gosysml2/sysml/parse.go` (lines 550-616 - verification handling)
 
-### 4. Silent Reference Resolution Failures
-- **Problem:** When `m.findElement()` returns nil, element silently remains unresolved. No error collected
-- **Files:** `gosysml2/sysml/model.go:1576-1993`
-- **Current behavior:** Unresolved references simply don't appear in relationship arrays (e.g., `DerivedFrom` remains empty)
-- **Recommendation:** Add optional strict mode that tracks unresolved references and reports them
+**Expected:** Method extracted from syntax like `verification test MyTest { ... }`
+
+**Actual:** Always shows `VerificationMethodUnspecified`
+
+### Verification Subjects Not Extracted
+
+**Issue:** The `subject` clause in verifications is parsed but not extracted to the model.
+
+**Example:**
+```sysml
+verification def MyVer {
+    subject system;  // Not captured
+}
+```
+
+**Files:**
+- `gosysml2/sysml/model.go` (lines 700-781 - `Verification` struct has `Subject` field)
+- `gosysml2/sysml/parse.go` (no extraction logic)
+
+### Satisfy/Verify Relationships Not Extracted
+
+**Issue:** `satisfy` and `verify` relationships are parsed but not available in the model.
+
+**Example:**
+```sysml
+satisfuiLatency by verifyUILatency;  // Parsed but not extracted
+```
+
+**Impact:** Medium - Cannot trace requirement satisfaction/verification links.
+
+### Objective Statements Not Extracted
+
+**Issue:** Verification objectives with `verify` statements are not captured.
+
+**Example:**
+```sysml
+verification def MyVer {
+    objective {
+        verify myRequirement;  // Not captured
+    }
+}
+```
 
 ## Security Considerations
 
-### 1. Panic on Parse Error in Must* Functions
-- **Risk:** `MustParseString` and `MustParseFile` panic on error, which could crash server applications
-- **Files:** `gosysml2/sysml/parse.go` lines 1686-1702
-- **Current mitigation:** Well-documented behavior (Must prefix convention); callers should use non-Must variants for production
-- **Recommendations:** Add recovery examples in documentation; ensure production code uses error-returning variants
+### No Input Size Limits
 
-### 2. No Input Size Limits
-- **Risk:** Parsing extremely large SysML files could cause OOM
-- **Files:** `gosysml2/sysml/parse.go` (ParseString, ParseFile, ParseDirectory)
-- **Current mitigation:** Streaming API (`ParseDirectoryStream`) available for memory-efficient processing
-- **Recommendations:** Document size limits; consider adding context.WithTimeout support
+**Risk:** The parser doesn't enforce maximum input size limits, potentially allowing resource exhaustion attacks.
 
-### 3. File Path Traversal in ParseFile
-- **Risk:** No validation of file path before reading
-- **Files:** `gosysml2/sysml/parse.go` (ParseFile)
-- **Current mitigation:** Uses standard Go file operations which respect OS permissions
-- **Recommendations:** If used in server context, validate paths against allowlist
+**Files:**
+- `gosysml2/sysml/parse.go` (all parse functions)
+- `gosysml2/low/parser.go`
 
-### 4. Memory Exhaustion from Malicious Input
-- **Risk:** Malicious input with deeply nested structures could cause stack overflow
-- **Files:** `gosysml2/sysml/visitor.go:196-206` (recursive walkDepth function)
-- **Current mitigation:** None; recursion depth unbounded
-- **Recommendations:** Add depth tracking with configurable limit; consider iterative traversal
+**Current mitigation:** Streaming API available (`ParseDirectoryStream`) for large files.
+
+**Recommendations:**
+- Add configurable max file size limit (e.g., 100MB default)
+- Add max token count limit
+- Add timeout context support for parsing operations
+
+### Generated Parser File Size
+
+**Risk:** `sysmlv2_parser.go` is ~60,000 lines (generated by ANTLR). Large generated files can be harder to audit.
+
+**Files:**
+- `gosysml2/internal/parser/sysmlv2_parser.go` (~60,000 lines)
+
+**Mitigation:** This is standard for ANTLR; the file is generated from a grammar file.
 
 ## Performance Bottlenecks
 
-### 1. Large ANTLR Parser Files
-- **Problem:** Generated parser files are very large (>80,000 lines)
-- **Files:** `gosysml2/internal/parser/sysmlv2_parser.go` (80,592 lines)
-- **Impact:** Slow compilation, large binary size
-- **Cause:** ANTLR generates full LL(*) parser for complete SysML v2 grammar
-- **Improvement path:** Consider splitting grammar or using parser combinators for specific use cases
+### Reference Resolution O(n²) in Worst Case
 
-### 2. Reference Resolution O(n) per Lookup
-- **Problem:** `Model.findElement()` does multiple index lookups and parent chain walks
-- **Files:** `gosysml2/sysml/model.go` lines 1962-1993
-- **Impact:** Could be slow for models with many references
-- **Cause:** No caching of failed lookups; repeated string concatenation
-- **Improvement path:** Add LRU cache for failed lookups; optimize qualified name construction
+**Issue:** `Model.findElement()` performs multiple lookups for unresolved references.
 
-### 3. Single-File Capacity Limits
-- **Current capacity:** ~100MB per file (with defaults), ~500MB with `WithDiscardTree()`
-- **Limit:** Hits wall at file size * 30-50 = available RAM
-- **On 32GB machine:** Can handle ~600-1000MB input with current approach
-- **Scaling path:** Use streaming APIs for large files
+**Files:**
+- `gosysml2/sysml/model.go` (lines 1962-1993 - `findElement`)
+
+**Problem:** For each unresolved reference:
+1. Try direct qualified name lookup
+2. Walk parent chain and try qualified names
+3. Try simple names in all packages
+
+**Impact:** Models with many unresolved references degrade performance.
+
+**Current mitigation:** Element index (`elementIndex` map) helps for resolved names.
+
+**Improvement path:** 
+- Add caching for failed lookups
+- Add batch resolution phase
+- Profile with large models (10,000+ elements)
+
+### Token Stream Memory Usage
+
+**Issue:** ANTLR token streams can consume significant memory for large files.
+
+**Files:**
+- `gosysml2/low/parser.go` (line 53 - removed `tokens.Fill()` for lazy loading)
+
+**Current state:** Lazy token loading implemented (good).
+
+**Recommendation:** Document memory usage patterns for users:
+- Small files (<1MB): Use standard API
+- Large files (>10MB): Use streaming API
+
+### Parse Tree Retention
+
+**Issue:** Parse tree is retained by default, doubling memory usage.
+
+**Files:**
+- `gosysml2/sysml/parse.go` (line 84 - tree retained unless `WithDiscardTree()`)
+
+**Current mitigation:** `WithDiscardTree()` option available.
+
+**Recommendation:** Consider making discard the default for production use.
 
 ## Fragile Areas
 
-### 1. Element Stack Management
-- **Files:** `gosysml2/sysml/parse.go` (multiple Enter/Exit methods)
-- **Why fragile:** Complex stack operations; easy to forget Exit handler or push/pop mismatch
-- **Safe modification:** Always add Exit method when adding Enter; test with deeply nested input
-- **Test coverage:** Basic coverage exists but doesn't test deep nesting (>5 levels)
+### Complex Type Hierarchy in Model
 
-### 2. Type Assertion Chains in AddChild Methods
-- **Files:** `gosysml2/sysml/model.go` (Package.AddChild, Part.AddChild, etc.)
-- **Why fragile:** Adding new element types requires updating multiple switch statements
-- **Safe modification:** Create generic container interface; use reflection or code generation
-- **Test coverage:** Partial - only tested types covered
+**Files:**
+- `gosysml2/sysml/model.go` (lines 174-186 - Definition/Usage interfaces)
 
-### 3. Grammar Version Coupling
-- **Files:** `code/SysMLv2Parser.g4`, `code/SysMLv2Lexer.g4`
-- **Why fragile:** Generated code is tied to specific grammar version; updates require regeneration
-- **Safe modification:** Pin ANTLR version; document grammar version compatibility
-- **Test coverage:** Grammar tests exist but not comprehensive
+**Why fragile:** 
+- `Attribute` implements both `Definition` and `Usage` interfaces (lines 353-354)
+- This dual implementation may cause confusion or bugs
 
-### 4. Model.Walk vs Visitor Pattern
-- **Files:** `gosysml2/sysml/model.go` (Walk), `gosysml2/sysml/visitor.go` (Visit)
-- **Why fragile:** Two traversal patterns that could diverge in behavior
-- **Safe modification:** Consider unifying or clearly documenting when to use each
+**Safe modification:** 
+- Test any changes to interface implementations thoroughly
+- Verify type assertions work correctly
 
-### 5. Visitor Pattern with Type-Specific Methods
-- **Files:** `gosysml2/sysml/visitor.go:64-96` (visitElement switch statement)
-- **Why fragile:** 20+ type-specific visit methods + catch-all. Adding new element types requires updating visitor interface + all implementations
-- **Safe modification:** Use reflection-based visitor or add new types to catch-all handler first
-- **Test coverage:** Base tests only; no tests for custom visitor implementations
+### Element Stack Management
 
-## Missing Critical Features
+**Files:**
+- `gosysml2/sysml/parse.go` (lines 262-263 - `elementStack`, `packageStack`)
 
-### 1. Metadata Extraction
-- **Problem:** Metadata annotations exist in grammar but not extracted to model
-- **Files:** `gosysml2/sysml/model.go` (KindMetadata defined but unused)
-- **Blocks:** Full SysML v2 compliance; metadata-driven tooling
+**Why fragile:**
+- Manual stack push/pop in Enter/Exit methods
+- Easy to miss Exit push causing stack imbalance
+- No validation that stacks are empty at end of parse
 
-### 2. Full Expression Parsing
-- **Problem:** Constraint/expression bodies captured as raw text only
-- **Files:** `gosysml2/sysml/parse.go` (EnterRequirementConstraintMember)
-- **Blocks:** Expression analysis, constraint validation, code generation
+**Safe modification:**
+- Always pair Enter/Exit methods
+- Add validation that stacks are balanced after parsing
+- Consider using defer for guaranteed cleanup
 
-### 3. Import Resolution
-- **Problem:** Imports are parsed but not resolved to actual files
-- **Files:** `gosysml2/sysml/model.go` (Import struct)
-- **Blocks:** Cross-file reference resolution, multi-file model building
+### Type-Switch Exhaustiveness
 
-### 4. Library Model Loading
-- **Problem:** Standard libraries (ScalarValues, etc.) not automatically available
-- **Blocks:** Complete type checking for real-world models
+**Files:**
+- `gosysml2/sysml/visitor.go` (lines 120-174 - `visitElement`)
+- `gosysml2/sysml/model.go` (lines 1528-1573 - `ResolveReferences`)
 
-### 5. Model Serialization
-- **Problem:** Can only parse SysML, not regenerate it. No way to modify and save models
-- **Impact:** Read-only tool; cannot be used in model generation pipelines
-- **Solution:** Add serializer that reconstructs SysML text from model
+**Why fragile:**
+- Type switches must be updated when adding new element types
+- Missing a case causes silent default behavior
+- No compiler warning for non-exhaustive type switches
 
-### 6. Semantic Validation
-- **Problem:** Parser validates syntax only. No enforcement of SysML rules like "requirement ID must be unique"
-- **Impact:** Invalid but parseable models silently accepted
-- **Solution:** Add semantic validator phase after model building
+**Test coverage:** Check that all element types have test cases.
 
-## Test Coverage Gaps
+## Scaling Limits
 
-### 1. Deep Nesting Tests
-- **What's not tested:** Elements nested >5 levels deep
-- **Files:** Test files focus on simple structures
-- **Risk:** Stack management bugs only visible in complex hierarchies
-- **Priority:** Medium
+### Model Size: Tested to ~11K Tokens
 
-### 2. Error Recovery Tests
-- **What's not tested:** Parser behavior with malformed input in various contexts
-- **Risk:** Panics or infinite loops on edge case inputs
-- **Priority:** High
+**Current capacity:** Successfully parses files up to ~11,000 tokens.
 
-### 3. Concurrent Access Tests
-- **What's not tested:** Thread safety of Model and element access
-- **Risk:** Race conditions in multi-threaded use
-- **Priority:** Medium (currently single-threaded design)
+**Test evidence:** `SimpleVehicleModel.sysml` (10,871 tokens)
 
-### 4. Large File Tests
-- **What's not tested:** Files >10MB or with >10,000 elements
-- **Risk:** Memory exhaustion, performance degradation
-- **Priority:** Low (streaming API available)
+**Scaling path:**
+- Test with files 100K+ tokens
+- Profile memory usage with pprof
+- Consider streaming model building for very large files
 
-### 5. Visitor Pattern Exhaustive Tests
-- **What's not tested:** All visitor methods for all element types
-- **Risk:** Visitor silently skips certain element types
-- **Priority:** Low
+### Reference Resolution: Linear with Element Count
 
-### 6. Reference Resolution Tests
-- **What's not tested:** Unresolved references, cross-file references, circular dependencies
-- **Files:** `gosysml2/sysml/parse_test.go`, `gosysml2/sysml/integration_test.go`
-- **Risk:** Reference resolution bugs won't be caught
-- **Priority:** High - affects correctness of requirement traceability
+**Current capacity:** Successfully resolves references in models with 100+ elements.
+
+**Scaling path:**
+- Add benchmark tests for large models
+- Consider parallel reference resolution
+- Optimize `findElement` with better scoping
 
 ## Dependencies at Risk
 
-### 1. ANTLR4 Go Runtime
-- **Package:** `github.com/antlr4-go/antlr/v4`
-- **Risk:** Major version changes could require grammar regeneration
-- **Impact:** Parser breaks, build failures
-- **Mitigation:** Version pinned in go.mod; test before upgrading
+### ANTLR4 Runtime
 
-### 2. ANTLR v4 Lock-in
-- **Risk:** Grammar is tied to ANTLR4 specifically
-- **Impact:** v4.13.1 is current; stuck on this version
-- **Alternatives:** Consider parsing combinator library (Parsec) for future, but high migration cost
+**Package:** `github.com/antlr4-go/antlr/v4` v4.13.1
 
-## Module Boundary Issues
+**Risk:** Low - ANTLR is mature and widely used.
 
-### 1. Root Module vs gosysml2 Submodule
-- **Issue:** Root module appears incomplete (no main package, just cmd tools)
-- **Impact:** Confusion about which module to use as dependency
-- **Recommendation:** Clarify in README that `gosysml2/` is the library module
+**Impact:** Parser is entirely dependent on ANTLR runtime.
 
-### 2. Internal Package Usage
-- **Issue:** `internal/parser` is accessible within module but not to importers
-- **Impact:** External users cannot access low-level parsing details if needed
-- **Recommendation:** Consider exposing through `low` package if needed
+**Migration plan:** Would require regenerating parser with different tool (high effort).
+
+### golang.org/x/exp
+
+**Package:** `golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842`
+
+**Risk:** Very low - Used for experimental Go features.
+
+**Impact:** Indirect dependency (likely via ANTLR).
+
+## Missing Critical Features
+
+### Semantic Validation
+
+**Gap:** Parser only does syntactic validation. No semantic checks like:
+- Duplicate name detection within scope
+- Type compatibility checking
+- Circular reference detection
+- Required field validation
+
+**Impact:** Users can create invalid models that parse successfully.
+
+**Files affected:** All model files
+
+### Import Resolution
+
+**Gap:** Import statements are parsed but not resolved.
+
+**Example:**
+```sysml
+import SI::*
+```
+
+**Current behavior:** Parsed as `Import` element with namespace string.
+
+**Missing:** 
+- Loading imported files
+- Merging imported elements
+- Handling recursive imports
+- Circular import detection
+
+### Expression Parsing
+
+**Gap:** Constraint and expression text is captured as raw strings, not parsed.
+
+**Example:**
+```sysml
+require constraint { effort > 0 }
+```
+
+**Current behavior:** Expression stored as string `"constraint{effort>0}"`
+
+**Missing:** 
+- AST for expressions
+- Type checking
+- Evaluation capability
+
+## Test Coverage Gaps
+
+### Missing Unit Tests for Edge Cases
+
+**What's not tested:**
+- Circular references in model
+- Malformed input recovery
+- Concurrent parsing safety
+- Very large file handling
+- All element type combinations
+
+**Files:**
+- `gosysml2/sysml/parse_test.go` (176 lines - basic tests only)
+- `gosysml2/sysml/visitor_test.go` (433 lines)
+- `gosysml2/sysml/integration_test.go` (197 lines)
+
+**Risk:** Edge cases may cause panics or incorrect behavior.
+
+**Priority:** Medium
+
+### No Performance Benchmarks
+
+**Gap:** No benchmark tests for:
+- Large file parsing
+- Reference resolution speed
+- Memory usage patterns
+- Concurrent parsing performance
+
+**Recommendation:** Add `*_bench_test.go` files with:
+```go
+func BenchmarkParseLargeFile(b *testing.B) { ... }
+func BenchmarkResolveReferences(b *testing.B) { ... }
+```
+
+## Code Organization Issues
+
+### Parse File Too Large
+
+**File:** `gosysml2/sysml/parse.go` (1733 lines)
+
+**Issue:** Contains all model building logic in one file.
+
+**Refactoring opportunity:**
+- Split by element type (parts.go, requirements.go, etc.)
+- Separate model builder from parsing entry points
+- Extract helper functions to utilities
+
+### Generated Code Mixed with Hand-Written
+
+**Issue:** ANTLR-generated files are in same package as hand-written code.
+
+**Files:**
+- `gosysml2/internal/parser/*.go` (generated)
+- `gosysml2/sysml/*.go` (hand-written)
+
+**Current state:** Good - Generated code is in `internal` package.
+
+**Concern:** Changes to grammar require regenerating and committing large files.
 
 ---
 

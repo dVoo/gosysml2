@@ -5,99 +5,92 @@
 ## Languages
 
 **Primary:**
-- Go 1.22 - All application code
+- Go 1.22 - Core library implementation and parser wrapper
 
-**Grammar Definition:**
-- ANTLR4 Grammar (.g4) - Parser/lexer definitions
-- BNF - Language specification documentation in `docs/bnf/`
+**Secondary:**
+- Java (implicit) - ANTLR4 tool runtime dependency for parser generation
+- SysML v2 - The domain-specific language being parsed
 
 ## Runtime
 
 **Environment:**
-- Go 1.22 runtime
-- Supports x86_64-linux (per `flake.nix`)
+- Go 1.22+ (specified in `go.mod`)
 
 **Package Manager:**
-- Go Modules (`go.mod`)
-- Lockfile: `go.sum` present
+- Go modules (`go.mod`)
+- Lockfile: `go.sum` (present)
 
-**Development Environment:**
-- Nix Flakes (`flake.nix`) for reproducible dev environment
+## Frameworks
 
-## Frameworks & Tools
-
-**Core Parsing:**
-- ANTLR4 v4.13.1 - Parser generator for SysML v2 grammar
-- `github.com/antlr4-go/antlr/v4` - Go ANTLR runtime
+**Core:**
+- ANTLR4-Go v4.13.1 - Parser generation framework
+  - Generates lexer/parser from grammar files
+  - Used in `internal/parser/` for generated code
+  - Wrapped by `low/` and `sysml/` packages
 
 **Testing:**
-- Go standard testing (`testing` package)
-- No external test framework dependencies
+- Go standard library `testing` - Unit and integration tests
+  - Test files: `*_test.go` throughout codebase
+  - No external test framework dependencies
 
 **Build/Dev:**
-- `nix develop` - Enter dev shell with ANTLR, OpenJDK, and tools
-- `go build` - Standard Go compilation
-- ANTLR CLI (via Nix) - Grammar compilation
+- Nix Flakes - Development environment management
+  - Configuration: `flake.nix`
+  - Provides: ANTLR4, OpenJDK, opencode
 
 ## Key Dependencies
 
 **Critical:**
-- `github.com/antlr4-go/antlr/v4 v4.13.1` - ANTLR Go runtime for generated parsers
-  - Required by all parser-generated code
-  - Used in: `gosysml2/internal/parser/`, `code/parser/`
+- `github.com/antlr4-go/antlr/v4` v4.13.1 - Core parser runtime
+  - Used by: `gosysml2/low/parser.go`, `gosysml2/low/lexer.go`
+  - Purpose: ANTLR4 runtime for Go
 
 **Infrastructure:**
-- `golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842` - Extended Go packages (indirect)
-
-## Module Structure
-
-**Three Go Modules:**
-
-1. **Root Module** (`go.mod`)
-   - Path: `github.com/dVoo/sysmlv2-tools`
-   - Replaces: `github.com/dVoo/gosysml2` → `./gosysml2`
-
-2. **Library Module** (`gosysml2/go.mod`)
-   - Path: `github.com/dVoo/gosysml2`
-   - Self-contained parser library
-   - Contains: `internal/parser/`, `sysml/`, `low/`
-
-3. **Verify Module** (`code/parser/go.mod`)
-   - Path: `verify`
-   - Standalone verification tool module
-   - Also replaces gosysml2 → local path
+- `golang.org/x/exp` (indirect) - Extended Go packages
+  - Required by ANTLR4 runtime
 
 ## Configuration
 
 **Environment:**
-- No environment variables required
-- No external configuration files
-- Library is self-contained
+- No environment variables required for library operation
+- Development environment managed via Nix flake
+- No `.env` files or external configuration needed
 
 **Build:**
-- `go.mod` - Module definitions
-- `flake.nix` - Nix development environment
-- `.gitignore` - Excludes build artifacts, ANTLR generated files
-
-**ANTLR Grammar Files:**
-- `code/SysMLv2Lexer.g4` - Lexer definition
-- `code/SysMLv2Parser.g4` - Parser definition
-- `code/KerMLParser.g4` - Kernel Modeling Language parser
+- `go.mod` - Module definition and dependencies
+- `go.sum` - Dependency lock file
+- `flake.nix` - Nix development shell configuration
+- `flake.lock` - Nix flake lock file
 
 ## Platform Requirements
 
 **Development:**
-- Nix with flakes support, OR
-- Go 1.22+ with ANTLR4 and OpenJDK installed
+- Go 1.22 or later
+- Nix (optional, for reproducible dev environment)
+- ANTLR4 tool (for regenerating parser)
+- OpenJDK (ANTLR4 runtime dependency)
 
 **Production:**
-- Pure Go - no CGO dependencies
-- Cross-platform: Linux, macOS, Windows (Go supported platforms)
-- No external runtime dependencies
+- Pure Go library - no external runtime dependencies
+- Single binary deployment for CLI tools
+- Cross-platform: Linux, macOS, Windows (Go-supported platforms)
 
-**Building ANTLR Parsers:**
+## Parser Generation
+
+**Grammar Files:** (outside `gosysml2/` module)
+- `code/SysMLv2Lexer.g4` - Lexer grammar
+- `code/SysMLv2Parser.g4` - Parser grammar
+- `code/KerMLParser.g4` - Kernel Modeling Language grammar
+
+**Generated Code:**
+- `gosysml2/internal/parser/` - ANTLR-generated Go code
+  - `sysmlv2_lexer.go`
+  - `sysmlv2_parser.go`
+  - `sysmlv2parser_listener.go`
+  - `sysmlv2parser_base_listener.go`
+
+**Regenerate Command:**
 ```bash
-# Requires ANTLR4 and Java
 cd code
 antlr -Dlanguage=Go -o parser SysMLv2Lexer.g4 SysMLv2Parser.g4
 ```
