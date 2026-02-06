@@ -1768,6 +1768,8 @@ func (m *Model) ResolveReferences() {
 			m.resolveAttributeRefs(e)
 		case *Interface:
 			m.resolveInterfaceRefs(e)
+		case *SuccessionFlow:
+			m.resolveSuccessionFlowRefs(e)
 		}
 		return true
 	})
@@ -2218,6 +2220,22 @@ func (m *Model) resolveInterfaceRefs(i *Interface) {
 			if iface, ok := elem.(*Interface); ok {
 				i.TypeRef.Resolve(iface)
 			}
+		}
+	}
+}
+
+func (m *Model) resolveSuccessionFlowRefs(s *SuccessionFlow) {
+	// Resolve source reference
+	if s.unresolvedSource != "" {
+		if elem := m.findElement(s.unresolvedSource, s); elem != nil {
+			s.Source.Resolve(elem)
+		}
+	}
+
+	// Resolve target reference
+	if s.unresolvedTarget != "" {
+		if elem := m.findElement(s.unresolvedTarget, s); elem != nil {
+			s.Target.Resolve(elem)
 		}
 	}
 }
