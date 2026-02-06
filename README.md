@@ -1,6 +1,6 @@
-# SysML v2 Language Reference & Tools
+# SysML v2 Parser
 
-This repository contains the SysML v2 language reference, including BNF grammar specifications, ANTLR parser definitions, and a Go library for parsing and working with SysML v2 models.
+A Go library for parsing SysML v2 models. Provides both a low-level performance-oriented API and a high-level developer-friendly API.
 
 ## Project Status
 
@@ -9,39 +9,92 @@ This repository contains the SysML v2 language reference, including BNF grammar 
 - **Library Support**: Full SysML v2 standard library resolution (52 packages, 2605 elements)
 - **Go Version**: 1.25+ with modern generics and iterator support
 
+## Features
+
+- Full SysML v2 grammar support via ANTLR4-generated parser
+- Two-tier API design:
+  - **Low-level API** (`low` package): Direct access to lexer, parser, and parse trees
+  - **High-level API** (`sysml` package): Idiomatic Go model with visitor pattern
+- Comprehensive error handling with source locations
+- Memory-efficient parsing options for large repositories
+- Parallel and streaming parsing modes
+- Element finder functions for requirements, verifications, parts, and more
+
+## Installation
+
+```bash
+go get github.com/dVoo/gosysml2_oc_oc
+```
+
+## Quick Start
+
+### Parse a SysML String
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/dVoo/gosysml2_oc_oc/sysml"
+)
+
+func main() {
+    input := `
+        package Vehicle {
+            part def Engine {
+                attribute power : Real;
+            }
+            part def Car {
+                part engine : Engine;
+            }
+        }
+    `
+
+    result := sysml.ParseString(input)
+    if !result.Success() {
+        fmt.Printf("Parse error: %s\n", result.Errors)
+        return
+    }
+
+    // Access the model
+    for _, pkg := range result.Model.Packages {
+        fmt.Printf("Package: %s\n", pkg.Name())
+    }
+}
+```
+
+## Documentation
+
+- **[API Reference](docs/README.md)** — Complete API documentation
+- **[Usage Guide](docs/USAGE.md)** — Comprehensive usage examples and patterns
+- **[Performance Guide](docs/PERFORMANCE.md)** — Performance optimization tips
+- **[Project Usage Guide](docs/usage-guide.md)** — Project-level documentation
+
 ## Repository Structure
 
 ```
 .
 ├── cmd/                    # Command-line tools
-│   ├── test-attrs/         # Test requirement attributes parsing
-│   ├── test-low-level/     # Low-level parser testing
-│   ├── test-requirement-attributes/  # Test requirement attribute handling
-│   ├── verify-completeness/          # Comprehensive model analysis tool
-│   └── verify-parser/                # Parser verification tool
-├── examples/               # Example SysML files for testing
-├── analysis/               # Analysis reports and documentation
-├── gosysml2/              # Go library for SysML v2 parsing (separate module)
-│   ├── cmd/               # Library-specific tools
-│   ├── examples/          # Library usage examples
-│   ├── internal/          # Internal parser implementation
-│   ├── low/               # Low-level parsing API
-│   └── sysml/             # High-level SysML API
-├── code/                  # ANTLR4 grammar files
-│   ├── SysMLv2Lexer.g4   # Shared lexer
-│   ├── KerMLParser.g4     # KerML parser
-│   └── SysMLv2Parser.g4   # Full SysML parser
-├── docs/                  # Language specification and documentation
-│   ├── bnf/               # BNF grammar specifications
-│   └── validationdata/    # SysML validation test files (18 categories)
-├── libraries/             # SysML v2 standard library files
-└── testdata/              # Test data for tools
-
+├── examples/               # Example programs
+│   ├── basic/              # Basic parsing example
+│   ├── requirements/       # Requirements traceability
+│   ├── validation/         # Validation example
+│   ├── parallel/           # Parallel parsing
+│   └── visitor/            # Visitor pattern example
+├── internal/               # Internal parser implementation
+├── low/                    # Low-level parsing API
+├── sysml/                  # High-level SysML API
+├── docs/                   # Documentation
+│   ├── bnf/                # BNF grammar specifications
+│   ├── README.md           # API reference
+│   ├── USAGE.md            # Usage guide
+│   └── PERFORMANCE.md      # Performance guide
+├── code/                   # ANTLR4 grammar files
+├── libraries/              # SysML v2 standard library files
+└── validationdata/         # Validation test files (18 categories)
 ```
 
-## Getting Started
-
-### Development Environment
+## Development Environment
 
 This project uses Nix flakes for environment management:
 
@@ -49,63 +102,35 @@ This project uses Nix flakes for environment management:
 nix develop          # Enter dev shell with antlr, openjdk, claude-code
 ```
 
-### Building Tools
+## Building
 
 ```bash
-# Build all command-line tools
+# Build all packages
+go build ./...
+
+# Run tests
+go test ./...
+
+# Build command-line tools
 go build ./cmd/...
-
-# Build a specific tool
-go build ./cmd/verify-completeness
 ```
-
-### Using the gosysml2 Library
-
-The `gosysml2/` directory contains a production-ready Go library for parsing SysML v2 models:
-
-```bash
-cd gosysml2
-go test ./...        # Run tests
-go doc ./sysml       # View high-level API documentation
-go doc ./low         # View low-level API documentation
-```
-
-#### Features
-
-- **Two-tier API**: High-level model API (`sysml` package) and low-level parser API (`low` package)
-- **Type-safe references**: Generic `Ref[T]` types with automatic resolution
-- **Standard library support**: Automatic resolution of SysML v2 standard library imports
-- **Multiple parsing modes**: Sequential, parallel, and streaming for different performance needs
-- **Comprehensive element types**: Parts, requirements, verifications, use cases, state machines, and more
-- **Visitor pattern**: Built-in visitor support for model traversal
-
-See `gosysml2/README.md` for detailed API documentation and `gosysml2/examples/` for working code samples.
 
 ## Command-Line Tools
 
 ### verify-completeness
 
-Analyzes SysML files and provides detailed statistics about the parsed model:
+Analyzes SysML files and provides detailed statistics:
 
 ```bash
-go run ./cmd/verify-completeness examples/test_example_req_verification.sysml
-go run ./cmd/verify-completeness testdata/simple/
+go run ./cmd/verify-completeness validationdata/parts-tree/
 ```
 
-### test-attrs
+### check_validation
 
-Tests requirement attribute parsing:
-
-```bash
-go run ./cmd/test-attrs examples/test_example_req_verification.sysml
-```
-
-### verify-parser
-
-Verifies parser completeness and coverage:
+Validates the parser against the test suite:
 
 ```bash
-go run ./cmd/verify-parser
+go run ./cmd/check_validation
 ```
 
 ## Validation
@@ -115,28 +140,6 @@ The parser is validated against the official SysML v2 validation suite:
 - **Location**: `validationdata/` directory (18 categories of test cases)
 - **Coverage**: 96.4% success rate (54 of 56 files pass)
 - **Categories**: Parts Tree, Requirements, Verification, State-based Behavior, Use Cases, and more
-
-Run validation:
-```bash
-cd gosysml2
-go run ./examples/validation
-```
-
-## ANTLR Grammar Files
-
-The `code/` directory contains ANTLR4 grammar files that can be used to generate parsers for various target languages:
-
-```bash
-cd code
-antlr -Dlanguage=Go -o parser SysMLv2Lexer.g4 SysMLv2Parser.g4
-```
-
-## Language Specification
-
-The `docs/bnf/` directory contains the official BNF grammar specifications for:
-- KerML (Kernel Modeling Language)
-- SysML v2 textual syntax
-- SysML v2 graphical notation
 
 ## License
 

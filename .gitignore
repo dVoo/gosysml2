@@ -1,0 +1,44 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# Build artifacts
+/cmd/*/cmd
+/cmd/*/*
+!/cmd/*/main.go
+test-attrs
+test-low-level
+test-requirement-attributes
+verify-completeness
+verify-parser
+
+# ANTLR generated files (optional - commit if needed)
+*.interp
+*.tokens
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Nix
+result
+result-*

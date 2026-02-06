@@ -286,7 +286,7 @@ WARN: verification/nested-verification.sysml
 
 **Symptom:**
 ```
-go: module github.com/dVoo/gosysml2: not found
+go: module github.com/dVoo/gosysml2_oc: not found
 ```
 
 **Solution:**
@@ -296,7 +296,7 @@ cd gosysml2
 go mod tidy
 
 # Or use local replace
-go mod edit -replace github.com/dVoo/gosysml2=./
+go mod edit -replace github.com/dVoo/gosysml2_oc=./
 ```
 
 #### Issue: Parse errors on valid-looking SysML
