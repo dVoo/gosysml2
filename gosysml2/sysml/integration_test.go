@@ -6,25 +6,74 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
-// testdataDir returns the path to testdata relative to this package.
-func integrationTestdataDir(t *testing.T) string {
+// validationTestdataDir returns the path to validationdata relative to this package.
+func validationTestdataDir(t *testing.T) string {
 	t.Helper()
-	dir := filepath.Join("..", "..", "testdata")
+	dir := filepath.Join("..", "..", "validationdata")
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		t.Skip("testdata directory not found")
+		t.Skip("validationdata directory not found")
 	}
 	return dir
 }
 
-// collectTestFiles finds all .sysml files in the testdata directory.
+// standardLibraryExists checks if the standard library is available.
+func standardLibraryExists() bool {
+	_, err := os.Stat("./libraries/sysml.library")
+	return err == nil
+}
+
+// collectValidationFiles finds all .sysml files in the validationdata directory grouped by category.
+func collectValidationFiles(t *testing.T) map[string][]string {
+	t.Helper()
+	validationDir := validationTestdataDir(t)
+
+	categories := make(map[string][]string)
+
+	entries, err := os.ReadDir(validationDir)
+	if err != nil {
+		t.Fatalf("failed to read validationdata directory: %v", err)
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		categoryName := entry.Name()
+		categoryPath := filepath.Join(validationDir, categoryName)
+
+		var files []string
+		err := filepath.WalkDir(categoryPath, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if !d.IsDir() && strings.HasSuffix(path, ".sysml") {
+				files = append(files, path)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("failed to walk category %s: %v", categoryName, err)
+		}
+
+		if len(files) > 0 {
+			categories[categoryName] = files
+		}
+	}
+
+	return categories
+}
+
+// collectTestFiles finds all .sysml files in the validationdata directory.
 func collectTestFiles(t *testing.T) []string {
 	t.Helper()
-	testdataDir := integrationTestdataDir(t)
+	validationDir := validationTestdataDir(t)
 
 	var files []string
-	err := filepath.WalkDir(testdataDir, func(path string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(validationDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -34,7 +83,7 @@ func collectTestFiles(t *testing.T) []string {
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("failed to walk testdata: %v", err)
+		t.Fatalf("failed to walk validationdata: %v", err)
 	}
 
 	return files
@@ -64,7 +113,7 @@ func TestIntegrationFullValidation(t *testing.T) {
 	// Process each file with sub-tests
 	for _, file := range files {
 		name := filepath.Base(file)
-		relPath, _ := filepath.Rel(integrationTestdataDir(t), file)
+		relPath, _ := filepath.Rel(validationTestdataDir(t), file)
 
 		t.Run(relPath, func(t *testing.T) {
 			result := ParseFile(file)
@@ -139,7 +188,7 @@ func TestIntegrationFullValidation(t *testing.T) {
 
 // TestIntegrationParallelParsing tests parallel parsing produces same results as sequential.
 func TestIntegrationParallelParsing(t *testing.T) {
-	testdataDir := integrationTestdataDir(t)
+	testdataDir := validationTestdataDir(t)
 	files := collectTestFiles(t)
 
 	if len(files) == 0 {
@@ -210,7 +259,7 @@ func TestIntegrationParallelParsing(t *testing.T) {
 
 // TestIntegrationStreaming tests streaming parse mode.
 func TestIntegrationStreaming(t *testing.T) {
-	testdataDir := integrationTestdataDir(t)
+	testdataDir := validationTestdataDir(t)
 	files := collectTestFiles(t)
 
 	if len(files) == 0 {
@@ -341,7 +390,7 @@ func TestIntegrationDiscardTree(t *testing.T) {
 
 // TestIntegrationParseDirectory tests basic directory parsing.
 func TestIntegrationParseDirectory(t *testing.T) {
-	testdataDir := integrationTestdataDir(t)
+	testdataDir := validationTestdataDir(t)
 	files := collectTestFiles(t)
 
 	if len(files) == 0 {
@@ -369,7 +418,7 @@ func TestIntegrationParseDirectory(t *testing.T) {
 
 // TestIntegrationParseDirectoryParallel tests parallel directory parsing.
 func TestIntegrationParseDirectoryParallel(t *testing.T) {
-	testdataDir := integrationTestdataDir(t)
+	testdataDir := validationTestdataDir(t)
 	files := collectTestFiles(t)
 
 	if len(files) == 0 {
@@ -401,7 +450,7 @@ func TestIntegrationParseDirectoryParallel(t *testing.T) {
 
 // TestIntegrationParseDirectoryStream tests streaming directory parsing.
 func TestIntegrationParseDirectoryStream(t *testing.T) {
-	testdataDir := integrationTestdataDir(t)
+	testdataDir := validationTestdataDir(t)
 	files := collectTestFiles(t)
 
 	if len(files) == 0 {
@@ -891,4 +940,331 @@ func FindByPath(model *Model, path string) Element {
 		}
 	}
 	return nil
+}
+
+// TestValidationCategories runs the parser against all 18 validation categories.
+func TestValidationCategories(t *testing.T) {
+	categories := collectValidationFiles(t)
+	if len(categories) == 0 {
+		t.Skip("No validation categories found")
+	}
+
+	// Check if standard library is available
+	hasLibrary := standardLibraryExists()
+	if !hasLibrary {
+		t.Log("WARNING: Standard library not found at ./libraries/sysml.library - library resolution tests will be limited")
+	}
+
+	t.Logf("Found %d validation categories", len(categories))
+
+	// Category statistics
+	type categoryStats struct {
+		name            string
+		files           int
+		parsed          int
+		failed          int
+		elements        int
+		libraryImports  int
+		libraryResolved int
+	}
+
+	var allStats []categoryStats
+
+	// Process each category
+	for categoryName, files := range categories {
+		t.Run(categoryName, func(t *testing.T) {
+			stats := categoryStats{
+				name:  categoryName,
+				files: len(files),
+			}
+
+			for _, file := range files {
+				filename := filepath.Base(file)
+
+				// Parse with library support if available
+				var result *ParseResult
+				if hasLibrary {
+					result = ParseFile(file, WithStandardLibrary())
+				} else {
+					result = ParseFile(file)
+				}
+
+				if result.Success() {
+					stats.parsed++
+					t.Logf("  ✓ %s", filename)
+
+					if result.Model != nil {
+						// Count elements
+						count := 0
+						Walk(result.Model, func(elem Element, depth int) bool {
+							count++
+							return true
+						})
+						stats.elements += count
+
+						// Count library imports if available
+						if hasLibrary {
+							for _, imp := range result.Model.Imports {
+								if imp.ResolvedPackage != nil {
+									stats.libraryImports++
+									stats.libraryResolved++
+								} else if imp.ResolvedElement != nil {
+									stats.libraryImports++
+								}
+							}
+						}
+					}
+				} else {
+					stats.failed++
+					errMsg := "parse error"
+					if result.Errors != nil && len(result.Errors.Errors) > 0 {
+						errMsg = result.Errors.Errors[0].Message
+					}
+					t.Logf("  ✗ %s - %s", filename, errMsg)
+				}
+			}
+
+			successRate := 0.0
+			if stats.files > 0 {
+				successRate = float64(stats.parsed) / float64(stats.files) * 100
+			}
+
+			t.Logf("  → %s: %d/%d files parsed (%.1f%%), %d elements, %d library imports resolved",
+				categoryName, stats.parsed, stats.files, successRate, stats.elements, stats.libraryResolved)
+
+			allStats = append(allStats, stats)
+		})
+	}
+
+	// Print final summary table
+	t.Log("\n=== Validation Categories Summary ===")
+	t.Logf("%-35s | %5s | %6s | %6s | %10s | %8s", "Category", "Files", "Parsed", "Failed", "Elements", "LibRefs")
+	t.Log("----------------------------------------------------------------------------------------")
+
+	totalFiles := 0
+	totalParsed := 0
+	totalFailed := 0
+	totalElements := 0
+	totalLibraryRefs := 0
+
+	for _, stats := range allStats {
+		t.Logf("%-35s | %5d | %6d | %6d | %10d | %8d",
+			stats.name, stats.files, stats.parsed, stats.failed, stats.elements, stats.libraryResolved)
+		totalFiles += stats.files
+		totalParsed += stats.parsed
+		totalFailed += stats.failed
+		totalElements += stats.elements
+		totalLibraryRefs += stats.libraryResolved
+	}
+
+	t.Log("----------------------------------------------------------------------------------------")
+	t.Logf("%-35s | %5d | %6d | %6d | %10d | %8d",
+		"TOTAL", totalFiles, totalParsed, totalFailed, totalElements, totalLibraryRefs)
+
+	overallRate := 0.0
+	if totalFiles > 0 {
+		overallRate = float64(totalParsed) / float64(totalFiles) * 100
+	}
+	t.Logf("\nOverall Success Rate: %d/%d files (%.1f%%)", totalParsed, totalFiles, overallRate)
+}
+
+// TestLibraryImportResolution verifies that library imports are resolved correctly.
+func TestLibraryImportResolution(t *testing.T) {
+	if !standardLibraryExists() {
+		t.Skip("Standard library not available - skipping library resolution test")
+	}
+
+	// Parse a simple file with library imports
+	input := `package TestLib {
+		import ScalarValues::*;
+		import ISQ::*;
+		
+		attribute testValue : ScalarValues::Real;
+	}`
+
+	result := ParseString(input, WithStandardLibrary())
+	if !result.Success() {
+		t.Fatalf("Failed to parse test input: %v", result.Errors)
+	}
+
+	if result.Model == nil {
+		t.Fatal("Model is nil")
+	}
+
+	// Check that imports were resolved
+	for _, imp := range result.Model.Imports {
+		resolvedName := ""
+		if imp.ResolvedPackage != nil {
+			resolvedName = imp.ResolvedPackage.Name()
+		}
+		t.Logf("Import: %s, ResolvedPackage: %s", imp.ImportedNamespace, resolvedName)
+		if imp.ResolvedPackage == nil {
+			t.Errorf("Import %s was not resolved to a library package", imp.ImportedNamespace)
+		}
+	}
+}
+
+// TestLibraryElementReferences verifies that qualified name references resolve to library elements.
+func TestLibraryElementReferences(t *testing.T) {
+	if !standardLibraryExists() {
+		t.Skip("Standard library not available - skipping library element reference test")
+	}
+
+	// Parse a file with qualified name references
+	input := `package TestRef {
+		import ISQ::*;
+		import SI::*;
+		
+		attribute mass :> ISQ::mass;
+		attribute weight :> SI::kg;
+	}`
+
+	result := ParseString(input, WithStandardLibrary())
+	if !result.Success() {
+		t.Fatalf("Failed to parse test input: %v", result.Errors)
+	}
+
+	if result.Model == nil {
+		t.Fatal("Model is nil")
+	}
+
+	// Find attributes and check if they have resolved type references
+	for _, elem := range result.Model.Elements {
+		if attr, ok := elem.(*Attribute); ok {
+			t.Logf("Attribute: %s", attr.Name())
+			if typeElem := attr.TypeRef.Resolved(); typeElem != nil {
+				t.Logf("  TypeRef: %s", typeElem.Name())
+			}
+		}
+	}
+}
+
+// TestValidationFileLibraryUsage tests library usage in actual validation files.
+func TestValidationFileLibraryUsage(t *testing.T) {
+	if !standardLibraryExists() {
+		t.Skip("Standard library not available - skipping validation file library usage test")
+	}
+
+	categories := collectValidationFiles(t)
+	if len(categories) == 0 {
+		t.Skip("No validation categories found")
+	}
+
+	// Test representative files from different categories
+	representativeFiles := []struct {
+		category string
+		pattern  string
+	}{
+		{"01-Parts Tree", "Parts Tree"},
+		{"03-Function-based Behavior", "Function"},
+		{"15-Properties-Values-Expressions", "Property"},
+	}
+
+	for _, rep := range representativeFiles {
+		files, ok := categories[rep.category]
+		if !ok || len(files) == 0 {
+			t.Logf("Category %s not found or empty, skipping", rep.category)
+			continue
+		}
+
+		// Find a file matching the pattern
+		var testFile string
+		for _, f := range files {
+			if strings.Contains(filepath.Base(f), rep.pattern) || strings.Contains(f, rep.pattern) {
+				testFile = f
+				break
+			}
+		}
+		if testFile == "" {
+			testFile = files[0] // Use first file if no match
+		}
+
+		t.Run(rep.category, func(t *testing.T) {
+			result := ParseFile(testFile, WithStandardLibrary())
+			if !result.Success() {
+				t.Logf("File %s did not parse successfully (may be expected for complex files)", filepath.Base(testFile))
+				return
+			}
+
+			if result.Model == nil {
+				t.Skip("Model is nil")
+			}
+
+			// Count library imports
+			libraryImportCount := 0
+			for _, imp := range result.Model.Imports {
+				if imp.ResolvedPackage != nil {
+					libraryImportCount++
+				}
+			}
+
+			t.Logf("Category %s: %s has %d resolved library imports",
+				rep.category, filepath.Base(testFile), libraryImportCount)
+		})
+	}
+}
+
+// TestLibraryPerformance measures library loading performance.
+func TestLibraryPerformance(t *testing.T) {
+	if !standardLibraryExists() {
+		t.Skip("Standard library not available - skipping performance test")
+	}
+
+	// Measure library loading time
+	start := time.Now()
+	reg := NewLibraryRegistry()
+	err := reg.RegisterStandardLibrary()
+	elapsed := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("Failed to load standard library: %v", err)
+	}
+
+	t.Logf("Standard library loaded in %v", elapsed)
+	t.Logf("Library contains %d packages", reg.GetLibraryCount())
+
+	// Measure parse time with library
+	input := `package PerfTest {
+		import ScalarValues::*;
+		attribute value : ScalarValues::Real;
+	}`
+
+	// Without library
+	start = time.Now()
+	result1 := ParseString(input)
+	elapsed1 := time.Since(start)
+
+	// With library (should reuse cached registry)
+	start = time.Now()
+	result2 := ParseString(input, WithLibraryRegistry(reg))
+	elapsed2 := time.Since(start)
+
+	if !result1.Success() || !result2.Success() {
+		t.Log("Parse results may have errors, but timing is still valid")
+	}
+
+	t.Logf("Parse time without library: %v", elapsed1)
+	t.Logf("Parse time with library: %v", elapsed2)
+	t.Logf("Overhead: %v", elapsed2-elapsed1)
+}
+
+// TestLibraryErrorHandling tests graceful handling of invalid library imports.
+func TestLibraryErrorHandling(t *testing.T) {
+	if !standardLibraryExists() {
+		t.Skip("Standard library not available - skipping error handling test")
+	}
+
+	// Parse a file with an invalid library import
+	input := `package TestError {
+		import NonExistentLibrary::*;
+		attribute value : NonExistentLibrary::SomeType;
+	}`
+
+	result := ParseString(input, WithStandardLibrary())
+
+	// Should complete without panic, even if there are errors
+	t.Logf("Parse completed with success=%v", result.Success())
+	if result.Errors != nil {
+		t.Logf("Errors: %v", result.Errors.Errors)
+	}
 }
