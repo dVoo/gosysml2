@@ -943,7 +943,7 @@ type Case struct {
 	Subject Ref[Element]
 
 	// Actors (resolved references)
-	Actors []Ref[Element]
+	Actors []Element
 
 	// Objectives (resolved references to requirements)
 	Objectives []*Requirement
@@ -972,7 +972,7 @@ func NewCase(name string, loc Location, isDefinition bool) *Case {
 			children: make([]Element, 0),
 		},
 		IsDefinition:         isDefinition,
-		Actors:               make([]Ref[Element], 0),
+		Actors:               make([]Element, 0),
 		Objectives:           make([]*Requirement, 0),
 		unresolvedActors:     make([]string, 0),
 		unresolvedObjectives: make([]string, 0),
@@ -1628,6 +1628,8 @@ func (m *Model) ResolveReferences() {
 			m.resolveConcernRefs(e)
 		case *AnalysisCase:
 			m.resolveAnalysisCaseRefs(e)
+		case *Case:
+			m.resolveCaseRefs(e)
 		case *Transition:
 			m.resolveTransitionRefs(e)
 		case *Connection:
@@ -1815,6 +1817,40 @@ func (m *Model) resolveAnalysisCaseRefs(a *AnalysisCase) {
 		if elem := m.findElement(a.TypeRef.name, a); elem != nil {
 			if ac, ok := elem.(*AnalysisCase); ok {
 				a.TypeRef.Resolve(ac)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveCaseRefs(c *Case) {
+	// Resolve subject
+	if c.unresolvedSubject != "" {
+		if elem := m.findElement(c.unresolvedSubject, c); elem != nil {
+			c.Subject.Resolve(elem)
+		}
+	}
+
+	// Resolve actors
+	for _, name := range c.unresolvedActors {
+		if elem := m.findElement(name, c); elem != nil {
+			c.Actors = append(c.Actors, elem)
+		}
+	}
+
+	// Resolve objectives (requirements)
+	for _, name := range c.unresolvedObjectives {
+		if elem := m.findElement(name, c); elem != nil {
+			if req, ok := elem.(*Requirement); ok {
+				c.Objectives = append(c.Objectives, req)
+			}
+		}
+	}
+
+	// Resolve type reference for usages
+	if !c.IsDefinition && c.TypeRef.name != "" {
+		if elem := m.findElement(c.TypeRef.name, c); elem != nil {
+			if cas, ok := elem.(*Case); ok {
+				c.TypeRef.Resolve(cas)
 			}
 		}
 	}
