@@ -195,12 +195,12 @@ type baseElement struct {
 	documentation string
 }
 
-func (e *baseElement) Kind() ElementKind   { return e.kind }
-func (e *baseElement) Name() string        { return e.name }
-func (e *baseElement) Location() Location  { return e.location }
-func (e *baseElement) Parent() Element     { return e.parent }
-func (e *baseElement) Children() []Element { return e.children }
-func (e *baseElement) SetParent(p Element) { e.parent = p }
+func (e *baseElement) Kind() ElementKind     { return e.kind }
+func (e *baseElement) Name() string          { return e.name }
+func (e *baseElement) Location() Location    { return e.location }
+func (e *baseElement) Parent() Element       { return e.parent }
+func (e *baseElement) Children() []Element   { return e.children }
+func (e *baseElement) SetParent(p Element)   { e.parent = p }
 func (e *baseElement) Documentation() string { return e.documentation }
 
 func (e *baseElement) SetDocumentation(doc string) {
@@ -556,10 +556,10 @@ type Requirement struct {
 	Subject Ref[Element] // Reference to the subject element
 
 	// Relationships with real references
-	DerivedFrom  []*Requirement   // Requirements this is derived from
-	DerivedReqs  []*Requirement   // Requirements derived from this one (inverse)
-	SatisfiedBy  []Element        // Elements that satisfy this requirement
-	VerifiedBy   []*Verification  // Verification cases that verify this
+	DerivedFrom []*Requirement  // Requirements this is derived from
+	DerivedReqs []*Requirement  // Requirements derived from this one (inverse)
+	SatisfiedBy []Element       // Elements that satisfy this requirement
+	VerifiedBy  []*Verification // Verification cases that verify this
 
 	// Constraints
 	Assumptions []*RequirementConstraint // assume constraints
@@ -845,8 +845,8 @@ type UseCase struct {
 	IncludedUseCases []*UseCase
 
 	// Unresolved
-	unresolvedSubject      string
-	unresolvedActors       []string
+	unresolvedSubject          string
+	unresolvedActors           []string
 	unresolvedIncludedUseCases []string
 }
 
@@ -867,10 +867,10 @@ func NewUseCase(name string, loc Location, isDefinition bool) *UseCase {
 			location: loc,
 			children: make([]Element, 0),
 		},
-		IsDefinition:              isDefinition,
-		Actors:                    make([]Element, 0),
-		IncludedUseCases:          make([]*UseCase, 0),
-		unresolvedActors:          make([]string, 0),
+		IsDefinition:               isDefinition,
+		Actors:                     make([]Element, 0),
+		IncludedUseCases:           make([]*UseCase, 0),
+		unresolvedActors:           make([]string, 0),
 		unresolvedIncludedUseCases: make([]string, 0),
 	}
 }
@@ -1395,9 +1395,9 @@ func (v *View) SetUnresolvedViewpoint(ref string) {
 type Import struct {
 	baseElement
 	ImportedNamespace string
-	IsRecursive       bool     // true for ::**
-	IsAll             bool     // true for ::*
-	ResolvedElement   Element  // The resolved imported element (if single import)
+	IsRecursive       bool    // true for ::**
+	IsAll             bool    // true for ::*
+	ResolvedElement   Element // The resolved imported element (if single import)
 }
 
 // NewImport creates a new Import element.
@@ -1464,6 +1464,9 @@ type Model struct {
 
 	// Index for fast lookup by qualified name
 	elementIndex map[string]Element
+
+	// Library registry for resolving qualified names to library elements
+	libraryRegistry *LibraryRegistry
 }
 
 // NewModel creates a new empty model.
@@ -1503,6 +1506,12 @@ func (m *Model) FindPackage(name string) *Package {
 		}
 	}
 	return nil
+}
+
+// SetLibraryRegistry sets the library registry for resolving qualified names.
+// This enables the model to resolve references to standard library elements.
+func (m *Model) SetLibraryRegistry(reg *LibraryRegistry) {
+	m.libraryRegistry = reg
 }
 
 // FindByQualifiedName finds an element by its fully qualified name.

@@ -2,7 +2,6 @@ package sysml
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -53,7 +52,10 @@ func (r *ParseResult) Success() bool {
 type ParseOption func(*parseConfig)
 
 type parseConfig struct {
-	discardTree bool
+	discardTree       bool
+	libraryRegistry   *LibraryRegistry
+	autoLoadLibraries bool
+	libraryPath       string
 }
 
 // WithDiscardTree discards the parse tree after building the model.
@@ -62,6 +64,89 @@ func WithDiscardTree() ParseOption {
 	return func(c *parseConfig) {
 		c.discardTree = true
 	}
+}
+
+// WithLibraryRegistry uses an existing library registry for resolving imports.
+// The registry should already be loaded with the standard libraries.
+func WithLibraryRegistry(reg *LibraryRegistry) ParseOption {
+	return func(c *parseConfig) {
+		c.libraryRegistry = reg
+	}
+}
+
+// WithStandardLibrary auto-loads the standard SysML library before parsing.
+// The library will be loaded from the default path (./libraries/sysml.library).
+func WithStandardLibrary() ParseOption {
+	return func(c *parseConfig) {
+		c.autoLoadLibraries = true
+	}
+}
+
+// WithLibraryPath specifies a custom path for loading standard libraries.
+// Use with WithStandardLibrary() to load from a non-default location.
+func WithLibraryPath(path string) ParseOption {
+	return func(c *parseConfig) {
+		c.libraryPath = path
+	}
+}
+
+// getOrCreateRegistry returns a library registry based on configuration.
+// If a registry is provided in config, it returns that.
+// If autoLoadLibraries is set, it creates and populates a new registry.
+// Otherwise returns nil.
+func getOrCreateRegistry(cfg *parseConfig) *LibraryRegistry {
+	// If registry already provided, use it
+	if cfg.libraryRegistry != nil {
+		return cfg.libraryRegistry
+	}
+
+	// If auto-loading is enabled, create and load registry
+	if cfg.autoLoadLibraries {
+		var opts []LibraryOption
+		if cfg.libraryPath != "" {
+			opts = append(opts, WithLibraryPaths(cfg.libraryPath))
+		}
+		registry := NewLibraryRegistry(opts...)
+		// Load standard libraries (ignore errors - libraries may not be present)
+		_ = registry.RegisterStandardLibrary()
+		return registry
+	}
+
+	return nil
+}
+
+// parseWithSource parses SysML input with a specified source identifier.
+func parseWithSource(input, source string, opts ...ParseOption) *ParseResult {
+	cfg := &parseConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	// Get or create library registry
+	registry := getOrCreateRegistry(cfg)
+
+	// Use low-level parser
+	tree, lowErrors := low.Parse(input)
+
+	result := &ParseResult{
+		Source: source,
+	}
+
+	if !cfg.discardTree {
+		result.Tree = tree
+	}
+
+	// Convert errors
+	if lowErrors.HasErrors() {
+		result.Errors = convertFromLowLevel(lowErrors, source)
+	}
+
+	// Build model from parse tree
+	if tree != nil {
+		result.Model = buildModel(tree, registry)
+	}
+
+	return result
 }
 
 // ParseString parses a SysML string and returns a high-level model.
@@ -91,80 +176,7 @@ func ParseFile(filename string, opts ...ParseOption) *ParseResult {
 // ParseBytes parses SysML from a byte slice.
 // This is more efficient than ParseString when you already have []byte.
 func ParseBytes(input []byte, source string, opts ...ParseOption) *ParseResult {
-	// Use low-level parser directly with bytes
-	tree, lowErrors := low.ParseBytes(input)
-
-	cfg := &parseConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
-	result := &ParseResult{
-		Source: source,
-	}
-
-	if !cfg.discardTree {
-		result.Tree = tree
-	}
-
-	if lowErrors.HasErrors() {
-		result.Errors = convertFromLowLevel(lowErrors, source)
-	}
-
-	if tree != nil {
-		result.Model = buildModel(tree)
-	}
-
-	return result
-}
-
-// ParseReader parses SysML from an io.Reader.
-func ParseReader(r io.Reader, source string, opts ...ParseOption) *ParseResult {
-	content, err := io.ReadAll(r)
-	if err != nil {
-		return &ParseResult{
-			Errors: &ParseError{
-				Errors: []*Error{{
-					Line:    0,
-					Column:  0,
-					Message: fmt.Errorf("reading from %s: %w", source, err).Error(),
-				}},
-				Source: source,
-			},
-			Source: source,
-		}
-	}
-	return ParseBytes(content, source, opts...)
-}
-
-func parseWithSource(input, source string, opts ...ParseOption) *ParseResult {
-	cfg := &parseConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
-	// Use low-level parser
-	tree, lowErrors := low.Parse(input)
-
-	result := &ParseResult{
-		Source: source,
-	}
-
-	if !cfg.discardTree {
-		result.Tree = tree
-	}
-
-	// Convert errors
-	if lowErrors.HasErrors() {
-		result.Errors = convertFromLowLevel(lowErrors, source)
-	}
-
-	// Build model from parse tree
-	if tree != nil {
-		result.Model = buildModel(tree)
-	}
-
-	return result
+	return parseWithSource(string(input), source, opts...)
 }
 
 // ParseDirectory parses all .sysml files in a directory.
@@ -264,18 +276,25 @@ func ParseDirectoryStream(dir string, handler func(*ParseResult) error, opts ...
 }
 
 // buildModel converts the parse tree to a high-level Model.
-func buildModel(tree parser.IEntryRuleRootNamespaceContext) *Model {
+// If registry is provided, it will be used for resolving library imports and qualified names.
+func buildModel(tree parser.IEntryRuleRootNamespaceContext, registry *LibraryRegistry) *Model {
 	if tree == nil {
 		return nil
 	}
 
 	model := NewModel()
 	builder := &modelBuilder{
-		model:        model,
-		elementStack: make([]Element, 0, 16),
-		packageStack: make([]*Package, 0, 8),
+		model:           model,
+		libraryRegistry: registry,
+		elementStack:    make([]Element, 0, 16),
+		packageStack:    make([]*Package, 0, 8),
 	}
 	antlr.ParseTreeWalkerDefault.Walk(builder, tree)
+
+	// Set library registry on model for reference resolution
+	if registry != nil {
+		model.SetLibraryRegistry(registry)
+	}
 
 	// Build index and resolve references
 	model.BuildIndex()
@@ -287,10 +306,11 @@ func buildModel(tree parser.IEntryRuleRootNamespaceContext) *Model {
 // modelBuilder walks the parse tree and builds the model.
 type modelBuilder struct {
 	*parser.BaseSysMLv2ParserListener
-	model        *Model
-	currentPkg   *Package
-	packageStack []*Package // Stack of packages for nested package handling
-	elementStack []Element  // Stack of elements (parts, requirements, etc.) for parent tracking
+	model           *Model
+	libraryRegistry *LibraryRegistry // For resolving library imports
+	currentPkg      *Package
+	packageStack    []*Package // Stack of packages for nested package handling
+	elementStack    []Element  // Stack of elements (parts, requirements, etc.) for parent tracking
 }
 
 // getCurrentParent returns the current parent element for adding children.
@@ -340,6 +360,47 @@ func (b *modelBuilder) EnterPackage_(ctx *parser.Package_Context) {
 }
 
 func (b *modelBuilder) ExitPackage_(ctx *parser.Package_Context) {
+	// Pop from element stack
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+
+	// Restore previous package from package stack
+	if len(b.packageStack) > 0 {
+		b.currentPkg = b.packageStack[len(b.packageStack)-1]
+		b.packageStack = b.packageStack[:len(b.packageStack)-1]
+	} else {
+		b.currentPkg = nil
+	}
+}
+
+// EnterLibraryPackage handles standard library package declarations.
+func (b *modelBuilder) EnterLibraryPackage(ctx *parser.LibraryPackageContext) {
+	name := ""
+	if ctx.PackageDeclaration() != nil {
+		if ident := ctx.PackageDeclaration().Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	}
+
+	pkg := NewPackage(name, locationFromContext(ctx))
+	pkg.IsLibrary = true // Mark as library package
+
+	if b.currentPkg != nil {
+		pkg.parent = b.currentPkg
+		b.currentPkg.AddChild(pkg)
+	} else {
+		b.model.AddPackage(pkg)
+	}
+
+	// Push current package to package stack and element stack
+	b.packageStack = append(b.packageStack, b.currentPkg)
+	b.elementStack = append(b.elementStack, pkg)
+	b.currentPkg = pkg
+}
+
+// ExitLibraryPackage handles exiting library package scope.
+func (b *modelBuilder) ExitLibraryPackage(ctx *parser.LibraryPackageContext) {
 	// Pop from element stack
 	if len(b.elementStack) > 0 {
 		b.elementStack = b.elementStack[:len(b.elementStack)-1]
