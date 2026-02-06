@@ -35,6 +35,8 @@ const (
 	KindEnumeration
 	KindEnumerationValue
 	KindCalculation
+	KindControlNode
+	KindOccurrence
 )
 
 // String returns the string representation of the element kind.
@@ -100,6 +102,10 @@ func (k ElementKind) String() string {
 		return "calculation"
 	case KindTransition:
 		return "transition"
+	case KindControlNode:
+		return "control node"
+	case KindOccurrence:
+		return "occurrence"
 	default:
 		return "unknown"
 	}
