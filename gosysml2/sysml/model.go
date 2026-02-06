@@ -1719,6 +1719,8 @@ func (m *Model) ResolveReferences() {
 			m.resolveAnalysisCaseRefs(e)
 		case *Case:
 			m.resolveCaseRefs(e)
+		case *IncludeUseCase:
+			m.resolveIncludeUseCaseRefs(e)
 		case *Transition:
 			m.resolveTransitionRefs(e)
 		case *Connection:
@@ -1940,6 +1942,26 @@ func (m *Model) resolveCaseRefs(c *Case) {
 		if elem := m.findElement(c.TypeRef.name, c); elem != nil {
 			if cas, ok := elem.(*Case); ok {
 				c.TypeRef.Resolve(cas)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveIncludeUseCaseRefs(i *IncludeUseCase) {
+	// Resolve the included use case reference
+	if i.unresolvedIncludedUseCase != "" {
+		if elem := m.findElement(i.unresolvedIncludedUseCase, i); elem != nil {
+			if uc, ok := elem.(*UseCase); ok {
+				i.IncludedUseCase.Resolve(uc)
+			}
+		}
+	}
+
+	// Resolve the owner reference if set
+	if i.Owner.name != "" && !i.Owner.IsResolved() {
+		if elem := m.findElement(i.Owner.name, i); elem != nil {
+			if uc, ok := elem.(*UseCase); ok {
+				i.Owner.Resolve(uc)
 			}
 		}
 	}
