@@ -81,6 +81,12 @@ type Visitor interface {
 	// VisitDependency is called for each dependency element.
 	VisitDependency(dep *Dependency) bool
 
+	// VisitFlow is called for each flow element.
+	VisitFlow(flow *Flow) bool
+
+	// VisitFlowEnd is called for each flow end element.
+	VisitFlowEnd(flowEnd *FlowEnd) bool
+
 	// VisitElement is called for any other element type.
 	VisitElement(elem Element) bool
 }
@@ -114,6 +120,8 @@ func (BaseVisitor) VisitEnumerationValue(value *EnumerationValue) bool { return 
 func (BaseVisitor) VisitView(view *View) bool                          { return true }
 func (BaseVisitor) VisitViewpoint(viewpoint *Viewpoint) bool           { return true }
 func (BaseVisitor) VisitDependency(dep *Dependency) bool               { return true }
+func (BaseVisitor) VisitFlow(flow *Flow) bool                          { return true }
+func (BaseVisitor) VisitFlowEnd(flowEnd *FlowEnd) bool                 { return true }
 func (BaseVisitor) VisitElement(elem Element) bool                     { return true }
 
 // Visit traverses a model using the given visitor.
@@ -177,6 +185,10 @@ func visitElement(elem Element, visitor Visitor) {
 		continueVisit = visitor.VisitViewpoint(e)
 	case *Dependency:
 		continueVisit = visitor.VisitDependency(e)
+	case *Flow:
+		continueVisit = visitor.VisitFlow(e)
+	case *FlowEnd:
+		continueVisit = visitor.VisitFlowEnd(e)
 	default:
 		continueVisit = visitor.VisitElement(elem)
 	}

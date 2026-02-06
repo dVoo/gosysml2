@@ -31,6 +31,7 @@ const (
 	KindAlias
 	KindDependency
 	KindFlow
+	KindFlowEnd
 	KindEnumeration
 	KindEnumerationValue
 	KindCalculation
@@ -89,6 +90,8 @@ func (k ElementKind) String() string {
 		return "dependency"
 	case KindFlow:
 		return "flow"
+	case KindFlowEnd:
+		return "flow end"
 	case KindEnumeration:
 		return "enumeration"
 	case KindEnumerationValue:
@@ -1470,6 +1473,7 @@ type Model struct {
 	Comments     []*Comment
 	Dependencies []*Dependency
 	Docs         []*Doc
+	Flows        []*Flow
 
 	// All top-level elements (for generic traversal)
 	Elements []Element
@@ -1489,6 +1493,7 @@ func NewModel() *Model {
 		Comments:     make([]*Comment, 0),
 		Dependencies: make([]*Dependency, 0),
 		Docs:         make([]*Doc, 0),
+		Flows:        make([]*Flow, 0),
 		Elements:     make([]Element, 0),
 		elementIndex: make(map[string]Element),
 	}
