@@ -93,6 +93,36 @@ Complete P2 grammar elements to reach 85%+ coverage. Focus on enterprise modelin
 - All P2 elements have parser handlers
 - Unit tests for all new grammar elements
 
+### Phase 5: Documentation and Examples
+**Goal:** Create comprehensive documentation and code examples to make the library accessible to Go developers
+
+**Status:** ✓ Complete - 3/3 plans finished
+
+**Depends on:** Phase 4
+**Plans:** 3 plans
+
+Plans:
+- [x] 05-01-PLAN.md -- API documentation improvements (godoc, package docs, README updates)
+- [x] 05-02-PLAN.md -- Code examples (basic, requirements, validation, parallel, visitor)
+- [x] 05-03-PLAN.md -- Usage guides (USAGE.md, docs/usage-guide.md)
+
+**Wave Structure:**
+- Wave 1: 05-01, 05-02 (independent - documentation and examples can proceed in parallel)
+- Wave 2: 05-03 (depends on 05-02 - usage guides reference examples)
+
+**Details:**
+Improve library documentation to make it accessible to Go developers. Focus on:
+1. API documentation with godoc comments and package-level documentation
+2. Working code examples demonstrating common use cases
+3. Comprehensive usage guides for different scenarios
+
+**Success Criteria:**
+- All public APIs documented with godoc
+- 5+ working code examples
+- Usage guides cover common scenarios
+- README serves as effective entry point
+- Documentation accurately reflects current API
+
 ---
 
 *Created: 2026-02-03*
