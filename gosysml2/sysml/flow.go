@@ -125,3 +125,75 @@ func (m *Model) AddFlow(flow *Flow) {
 func (m *Model) GetFlows() []*Flow {
 	return m.Flows
 }
+
+// SuccessionFlow represents a succession flow usage in SysML.
+// SuccessionFlowUsage is used in action bodies for control flow with succession semantics.
+// It connects source and target elements with an optional guard condition.
+type SuccessionFlow struct {
+	baseElement
+	// Source is the element that succeeds (the "from" end)
+	Source Ref[Element]
+	// Target is the element that is succeeded by (the "to" end)
+	Target Ref[Element]
+	// Guard is an optional guard condition expression
+	Guard string
+
+	// Unresolved references (used during parsing, before resolution)
+	unresolvedSource string
+	unresolvedTarget string
+}
+
+// isUsage marks SuccessionFlow as a usage element.
+func (s *SuccessionFlow) isUsage() {}
+
+// NewSuccessionFlow creates a new SuccessionFlow element.
+func NewSuccessionFlow(name string, loc Location) *SuccessionFlow {
+	return &SuccessionFlow{
+		baseElement: baseElement{
+			name:     name,
+			kind:     KindSuccessionFlow,
+			location: loc,
+			children: make([]Element, 0),
+		},
+	}
+}
+
+// SetUnresolvedSource sets the unresolved source reference.
+func (s *SuccessionFlow) SetUnresolvedSource(ref string) {
+	s.unresolvedSource = ref
+}
+
+// SetUnresolvedTarget sets the unresolved target reference.
+func (s *SuccessionFlow) SetUnresolvedTarget(ref string) {
+	s.unresolvedTarget = ref
+}
+
+// GetName returns the succession flow name.
+func (s *SuccessionFlow) GetName() string {
+	return s.name
+}
+
+// GetKind returns the element kind.
+func (s *SuccessionFlow) GetKind() ElementKind {
+	return s.kind
+}
+
+// GetLocation returns the source location.
+func (s *SuccessionFlow) GetLocation() Location {
+	return s.location
+}
+
+// GetParent returns the parent element.
+func (s *SuccessionFlow) GetParent() Element {
+	return s.parent
+}
+
+// SetParent sets the parent element.
+func (s *SuccessionFlow) SetParent(parent Element) {
+	s.parent = parent
+}
+
+// Accept implements the visitor pattern.
+func (s *SuccessionFlow) Accept(v Visitor) bool {
+	return v.VisitSuccessionFlow(s)
+}

@@ -38,6 +38,9 @@ const (
 	KindControlNode
 	KindOccurrence
 	KindCase
+	KindIncludeUseCase
+	KindConjugatedPort
+	KindSuccessionFlow
 )
 
 // String returns the string representation of the element kind.
@@ -109,6 +112,12 @@ func (k ElementKind) String() string {
 		return "occurrence"
 	case KindCase:
 		return "case"
+	case KindIncludeUseCase:
+		return "include use case"
+	case KindConjugatedPort:
+		return "conjugated port"
+	case KindSuccessionFlow:
+		return "succession flow"
 	default:
 		return "unknown"
 	}
@@ -893,6 +902,41 @@ func NewUseCase(name string, loc Location, isDefinition bool) *UseCase {
 		unresolvedActors:           make([]string, 0),
 		unresolvedIncludedUseCases: make([]string, 0),
 	}
+}
+
+// IncludeUseCase represents a use case inclusion relationship.
+// This is a usage element that represents the "include" relationship between use cases.
+type IncludeUseCase struct {
+	baseElement
+
+	// IncludedUseCase is the reference to the included use case
+	IncludedUseCase Ref[*UseCase]
+
+	// unresolvedIncludedUseCase holds the name before resolution
+	unresolvedIncludedUseCase string
+
+	// Owner is the use case that includes this (set during parsing)
+	Owner Ref[*UseCase]
+}
+
+// isUsage marks IncludeUseCase as a usage element.
+func (i *IncludeUseCase) isUsage() {}
+
+// NewIncludeUseCase creates a new IncludeUseCase element.
+func NewIncludeUseCase(name string, loc Location) *IncludeUseCase {
+	return &IncludeUseCase{
+		baseElement: baseElement{
+			kind:     KindIncludeUseCase,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+	}
+}
+
+// SetUnresolvedIncludedUseCase sets the unresolved reference to the included use case.
+func (i *IncludeUseCase) SetUnresolvedIncludedUseCase(ref string) {
+	i.unresolvedIncludedUseCase = ref
 }
 
 // AnalysisCase represents a SysML analysis case definition or usage.

@@ -93,6 +93,9 @@ type Visitor interface {
 	// VisitFlowEnd is called for each flow end element.
 	VisitFlowEnd(flowEnd *FlowEnd) bool
 
+	// VisitSuccessionFlow is called for each succession flow element.
+	VisitSuccessionFlow(successionFlow *SuccessionFlow) bool
+
 	// VisitElement is called for any other element type.
 	VisitElement(elem Element) bool
 }
@@ -101,36 +104,37 @@ type Visitor interface {
 // Embed this in your visitor to only override methods you care about.
 type BaseVisitor struct{}
 
-func (BaseVisitor) VisitPackage(pkg *Package) bool                     { return true }
-func (BaseVisitor) VisitPart(part *Part) bool                          { return true }
-func (BaseVisitor) VisitRequirement(req *Requirement) bool             { return true }
-func (BaseVisitor) VisitVerification(ver *Verification) bool           { return true }
-func (BaseVisitor) VisitConcern(concern *Concern) bool                 { return true }
-func (BaseVisitor) VisitUseCase(useCase *UseCase) bool                 { return true }
-func (BaseVisitor) VisitAnalysisCase(analysis *AnalysisCase) bool      { return true }
-func (BaseVisitor) VisitCase(case_ *Case) bool                         { return true }
-func (BaseVisitor) VisitAction(action *Action) bool                    { return true }
-func (BaseVisitor) VisitImport(imp *Import) bool                       { return true }
-func (BaseVisitor) VisitComment(comment *Comment) bool                 { return true }
-func (BaseVisitor) VisitDoc(doc *Doc) bool                             { return true }
-func (BaseVisitor) VisitPort(port *Port) bool                          { return true }
-func (BaseVisitor) VisitConnection(conn *Connection) bool              { return true }
-func (BaseVisitor) VisitInterface(iface *Interface) bool               { return true }
-func (BaseVisitor) VisitAllocation(alloc *Allocation) bool             { return true }
-func (BaseVisitor) VisitAttribute(attr *Attribute) bool                { return true }
-func (BaseVisitor) VisitItem(item *Item) bool                          { return true }
-func (BaseVisitor) VisitState(state *State) bool                       { return true }
-func (BaseVisitor) VisitTransition(transition *Transition) bool        { return true }
-func (BaseVisitor) VisitCalculation(calc *Calculation) bool            { return true }
-func (BaseVisitor) VisitConstraint(constraint *Constraint) bool        { return true }
-func (BaseVisitor) VisitEnumeration(enum *Enumeration) bool            { return true }
-func (BaseVisitor) VisitEnumerationValue(value *EnumerationValue) bool { return true }
-func (BaseVisitor) VisitView(view *View) bool                          { return true }
-func (BaseVisitor) VisitViewpoint(viewpoint *Viewpoint) bool           { return true }
-func (BaseVisitor) VisitDependency(dep *Dependency) bool               { return true }
-func (BaseVisitor) VisitFlow(flow *Flow) bool                          { return true }
-func (BaseVisitor) VisitFlowEnd(flowEnd *FlowEnd) bool                 { return true }
-func (BaseVisitor) VisitElement(elem Element) bool                     { return true }
+func (BaseVisitor) VisitPackage(pkg *Package) bool                          { return true }
+func (BaseVisitor) VisitPart(part *Part) bool                               { return true }
+func (BaseVisitor) VisitRequirement(req *Requirement) bool                  { return true }
+func (BaseVisitor) VisitVerification(ver *Verification) bool                { return true }
+func (BaseVisitor) VisitConcern(concern *Concern) bool                      { return true }
+func (BaseVisitor) VisitUseCase(useCase *UseCase) bool                      { return true }
+func (BaseVisitor) VisitAnalysisCase(analysis *AnalysisCase) bool           { return true }
+func (BaseVisitor) VisitCase(case_ *Case) bool                              { return true }
+func (BaseVisitor) VisitAction(action *Action) bool                         { return true }
+func (BaseVisitor) VisitImport(imp *Import) bool                            { return true }
+func (BaseVisitor) VisitComment(comment *Comment) bool                      { return true }
+func (BaseVisitor) VisitDoc(doc *Doc) bool                                  { return true }
+func (BaseVisitor) VisitPort(port *Port) bool                               { return true }
+func (BaseVisitor) VisitConnection(conn *Connection) bool                   { return true }
+func (BaseVisitor) VisitInterface(iface *Interface) bool                    { return true }
+func (BaseVisitor) VisitAllocation(alloc *Allocation) bool                  { return true }
+func (BaseVisitor) VisitAttribute(attr *Attribute) bool                     { return true }
+func (BaseVisitor) VisitItem(item *Item) bool                               { return true }
+func (BaseVisitor) VisitState(state *State) bool                            { return true }
+func (BaseVisitor) VisitTransition(transition *Transition) bool             { return true }
+func (BaseVisitor) VisitCalculation(calc *Calculation) bool                 { return true }
+func (BaseVisitor) VisitConstraint(constraint *Constraint) bool             { return true }
+func (BaseVisitor) VisitEnumeration(enum *Enumeration) bool                 { return true }
+func (BaseVisitor) VisitEnumerationValue(value *EnumerationValue) bool      { return true }
+func (BaseVisitor) VisitView(view *View) bool                               { return true }
+func (BaseVisitor) VisitViewpoint(viewpoint *Viewpoint) bool                { return true }
+func (BaseVisitor) VisitDependency(dep *Dependency) bool                    { return true }
+func (BaseVisitor) VisitFlow(flow *Flow) bool                               { return true }
+func (BaseVisitor) VisitFlowEnd(flowEnd *FlowEnd) bool                      { return true }
+func (BaseVisitor) VisitSuccessionFlow(successionFlow *SuccessionFlow) bool { return true }
+func (BaseVisitor) VisitElement(elem Element) bool                          { return true }
 
 // Visit traverses a model using the given visitor.
 func Visit(model *Model, visitor Visitor) {
@@ -201,6 +205,8 @@ func visitElement(elem Element, visitor Visitor) {
 		continueVisit = visitor.VisitFlow(e)
 	case *FlowEnd:
 		continueVisit = visitor.VisitFlowEnd(e)
+	case *SuccessionFlow:
+		continueVisit = visitor.VisitSuccessionFlow(e)
 	default:
 		continueVisit = visitor.VisitElement(elem)
 	}
@@ -507,6 +513,30 @@ func FindAllocations(model *Model) []*Allocation {
 	return result
 }
 
+// FindFlows returns all flows in the model.
+func FindFlows(model *Model) []*Flow {
+	var result []*Flow
+	Walk(model, func(elem Element, depth int) bool {
+		if flow, ok := elem.(*Flow); ok {
+			result = append(result, flow)
+		}
+		return true
+	})
+	return result
+}
+
+// FindSuccessionFlows returns all succession flows in the model.
+func FindSuccessionFlows(model *Model) []*SuccessionFlow {
+	var result []*SuccessionFlow
+	Walk(model, func(elem Element, depth int) bool {
+		if sf, ok := elem.(*SuccessionFlow); ok {
+			result = append(result, sf)
+		}
+		return true
+	})
+	return result
+}
+
 // FindDefinitions returns all definition elements in the model.
 func FindDefinitions(model *Model) []Definition {
 	var result []Definition
@@ -606,6 +636,11 @@ func (c *Counter) VisitComment(comment *Comment) bool {
 
 func (c *Counter) VisitElement(elem Element) bool {
 	c.Counts[elem.Kind()]++
+	return true
+}
+
+func (c *Counter) VisitSuccessionFlow(successionFlow *SuccessionFlow) bool {
+	c.Counts[KindSuccessionFlow]++
 	return true
 }
 
