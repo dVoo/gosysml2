@@ -1268,3 +1268,143 @@ func TestLibraryErrorHandling(t *testing.T) {
 		t.Logf("Errors: %v", result.Errors.Errors)
 	}
 }
+
+// TestElementRetention verifies that P0 critical elements (Dependency, Comment, Doc, Flow)
+// are captured in the model and not silently discarded.
+func TestElementRetention(t *testing.T) {
+	input := `
+		package Test {
+			comment /* This is a comment */;
+			doc /* This is documentation */;
+			
+			dependency from A to B;
+			
+			flow def DataFlow;
+			
+			part def A;
+			part def B;
+		}
+	`
+
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("Failed to parse test input: %v", result.Errors)
+	}
+
+	if result.Model == nil {
+		t.Fatal("Model is nil")
+	}
+
+	// Verify dependencies are captured
+	if len(result.Model.Dependencies) == 0 {
+		t.Error("No dependencies captured - element discarding detected!")
+	} else {
+		t.Logf("✓ Captured %d dependencies", len(result.Model.Dependencies))
+	}
+
+	// Verify comments are captured
+	if len(result.Model.Comments) == 0 {
+		t.Error("No comments captured - element discarding detected!")
+	} else {
+		t.Logf("✓ Captured %d comments", len(result.Model.Comments))
+	}
+
+	// Verify docs are captured
+	if len(result.Model.Docs) == 0 {
+		t.Error("No documentation captured - element discarding detected!")
+	} else {
+		t.Logf("✓ Captured %d docs", len(result.Model.Docs))
+	}
+
+	// Verify flows are captured
+	if len(result.Model.Flows) == 0 {
+		t.Error("No flows captured - element discarding detected!")
+	} else {
+		t.Logf("✓ Captured %d flows", len(result.Model.Flows))
+	}
+
+	// Verify elements are also in the general Elements list
+	elementCount := len(result.Model.Elements)
+	if elementCount < 4 {
+		t.Errorf("Expected at least 4 top-level elements, got %d", elementCount)
+	}
+
+	// Verify packages still work
+	if len(result.Model.Packages) == 0 {
+		t.Error("No packages captured")
+	} else {
+		t.Logf("✓ Captured %d packages", len(result.Model.Packages))
+	}
+}
+
+// TestNoElementDiscarding is a more comprehensive test that verifies
+// no P0 elements are silently discarded during parsing.
+func TestNoElementDiscarding(t *testing.T) {
+	// Test with multiple P0 elements
+	input := `
+		package Test1 {
+			comment /* Comment 1 */;
+			doc /* Doc 1 */;
+			dependency from X to Y;
+			flow def Flow1;
+			
+			part def X;
+			part def Y;
+		}
+		
+		package Test2 {
+			comment /* Comment 2 */;
+			comment /* Comment 3 */;
+			doc /* Doc 2 */;
+			doc /* Doc 3 */;
+			dependency from A to B;
+			dependency from C to D;
+			flow def Flow2;
+			flow def Flow3;
+			
+			part def A;
+			part def B;
+			part def C;
+			part def D;
+		}
+	`
+
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("Failed to parse test input: %v", result.Errors)
+	}
+
+	// Check Test1 package
+	test1 := result.Model.Packages[0]
+	if test1.Name() != "Test1" {
+		t.Error("First package should be Test1")
+	}
+
+	// Check Test2 package
+	test2 := result.Model.Packages[1]
+	if test2.Name() != "Test2" {
+		t.Error("Second package should be Test2")
+	}
+
+	// Verify total counts
+	t.Logf("Total elements captured:")
+	t.Logf("  - Packages: %d", len(result.Model.Packages))
+	t.Logf("  - Dependencies: %d", len(result.Model.Dependencies))
+	t.Logf("  - Comments: %d", len(result.Model.Comments))
+	t.Logf("  - Docs: %d", len(result.Model.Docs))
+	t.Logf("  - Flows: %d", len(result.Model.Flows))
+
+	// All P0 elements should be present
+	if len(result.Model.Dependencies) < 2 {
+		t.Errorf("Expected at least 2 dependencies, got %d", len(result.Model.Dependencies))
+	}
+	if len(result.Model.Comments) < 3 {
+		t.Errorf("Expected at least 3 comments, got %d", len(result.Model.Comments))
+	}
+	if len(result.Model.Docs) < 3 {
+		t.Errorf("Expected at least 3 docs, got %d", len(result.Model.Docs))
+	}
+	if len(result.Model.Flows) < 3 {
+		t.Errorf("Expected at least 3 flows, got %d", len(result.Model.Flows))
+	}
+}
