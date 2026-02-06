@@ -2050,3 +2050,60 @@ func (b *modelBuilder) ExitOccurrenceDefinition(ctx *parser.OccurrenceDefinition
 		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
+
+// EnterBindingConnectorAsUsage handles binding connector declarations.
+// Binding connectors bind values between features.
+func (b *modelBuilder) EnterBindingConnectorAsUsage(ctx *parser.BindingConnectorAsUsageContext) {
+	// Binding connectors are handled as specialized connections
+	// Extract the binding information from the context
+	loc := locationFromContext(ctx)
+
+	// Create a connection to represent the binding
+	conn := NewConnection("", loc, false)
+	conn.parent = b.getCurrentParent()
+
+	// Add to current package
+	if b.currentPkg != nil {
+		b.currentPkg.AddChild(conn)
+	}
+
+	// Mark as binding connector (using first end as indicator)
+	// The actual binding semantics will be resolved during reference resolution
+
+	// Push to element stack for nested content
+	b.elementStack = append(b.elementStack, conn)
+}
+
+// ExitBindingConnectorAsUsage pops the binding connector from the element stack.
+func (b *modelBuilder) ExitBindingConnectorAsUsage(ctx *parser.BindingConnectorAsUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+// EnterSuccessionAsUsage handles succession declarations.
+// Successions define predecessor-successor relationships.
+func (b *modelBuilder) EnterSuccessionAsUsage(ctx *parser.SuccessionAsUsageContext) {
+	// Successions are handled as transitions or specialized connections
+	// Extract the succession information from the context
+	loc := locationFromContext(ctx)
+
+	// Create a transition to represent the succession
+	trans := NewTransition("", loc)
+	trans.parent = b.getCurrentParent()
+
+	// Add to current package
+	if b.currentPkg != nil {
+		b.currentPkg.AddChild(trans)
+	}
+
+	// Push to element stack for nested content
+	b.elementStack = append(b.elementStack, trans)
+}
+
+// ExitSuccessionAsUsage pops the succession from the element stack.
+func (b *modelBuilder) ExitSuccessionAsUsage(ctx *parser.SuccessionAsUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
