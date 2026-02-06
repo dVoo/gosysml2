@@ -488,6 +488,10 @@ func (c *ConjugatedPort) EffectiveName() string {
 	if c.OriginalPort.IsResolved() {
 		return "~" + c.OriginalPort.Resolved().Name()
 	}
+	// If name already has ~ prefix, return it as-is
+	if len(c.name) > 0 && c.name[0] == '~' {
+		return c.name
+	}
 	return "~" + c.name
 }
 
