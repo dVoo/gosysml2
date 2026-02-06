@@ -66,6 +66,32 @@ Complete grammar implementation to achieve 80%+ parser handler coverage (current
 - Zero elements discarded during parsing
 - All new handlers have unit tests
 
+### Phase 4: Advanced Features
+**Goal:** Implement P2 medium priority grammar elements for advanced SysML modeling including case modeling, use case relationships, and port conjugation
+
+**Status:** ○ Planned - 3 plans ready
+
+**Depends on:** Phase 3
+**Plans:** 3 plans
+
+Plans:
+- [ ] 04-01-PLAN.md -- Case modeling (CaseDefinition, CaseUsage)
+- [ ] 04-02-PLAN.md -- Use case relationships and Port conjugation (IncludeUseCaseUsage, ConjugatedPortDefinition)
+- [ ] 04-03-PLAN.md -- SuccessionFlow usage and Phase 4 completion
+
+**Wave Structure:**
+- Wave 1: 04-01, 04-02 (independent - both add new model types)
+- Wave 2: 04-03 (depends on 04-01, 04-02 - integration and validation)
+
+**Details:**
+Complete P2 grammar elements to reach 85%+ coverage. Focus on enterprise modeling features: case definitions and usages for use case modeling, include/extend relationships between use cases, and port conjugation for interface modeling. These elements are essential for full SysML v2 compliance in enterprise contexts.
+
+**Success Criteria:**
+- 85%+ grammar coverage (up from 68%)
+- 98%+ validation success rate maintained
+- All P2 elements have parser handlers
+- Unit tests for all new grammar elements
+
 ---
 
 *Created: 2026-02-03*
