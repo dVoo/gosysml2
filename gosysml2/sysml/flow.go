@@ -197,3 +197,8 @@ func (s *SuccessionFlow) SetParent(parent Element) {
 func (s *SuccessionFlow) Accept(v Visitor) bool {
 	return v.VisitSuccessionFlow(s)
 }
+
+// Type returns the type reference for usages (SuccessionFlow doesn't have a type).
+func (s *SuccessionFlow) Type() Element {
+	return nil
+}

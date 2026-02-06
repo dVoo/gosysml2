@@ -251,3 +251,146 @@ func TestFlowEndReference(t *testing.T) {
 		t.Error("Feature not set correctly")
 	}
 }
+
+// TestSuccessionFlow tests basic SuccessionFlow creation
+func TestSuccessionFlow(t *testing.T) {
+	loc := Location{Line: 10, Column: 5}
+	succession := NewSuccessionFlow("s1", loc)
+
+	if succession == nil {
+		t.Fatal("NewSuccessionFlow returned nil")
+	}
+
+	if succession.GetName() != "s1" {
+		t.Errorf("Expected name 's1', got '%s'", succession.GetName())
+	}
+
+	if succession.GetKind() != KindSuccessionFlow {
+		t.Errorf("Expected kind %v, got %v", KindSuccessionFlow, succession.GetKind())
+	}
+
+	if succession.GetLocation() != loc {
+		t.Errorf("Expected location %+v, got %+v", loc, succession.GetLocation())
+	}
+
+	if succession.GetParent() != nil {
+		t.Error("Expected nil parent for new succession flow")
+	}
+}
+
+// TestSuccessionFlowUnresolvedRefs tests setting unresolved references
+func TestSuccessionFlowUnresolvedRefs(t *testing.T) {
+	succession := NewSuccessionFlow("s1", Location{})
+
+	// Initially unresolved should be empty
+	if succession.Source.IsResolved() {
+		t.Error("Source should not be resolved initially")
+	}
+	if succession.Target.IsResolved() {
+		t.Error("Target should not be resolved initially")
+	}
+
+	// Set unresolved references
+	succession.SetUnresolvedSource("action1")
+	succession.SetUnresolvedTarget("action2")
+
+	// These are internal fields, but we can verify by checking if resolution works
+	// (which would require a full model)
+}
+
+// TestSuccessionFlowResolution tests reference resolution
+func TestSuccessionFlowResolution(t *testing.T) {
+	model := NewModel()
+
+	// Create source and target actions
+	source := NewAction("sourceAction", Location{Line: 10, Column: 5}, false)
+	target := NewAction("targetAction", Location{Line: 20, Column: 5}, false)
+
+	// Create succession flow with unresolved references
+	succession := NewSuccessionFlow("s1", Location{Line: 15, Column: 5})
+	succession.SetUnresolvedSource("sourceAction")
+	succession.SetUnresolvedTarget("targetAction")
+
+	// Add to model
+	pkg := NewPackage("TestPkg", Location{})
+	model.AddPackage(pkg)
+	pkg.AddChild(source)
+	pkg.AddChild(target)
+	pkg.AddChild(succession)
+
+	// Build index and resolve references
+	model.BuildIndex()
+	model.ResolveReferences()
+
+	// Verify references resolved
+	if !succession.Source.IsResolved() {
+		t.Error("Source should be resolved after ResolveReferences")
+	}
+
+	if !succession.Target.IsResolved() {
+		t.Error("Target should be resolved after ResolveReferences")
+	}
+
+	// Verify resolved to correct elements
+	if succession.Source.Resolved() != source {
+		t.Error("Source should resolve to sourceAction")
+	}
+
+	if succession.Target.Resolved() != target {
+		t.Error("Target should resolve to targetAction")
+	}
+}
+
+// TestSuccessionFlowVisitor tests the visitor pattern
+func TestSuccessionFlowVisitor(t *testing.T) {
+	succession := NewSuccessionFlow("s1", Location{})
+
+	var visited bool
+	visitor := &testSuccessionFlowVisitor{
+		onVisit: func(s *SuccessionFlow) {
+			visited = true
+			if s != succession {
+				t.Error("Visitor received wrong succession flow")
+			}
+		},
+	}
+
+	succession.Accept(visitor)
+
+	if !visited {
+		t.Error("Visitor was not called for succession flow")
+	}
+}
+
+type testSuccessionFlowVisitor struct {
+	BaseVisitor
+	onVisit func(*SuccessionFlow)
+}
+
+func (v *testSuccessionFlowVisitor) VisitSuccessionFlow(s *SuccessionFlow) bool {
+	if v.onVisit != nil {
+		v.onVisit(s)
+	}
+	return true
+}
+
+// TestSuccessionFlowParent tests parent relationships
+func TestSuccessionFlowParent(t *testing.T) {
+	succession := NewSuccessionFlow("s1", Location{})
+	action := NewAction("TestAction", Location{}, true)
+
+	succession.SetParent(action)
+
+	if succession.GetParent() != action {
+		t.Error("SetParent did not set parent correctly for succession flow")
+	}
+}
+
+// TestSuccessionFlowIsUsage tests that SuccessionFlow implements Usage interface
+func TestSuccessionFlowIsUsage(t *testing.T) {
+	succession := NewSuccessionFlow("s1", Location{})
+
+	// Test that it implements the Usage interface (isUsage method)
+	// This is a compile-time check, but we can also verify at runtime
+	var _ Usage = succession
+}
