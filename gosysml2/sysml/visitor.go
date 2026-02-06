@@ -27,6 +27,9 @@ type Visitor interface {
 	// VisitAnalysisCase is called for each analysis case element.
 	VisitAnalysisCase(analysis *AnalysisCase) bool
 
+	// VisitCase is called for each case element.
+	VisitCase(case_ *Case) bool
+
 	// VisitAction is called for each action element.
 	VisitAction(action *Action) bool
 
@@ -105,6 +108,7 @@ func (BaseVisitor) VisitVerification(ver *Verification) bool           { return 
 func (BaseVisitor) VisitConcern(concern *Concern) bool                 { return true }
 func (BaseVisitor) VisitUseCase(useCase *UseCase) bool                 { return true }
 func (BaseVisitor) VisitAnalysisCase(analysis *AnalysisCase) bool      { return true }
+func (BaseVisitor) VisitCase(case_ *Case) bool                         { return true }
 func (BaseVisitor) VisitAction(action *Action) bool                    { return true }
 func (BaseVisitor) VisitImport(imp *Import) bool                       { return true }
 func (BaseVisitor) VisitComment(comment *Comment) bool                 { return true }
@@ -153,6 +157,8 @@ func visitElement(elem Element, visitor Visitor) {
 		continueVisit = visitor.VisitUseCase(e)
 	case *AnalysisCase:
 		continueVisit = visitor.VisitAnalysisCase(e)
+	case *Case:
+		continueVisit = visitor.VisitCase(e)
 	case *Action:
 		continueVisit = visitor.VisitAction(e)
 	case *Import:
@@ -417,6 +423,18 @@ func FindAnalysisCases(model *Model) []*AnalysisCase {
 	return result
 }
 
+// FindCases returns all cases in the model.
+func FindCases(model *Model) []*Case {
+	var result []*Case
+	Walk(model, func(elem Element, depth int) bool {
+		if c, ok := elem.(*Case); ok {
+			result = append(result, c)
+		}
+		return true
+	})
+	return result
+}
+
 // FindActions returns all actions in the model.
 func FindActions(model *Model) []*Action {
 	var result []*Action
@@ -563,6 +581,11 @@ func (c *Counter) VisitUseCase(useCase *UseCase) bool {
 
 func (c *Counter) VisitAnalysisCase(analysis *AnalysisCase) bool {
 	c.Counts[KindAnalysis]++
+	return true
+}
+
+func (c *Counter) VisitCase(case_ *Case) bool {
+	c.Counts[KindCase]++
 	return true
 }
 
