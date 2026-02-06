@@ -1184,6 +1184,15 @@ func (b *modelBuilder) EnterPortDefinition(ctx *parser.PortDefinitionContext) {
 		b.currentPkg.AddChild(port)
 	}
 
+	// Per SysML spec: PortDefinition always contains a ConjugatedPortDefinition
+	// with effective name "~" + original port name
+	conjName := "~" + name
+	conjPort := NewConjugatedPort(conjName, loc)
+	conjPort.parent = port
+	conjPort.OriginalPort.Resolve(port)
+	port.ConjugatedPort = conjPort
+	port.AddChild(conjPort)
+
 	// Push port onto stack for nested elements (ports can have nested ports)
 	b.elementStack = append(b.elementStack, port)
 }
