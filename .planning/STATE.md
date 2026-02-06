@@ -2,25 +2,25 @@
 
 **Project:** SysML v2 Parser
 **Current Milestone:** v0.1 - Modern Go Implementation
-**Active Phase:** Phase 3 - Grammar Completion
+**Active Phase:** Phase 4 - Advanced Features
 
 ## Status
 - Codebase mapped: ✓
 - Roadmap created: ✓
 - Phase 1: ✓ Complete (4/4 plans)
 - Phase 2: ✓ Complete (3/3 plans)
-- Phase 3 Plan 01: ✓ COMPLETE - P0 critical grammar elements
-- Phase 3 Plan 02: ✓ COMPLETE - P1 high priority grammar elements
-- Phase 3: ✓ COMPLETE
+- Phase 3: ✓ Complete (2/2 plans)
+- Phase 4 Plan 01: ✓ COMPLETE - Case modeling (CaseDefinition/Usage)
+- Phase 4: In Progress (1/3 plans)
 
 ## Current Position
 
-Phase: 03-grammar-completion (3 of 3)
-Plan: 2 of 2 complete
-Status: Phase complete - P0 and P1 grammar elements implemented
-Last activity: 2026-02-06 - Completed 03-02-PLAN.md
+Phase: 04-advanced-features (1 of 3)
+Plan: 1 of 3 complete
+Status: In progress - Case modeling implemented
+Last activity: 2026-02-06 - Completed 04-01-PLAN.md
 
-Progress: [████████░░] 80%
+Progress: [█████████░] 82%
 
 ## Completed Plans
 
@@ -35,6 +35,7 @@ Progress: [████████░░] 80%
 | 02-sysml-standard-libraries | 03 | Validation Test Suite | 2026-02-06 | 96.4% success rate (54/56 files), standalone checker, per-category reporting |
 | 03-grammar-completion | 01 | P0 Critical Grammar Elements | 2026-02-06 | Dependency, Comment, Doc, Flow types with parser handlers - zero element discarding |
 | 03-grammar-completion | 02 | P1 High Priority Grammar Elements | 2026-02-06 | ControlNode, Occurrence, BindingConnector, Succession - 68% grammar coverage |
+| 04-advanced-features | 01 | Case Modeling | 2026-02-06 | CaseDefinition and CaseUsage with Subject, Actors, Objectives - ~70% grammar coverage |
 
 ## Decisions Made
 
@@ -53,6 +54,8 @@ Progress: [████████░░] 80%
 13. **PortionKind enum:** Used iota pattern with String() method for snapshot/timeslice
 14. **BindingConnector representation:** Reused existing Connection type rather than creating new type
 15. **Succession representation:** Reused existing Transition type rather than creating new type
+16. **Case.Actors type:** Used []Element (matching UseCase pattern) rather than []Ref[Element] for consistency
+17. **Case reference resolution:** Followed AnalysisCase/UseCase pattern with resolveCaseRefs method
 
 ## Blockers/Concerns
 
@@ -66,17 +69,16 @@ None currently.
 
 ## Next Steps
 
-- Phase 3 is COMPLETE - both P0 and P1 grammar elements implemented
-- Grammar coverage: 68% (54/80 elements)
-- Validation success rate: 96.4% (54/56 files)
-- Ready for Phase 4: Advanced Features (P2 medium priority)
-  - Case modeling (CaseDefinition/Usage)
-  - Use case relationships (IncludeUseCaseUsage)
-  - Port conjugation
-- Or proceed to milestone completion/verification
+- Phase 4 Plan 01 COMPLETE - Case modeling implemented
+- Grammar coverage: ~70% (56/80 elements, estimated)
+- Validation success rate: 96.4% (54/56 files) - maintained
+- Ready for Phase 4 Plan 02: Use case relationships and Port conjugation
+  - IncludeUseCaseUsage
+  - ConjugatedPortDefinition
+- Phase 4 Plan 03 will integrate and validate all P2 elements
 
 ---
 
 *Last session: 2026-02-06*
-*Stopped at: Completed 03-02-PLAN.md - P1 grammar elements*
-*Resume file: None - phase complete*
+*Stopped at: Completed 04-01-PLAN.md - Case modeling*
+*Resume file: None - continuing Phase 4*
