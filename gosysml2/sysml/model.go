@@ -972,6 +972,11 @@ type IncludeUseCase struct {
 // isUsage marks IncludeUseCase as a usage element.
 func (i *IncludeUseCase) isUsage() {}
 
+// Type returns the type reference for usages (IncludeUseCase doesn't have a type).
+func (i *IncludeUseCase) Type() Element {
+	return nil
+}
+
 // NewIncludeUseCase creates a new IncludeUseCase element.
 func NewIncludeUseCase(name string, loc Location) *IncludeUseCase {
 	return &IncludeUseCase{
@@ -1753,6 +1758,8 @@ func (m *Model) ResolveReferences() {
 			m.resolveEnumerationRefs(e)
 		case *Port:
 			m.resolvePortRefs(e)
+		case *ConjugatedPort:
+			m.resolveConjugatedPortRefs(e)
 		case *Attribute:
 			m.resolveAttributeRefs(e)
 		case *Interface:
@@ -2175,6 +2182,17 @@ func (m *Model) resolvePortRefs(p *Port) {
 		if elem := m.findElement(p.TypeRef.name, p); elem != nil {
 			if port, ok := elem.(*Port); ok {
 				p.TypeRef.Resolve(port)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveConjugatedPortRefs(c *ConjugatedPort) {
+	// Resolve original port reference if not already resolved
+	if !c.OriginalPort.IsResolved() && c.unresolvedOriginalPort != "" {
+		if elem := m.findElement(c.unresolvedOriginalPort, c); elem != nil {
+			if port, ok := elem.(*Port); ok {
+				c.OriginalPort.Resolve(port)
 			}
 		}
 	}
