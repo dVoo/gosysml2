@@ -2,6 +2,7 @@ package sysml
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -177,6 +178,26 @@ func ParseFile(filename string, opts ...ParseOption) *ParseResult {
 // This is more efficient than ParseString when you already have []byte.
 func ParseBytes(input []byte, source string, opts ...ParseOption) *ParseResult {
 	return parseWithSource(string(input), source, opts...)
+}
+
+// ParseReader parses SysML from an io.Reader.
+// Useful when reading from network streams or other io sources.
+func ParseReader(r io.Reader, source string, opts ...ParseOption) *ParseResult {
+	content, err := io.ReadAll(r)
+	if err != nil {
+		return &ParseResult{
+			Errors: &ParseError{
+				Errors: []*Error{{
+					Line:    0,
+					Column:  0,
+					Message: fmt.Errorf("reading from %s: %w", source, err).Error(),
+				}},
+				Source: source,
+			},
+			Source: source,
+		}
+	}
+	return parseWithSource(string(content), source, opts...)
 }
 
 // ParseDirectory parses all .sysml files in a directory.
