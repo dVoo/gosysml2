@@ -37,6 +37,7 @@ const (
 	KindCalculation
 	KindControlNode
 	KindOccurrence
+	KindCase
 )
 
 // String returns the string representation of the element kind.
@@ -106,6 +107,8 @@ func (k ElementKind) String() string {
 		return "control node"
 	case KindOccurrence:
 		return "occurrence"
+	case KindCase:
+		return "case"
 	default:
 		return "unknown"
 	}
@@ -928,6 +931,67 @@ func NewAnalysisCase(name string, loc Location, isDefinition bool) *AnalysisCase
 		},
 		IsDefinition: isDefinition,
 	}
+}
+
+// Case represents a SysML case definition or usage.
+type Case struct {
+	baseElement
+	IsDefinition bool
+	TypeRef      Ref[*Case]
+
+	// Subject (resolved reference)
+	Subject Ref[Element]
+
+	// Actors (resolved references)
+	Actors []Ref[Element]
+
+	// Objectives (resolved references to requirements)
+	Objectives []*Requirement
+
+	// Unresolved references
+	unresolvedSubject    string
+	unresolvedActors     []string
+	unresolvedObjectives []string
+}
+
+func (c *Case) isDefinition() {}
+func (c *Case) isUsage()      {}
+
+// Type returns the type reference for usages.
+func (c *Case) Type() Element {
+	return c.TypeRef.Resolved()
+}
+
+// NewCase creates a new Case element.
+func NewCase(name string, loc Location, isDefinition bool) *Case {
+	return &Case{
+		baseElement: baseElement{
+			kind:     KindCase,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		IsDefinition:         isDefinition,
+		Actors:               make([]Ref[Element], 0),
+		Objectives:           make([]*Requirement, 0),
+		unresolvedActors:     make([]string, 0),
+		unresolvedObjectives: make([]string, 0),
+	}
+}
+
+// SetUnresolvedSubject sets the unresolved subject reference.
+func (c *Case) SetUnresolvedSubject(ref string) {
+	c.unresolvedSubject = ref
+}
+
+// AddUnresolvedActor adds an unresolved actor reference.
+func (c *Case) AddUnresolvedActor(ref string) {
+	c.unresolvedActors = append(c.unresolvedActors, ref)
+}
+
+// AddUnresolvedObjective adds an unresolved objective reference.
+func (c *Case) AddUnresolvedObjective(ref string) {
+	c.unresolvedObjectives = append(c.unresolvedObjectives, ref)
 }
 
 // EnumerationValue represents a single value within an enumeration.
