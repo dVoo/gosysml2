@@ -48,14 +48,14 @@ Enable the parser to resolve and use SysML standard library definitions found in
 ### Phase 3: Grammar Completion
 **Goal:** Implement full SysML v2 grammar coverage to enable parsing of large enterprise model repositories using complete sysml-core syntax and libraries
 
-**Status:** ○ Planned - 2 plans ready for execution
+**Status:** ○ In Progress - Partially executed
 
 **Depends on:** Phase 2
-**Plans:** 2 plans
+**Plans:** 2 plans (partially complete)
 
 Plans:
-- [ ] 03-01-PLAN.md -- P0 Critical Elements (Dependency, Comment, Documentation, Flows)
-- [ ] 03-02-PLAN.md -- P1 High Priority (ControlNodes, Occurrences, Bindings, Successions)
+- [x] 03-01-PLAN.md -- P0 Critical Elements (Dependency, Comment, Documentation, Flows) - Core types and handlers implemented
+- [~] 03-02-PLAN.md -- P1 High Priority (ControlNodes, Occurrences, Bindings, Successions) - ControlNode only
 
 **Details:**
 Complete grammar implementation to achieve 80%+ parser handler coverage (currently 10%). Critical requirement: all parsed elements must land in the model — nothing discarded. Focus on elements required for enterprise models: dependencies, documentation, flows, control nodes, occurrences.
