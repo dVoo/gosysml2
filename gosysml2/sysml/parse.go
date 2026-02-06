@@ -1817,3 +1817,45 @@ func ValidateFile(filename string) *ParseError {
 	}
 	return nil
 }
+
+// EnterDependency handles dependency declarations.
+// Dependencies declare relationships between client and supplier elements.
+func (b *modelBuilder) EnterDependency(ctx *parser.DependencyContext) {
+	// Create dependency
+	loc := locationFromContext(ctx)
+	dep := NewDependency(loc)
+
+	// Extract client/supplier from DependencyDeclaration
+	if decl := ctx.DependencyDeclaration(); decl != nil {
+		// Get all qualified names (client and supplier references)
+		names := decl.AllQualifiedName()
+		if len(names) > 0 {
+			// First qualified name is the client
+			dep.AddUnresolvedClient(names[0].GetText())
+		}
+		if len(names) > 1 {
+			// Second qualified name is the supplier (after TO keyword)
+			dep.AddUnresolvedSupplier(names[1].GetText())
+		}
+	}
+
+	// Add to current package
+	if b.currentPkg != nil {
+		dep.parent = b.currentPkg
+		b.currentPkg.AddChild(dep)
+	}
+
+	// Add to model's dependency list
+	b.model.AddDependency(dep)
+
+	// Push to element stack for body content (annotations, etc.)
+	b.elementStack = append(b.elementStack, dep)
+}
+
+// ExitDependency handles exiting dependency scope.
+func (b *modelBuilder) ExitDependency(ctx *parser.DependencyContext) {
+	// Pop from element stack
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}

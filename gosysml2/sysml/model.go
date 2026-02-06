@@ -244,6 +244,7 @@ type Package struct {
 	calculations []*Calculation
 	enumerations []*Enumeration
 	constraints  []*Constraint
+	dependencies []*Dependency
 }
 
 // NewPackage creates a new Package element.
@@ -270,6 +271,7 @@ func NewPackage(name string, loc Location) *Package {
 		calculations: make([]*Calculation, 0),
 		enumerations: make([]*Enumeration, 0),
 		constraints:  make([]*Constraint, 0),
+		dependencies: make([]*Dependency, 0),
 	}
 }
 
@@ -309,6 +311,8 @@ func (p *Package) AddChild(child Element) {
 		p.enumerations = append(p.enumerations, c)
 	case *Constraint:
 		p.constraints = append(p.constraints, c)
+	case *Dependency:
+		p.dependencies = append(p.dependencies, c)
 	}
 }
 
