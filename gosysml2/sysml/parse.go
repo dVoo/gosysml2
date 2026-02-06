@@ -900,6 +900,66 @@ func (b *modelBuilder) EnterAnalysisCaseUsage(ctx *parser.AnalysisCaseUsageConte
 	}
 }
 
+func (b *modelBuilder) EnterCaseDefinition(ctx *parser.CaseDefinitionContext) {
+	name := ""
+	if decl := ctx.DefinitionDeclaration(); decl != nil {
+		if ident := decl.Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	}
+
+	loc := Location{
+		Line:   ctx.GetStart().GetLine(),
+		Column: ctx.GetStart().GetColumn(),
+	}
+
+	c := NewCase(name, loc, true)
+
+	if b.currentPkg != nil {
+		c.parent = b.currentPkg
+		b.currentPkg.AddChild(c)
+	}
+
+	// Push onto element stack for nested elements (subject, actor, objective)
+	b.elementStack = append(b.elementStack, c)
+}
+
+func (b *modelBuilder) ExitCaseDefinition(ctx *parser.CaseDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+func (b *modelBuilder) EnterCaseUsage(ctx *parser.CaseUsageContext) {
+	name := ""
+	if ctx.ConstraintUsageDeclaration() != nil {
+		if ident := ctx.ConstraintUsageDeclaration().UsageDeclaration().Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	}
+
+	loc := Location{
+		Line:   ctx.GetStart().GetLine(),
+		Column: ctx.GetStart().GetColumn(),
+	}
+
+	c := NewCase(name, loc, false)
+
+	if b.currentPkg != nil {
+		c.parent = b.currentPkg
+		b.currentPkg.AddChild(c)
+	}
+
+	// Push onto element stack for nested elements (subject, actor, objective)
+	b.elementStack = append(b.elementStack, c)
+}
+
+func (b *modelBuilder) ExitCaseUsage(ctx *parser.CaseUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
 func (b *modelBuilder) EnterAttributeDefinition(ctx *parser.AttributeDefinitionContext) {
 	name := ""
 	if ctx.Definition() != nil && ctx.Definition().DefinitionDeclaration() != nil {
@@ -1680,6 +1740,72 @@ func (b *modelBuilder) EnterSubjectMember(ctx *parser.SubjectMemberContext) {
 		elem.unresolvedSubject = subjectName
 	case *Verification:
 		elem.unresolvedSubject = subjectName
+	case *Case:
+		elem.SetUnresolvedSubject(subjectName)
+	}
+}
+
+// EnterActorMember captures actors for requirements and cases.
+func (b *modelBuilder) EnterActorMember(ctx *parser.ActorMemberContext) {
+	if len(b.elementStack) == 0 {
+		return
+	}
+
+	// Get the actor name from the actorUsage
+	actorName := ""
+	if ctx.ActorUsage() != nil {
+		if ctx.ActorUsage().GetText() != "" {
+			actorName = ctx.ActorUsage().GetText()
+			// Remove "actor" keyword if present
+			actorName = strings.TrimPrefix(actorName, "actor")
+			actorName = strings.TrimSpace(actorName)
+			// Remove semicolon if present
+			actorName = strings.TrimSuffix(actorName, ";")
+			actorName = strings.TrimSpace(actorName)
+		}
+	}
+
+	if actorName == "" {
+		return
+	}
+
+	// Set the actor reference on the current element
+	current := b.elementStack[len(b.elementStack)-1]
+	switch elem := current.(type) {
+	case *Case:
+		elem.AddUnresolvedActor(actorName)
+	}
+}
+
+// EnterObjectiveMember captures objectives for cases.
+func (b *modelBuilder) EnterObjectiveMember(ctx *parser.ObjectiveMemberContext) {
+	if len(b.elementStack) == 0 {
+		return
+	}
+
+	// Get the objective requirement name
+	objectiveName := ""
+	if ctx.ObjectiveRequirementUsage() != nil {
+		if ctx.ObjectiveRequirementUsage().GetText() != "" {
+			objectiveName = ctx.ObjectiveRequirementUsage().GetText()
+			// Remove "objective" keyword if present
+			objectiveName = strings.TrimPrefix(objectiveName, "objective")
+			objectiveName = strings.TrimSpace(objectiveName)
+			// Remove semicolon if present
+			objectiveName = strings.TrimSuffix(objectiveName, ";")
+			objectiveName = strings.TrimSpace(objectiveName)
+		}
+	}
+
+	if objectiveName == "" {
+		return
+	}
+
+	// Set the objective reference on the current element
+	current := b.elementStack[len(b.elementStack)-1]
+	switch elem := current.(type) {
+	case *Case:
+		elem.AddUnresolvedObjective(objectiveName)
 	}
 }
 
