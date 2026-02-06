@@ -48,6 +48,9 @@ type Visitor interface {
 	// VisitPort is called for each port element.
 	VisitPort(port *Port) bool
 
+	// VisitConjugatedPort is called for each conjugated port element.
+	VisitConjugatedPort(conj *ConjugatedPort) bool
+
 	// VisitConnection is called for each connection element.
 	VisitConnection(conn *Connection) bool
 
@@ -121,6 +124,7 @@ func (BaseVisitor) VisitImport(imp *Import) bool                            { re
 func (BaseVisitor) VisitComment(comment *Comment) bool                      { return true }
 func (BaseVisitor) VisitDoc(doc *Doc) bool                                  { return true }
 func (BaseVisitor) VisitPort(port *Port) bool                               { return true }
+func (BaseVisitor) VisitConjugatedPort(conj *ConjugatedPort) bool           { return true }
 func (BaseVisitor) VisitConnection(conn *Connection) bool                   { return true }
 func (BaseVisitor) VisitInterface(iface *Interface) bool                    { return true }
 func (BaseVisitor) VisitAllocation(alloc *Allocation) bool                  { return true }
@@ -179,6 +183,8 @@ func visitElement(elem Element, visitor Visitor) {
 		continueVisit = visitor.VisitDoc(e)
 	case *Port:
 		continueVisit = visitor.VisitPort(e)
+	case *ConjugatedPort:
+		continueVisit = visitor.VisitConjugatedPort(e)
 	case *Connection:
 		continueVisit = visitor.VisitConnection(e)
 	case *Interface:
@@ -495,6 +501,18 @@ func FindPorts(model *Model) []*Port {
 	return result
 }
 
+// FindConjugatedPorts returns all conjugated ports in the model.
+func FindConjugatedPorts(model *Model) []*ConjugatedPort {
+	var result []*ConjugatedPort
+	Walk(model, func(elem Element, depth int) bool {
+		if conj, ok := elem.(*ConjugatedPort); ok {
+			result = append(result, conj)
+		}
+		return true
+	})
+	return result
+}
+
 // FindConnections returns all connections in the model.
 func FindConnections(model *Model) []*Connection {
 	var result []*Connection
@@ -639,6 +657,11 @@ func (c *Counter) VisitCase(case_ *Case) bool {
 
 func (c *Counter) VisitIncludeUseCase(include *IncludeUseCase) bool {
 	c.Counts[KindIncludeUseCase]++
+	return true
+}
+
+func (c *Counter) VisitConjugatedPort(conj *ConjugatedPort) bool {
+	c.Counts[KindConjugatedPort]++
 	return true
 }
 

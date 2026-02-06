@@ -949,6 +949,11 @@ func NewUseCase(name string, loc Location, isDefinition bool) *UseCase {
 	}
 }
 
+// AddChild adds a child element to the use case.
+func (u *UseCase) AddChild(child Element) {
+	u.baseElement.addChild(child)
+}
+
 // IncludeUseCase represents a use case inclusion relationship.
 // This is a usage element that represents the "include" relationship between use cases.
 type IncludeUseCase struct {
@@ -1081,6 +1086,11 @@ func (c *Case) AddUnresolvedActor(ref string) {
 // AddUnresolvedObjective adds an unresolved objective reference.
 func (c *Case) AddUnresolvedObjective(ref string) {
 	c.unresolvedObjectives = append(c.unresolvedObjectives, ref)
+}
+
+// AddChild adds a child element to the case.
+func (c *Case) AddChild(child Element) {
+	c.baseElement.addChild(child)
 }
 
 // EnumerationValue represents a single value within an enumeration.
