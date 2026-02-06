@@ -1480,6 +1480,7 @@ type Model struct {
 	Dependencies []*Dependency
 	Docs         []*Doc
 	Flows        []*Flow
+	ControlNodes []*ControlNode
 
 	// All top-level elements (for generic traversal)
 	Elements []Element
@@ -1500,6 +1501,7 @@ func NewModel() *Model {
 		Dependencies: make([]*Dependency, 0),
 		Docs:         make([]*Doc, 0),
 		Flows:        make([]*Flow, 0),
+		ControlNodes: make([]*ControlNode, 0),
 		Elements:     make([]Element, 0),
 		elementIndex: make(map[string]Element),
 	}
@@ -1533,6 +1535,12 @@ func (m *Model) AddImport(imp *Import) {
 func (m *Model) AddComment(comment *Comment) {
 	m.Comments = append(m.Comments, comment)
 	m.Elements = append(m.Elements, comment)
+}
+
+// AddControlNode adds a control node to the model.
+func (m *Model) AddControlNode(node *ControlNode) {
+	m.ControlNodes = append(m.ControlNodes, node)
+	m.Elements = append(m.Elements, node)
 }
 
 // FindPackage finds a package by name.
