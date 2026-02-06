@@ -39,6 +39,7 @@ Progress: [███████████] 90%
 | 03-grammar-completion | 02 | P1 High Priority Grammar Elements | 2026-02-06 | ControlNode, Occurrence, BindingConnector, Succession - 68% grammar coverage |
 | 04-advanced-features | 01 | Case Modeling | 2026-02-06 | CaseDefinition and CaseUsage with Subject, Actors, Objectives - ~70% grammar coverage |
 | 04-advanced-features | 04 | IncludeUseCaseUsage Parsing | 2026-02-06 | IncludeUseCase type with visitor support, parser handler, reference resolution, and unit tests |
+| 04-advanced-features | 05 | ConjugatedPort Implementation | 2026-02-06 | ConjugatedPort type with OriginalPort reference, auto-creation in PortDefinition, and unit tests |
 | 04-advanced-features | 06 | SuccessionFlowUsage Parsing | 2026-02-06 | SuccessionFlow with reference resolution, parser integration, and comprehensive unit tests |
 
 ## Decisions Made
