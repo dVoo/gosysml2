@@ -2,7 +2,7 @@
 
 **Project:** SysML v2 Parser
 **Current Milestone:** v0.1 - Modern Go Implementation
-**Active Phase:** Phase 1 - Modernize Go codebase
+**Active Phase:** Phase 2 - SysML Standard Libraries Support
 
 ## Status
 - Codebase mapped: ✓
@@ -11,15 +11,16 @@
 - Phase 1 Plan 02: ✓ COMPLETE
 - Phase 1 Plan 03: ✓ COMPLETE
 - Phase 1 Plan 04: ✓ COMPLETE
+- Phase 2: ◆ Planned - 3 plans ready
 
 ## Current Position
 
-Phase: 01-modernize-go-codebase (1 of 1)
-Plan: 04 of 04 complete
-Status: Phase complete - ready for verification
-Last activity: 2026-02-06 - Completed 01-04 plan (benchmarks and integration tests)
+Phase: 02-sysml-standard-libraries (2 of 2)
+Plan: 0 of 3 planned
+Status: Phase 2 planned, ready for execution
+Last activity: 2026-02-06 - Planned Phase 2: 3 plans across 3 waves
 
-Progress: [██████████] 100%
+Progress: [░░░░░░░░░░] 0%
 
 ## Completed Plans
 
@@ -45,11 +46,15 @@ Progress: [██████████] 100%
 
 None currently.
 
+## Roadmap Evolution
+
+- Phase 2 added: SysML Standard Libraries Support (2026-02-06)
+
 ## Next Steps
 
-- Phase 1 complete - ready for verification
-- Consider Phase 2: Feature development or API stabilization
-- Benchmarks available for future performance regression detection
+- Plan Phase 2: SysML Standard Libraries Support
+- Enable parser to resolve SysML standard library definitions
+- Validate against 18 categories of validation test cases
 
 ---
 
