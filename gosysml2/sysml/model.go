@@ -1395,9 +1395,11 @@ func (v *View) SetUnresolvedViewpoint(ref string) {
 type Import struct {
 	baseElement
 	ImportedNamespace string
-	IsRecursive       bool    // true for ::**
-	IsAll             bool    // true for ::*
-	ResolvedElement   Element // The resolved imported element (if single import)
+	IsRecursive       bool     // true for ::**
+	IsAll             bool     // true for ::*
+	ResolvedElement   Element  // The resolved imported element (if single import)
+	ResolvedPackage   *Package // The resolved library package (if namespace is a library package)
+	IsResolved        bool     // true if the import was successfully resolved
 }
 
 // NewImport creates a new Import element.

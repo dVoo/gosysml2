@@ -506,10 +506,74 @@ func (b *modelBuilder) EnterImport_(ctx *parser.Import_Context) {
 	namespace := ctx.GetText()
 	imp := NewImport(namespace, loc)
 
+	// Parse import patterns and detect wildcards
+	b.parseImportPattern(imp, namespace)
+
+	// Try to resolve library import if registry is available
+	if b.libraryRegistry != nil {
+		b.resolveLibraryImport(imp, namespace)
+	}
+
 	if b.currentPkg != nil {
 		b.currentPkg.AddChild(imp)
 	} else {
 		b.model.AddImport(imp)
+	}
+}
+
+// parseImportPattern detects wildcard patterns in import statements.
+// Sets IsAll for "::*" and IsRecursive for "::**" patterns.
+func (b *modelBuilder) parseImportPattern(imp *Import, namespace string) {
+	// Check for recursive wildcard (::**)
+	if strings.HasSuffix(namespace, "::**") {
+		imp.IsRecursive = true
+		imp.IsAll = true
+		return
+	}
+
+	// Check for wildcard (::*)
+	if strings.HasSuffix(namespace, "::*") {
+		imp.IsAll = true
+		return
+	}
+
+	// Check for specific element import (contains :: but doesn't end with wildcard)
+	if strings.Contains(namespace, "::") && !strings.HasSuffix(namespace, "*") {
+		// This is a specific element import like "ISQ::mass"
+		// IsAll and IsRecursive remain false
+	}
+}
+
+// resolveLibraryImport attempts to resolve an import to a library package or element.
+// If successful, sets ResolvedPackage and IsResolved fields.
+func (b *modelBuilder) resolveLibraryImport(imp *Import, namespace string) {
+	// Clean up the namespace for resolution
+	cleanNamespace := strings.TrimSpace(namespace)
+
+	// Remove trailing wildcards for package lookup
+	pkgName := cleanNamespace
+	if strings.HasSuffix(pkgName, "::**") {
+		pkgName = strings.TrimSuffix(pkgName, "::**")
+	} else if strings.HasSuffix(pkgName, "::*") {
+		pkgName = strings.TrimSuffix(pkgName, "::*")
+	}
+
+	// Try to resolve as a package import
+	if pkg, err := b.libraryRegistry.ResolveImport(pkgName); err == nil && pkg != nil {
+		imp.ResolvedPackage = pkg
+		imp.IsResolved = true
+
+		// If this is a wildcard import, we could add package elements to scope
+		// For now, we just record that the package was resolved
+		return
+	}
+
+	// Try to resolve as a specific element import (e.g., "ISQ::mass")
+	if strings.Contains(cleanNamespace, "::") && !imp.IsAll {
+		if elem := b.libraryRegistry.FindElement(cleanNamespace); elem != nil {
+			imp.ResolvedElement = elem
+			imp.IsResolved = true
+		}
 	}
 }
 
