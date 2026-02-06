@@ -1859,3 +1859,32 @@ func (b *modelBuilder) ExitDependency(ctx *parser.DependencyContext) {
 		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
+
+// EnterComment_ handles comment declarations.
+// Comments provide documentation and annotations for model elements.
+func (b *modelBuilder) EnterComment_(ctx *parser.Comment_Context) {
+	// Extract body from REGULAR_COMMENT or COMMENT
+	body := ""
+	if ctx.REGULAR_COMMENT() != nil {
+		body = ctx.REGULAR_COMMENT().GetText()
+	} else if ctx.COMMENT() != nil {
+		body = ctx.COMMENT().GetText()
+	}
+
+	// Extract locale if present
+	locale := ""
+	if ctx.LOCALE() != nil {
+		locale = ctx.LOCALE().GetText()
+	}
+
+	loc := locationFromContext(ctx)
+	comment := NewComment(body, loc)
+	comment.Locale = locale
+
+	// Add to current package
+	if b.currentPkg != nil {
+		comment.parent = b.currentPkg
+		b.currentPkg.AddChild(comment)
+		b.model.AddComment(comment)
+	}
+}
