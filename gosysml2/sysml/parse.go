@@ -960,6 +960,48 @@ func (b *modelBuilder) ExitCaseUsage(ctx *parser.CaseUsageContext) {
 	}
 }
 
+func (b *modelBuilder) EnterIncludeUseCaseUsage(ctx *parser.IncludeUseCaseUsageContext) {
+	name := ""
+	// Try to extract name from UsageDeclaration if present
+	if ctx.UsageDeclaration() != nil {
+		if ident := ctx.UsageDeclaration().Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	}
+
+	loc := locationFromContext(ctx)
+
+	include := NewIncludeUseCase(name, loc)
+
+	// Extract the referenced use case name from OwnedReferenceSubsetting
+	if ctx.OwnedReferenceSubsetting() != nil {
+		refName := ctx.OwnedReferenceSubsetting().GetText()
+		include.SetUnresolvedIncludedUseCase(refName)
+	}
+
+	// Add to current parent (should be a UseCase or Case)
+	if len(b.elementStack) > 0 {
+		parent := b.elementStack[len(b.elementStack)-1]
+		include.parent = parent
+		// Add to parent's children via the childAdder interface
+		if container, ok := parent.(childAdder); ok {
+			container.AddChild(include)
+		}
+	} else if b.currentPkg != nil {
+		include.parent = b.currentPkg
+		b.currentPkg.AddChild(include)
+	}
+
+	// Push onto element stack for nested elements
+	b.elementStack = append(b.elementStack, include)
+}
+
+func (b *modelBuilder) ExitIncludeUseCaseUsage(ctx *parser.IncludeUseCaseUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
 func (b *modelBuilder) EnterAttributeDefinition(ctx *parser.AttributeDefinitionContext) {
 	name := ""
 	if ctx.Definition() != nil && ctx.Definition().DefinitionDeclaration() != nil {
@@ -2099,6 +2141,66 @@ func (b *modelBuilder) EnterFlowUsage(ctx *parser.FlowUsageContext) {
 
 // ExitFlowUsage pops the flow from the element stack.
 func (b *modelBuilder) ExitFlowUsage(ctx *parser.FlowUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+// EnterSuccessionFlowUsage handles succession flow declarations in action bodies.
+// SuccessionFlowUsage represents control flow succession from source to target elements.
+func (b *modelBuilder) EnterSuccessionFlowUsage(ctx *parser.SuccessionFlowUsageContext) {
+	name := ""
+	if ctx.FlowDeclaration() != nil && ctx.FlowDeclaration().UsageDeclaration() != nil {
+		if ident := ctx.FlowDeclaration().UsageDeclaration().Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	}
+
+	loc := locationFromContext(ctx)
+	succession := NewSuccessionFlow(name, loc)
+
+	// Extract source and target from flow declaration
+	if ctx.FlowDeclaration() != nil {
+		flowDecl := ctx.FlowDeclaration()
+
+		// Check for FROM/TO syntax: from source to target
+		if flowDecl.FROM() != nil && flowDecl.TO() != nil {
+			// Get source and target from FlowEndMember
+			flowEndMembers := flowDecl.AllFlowEndMember()
+			if len(flowEndMembers) >= 2 {
+				// Extract source from first flow end member
+				sourceText := flowEndMembers[0].GetText()
+				succession.SetUnresolvedSource(sourceText)
+
+				// Extract target from second flow end member
+				targetText := flowEndMembers[1].GetText()
+				succession.SetUnresolvedTarget(targetText)
+			}
+		} else if flowEndMembers := flowDecl.AllFlowEndMember(); len(flowEndMembers) >= 2 {
+			// Inline syntax: source to target
+			sourceText := flowEndMembers[0].GetText()
+			succession.SetUnresolvedSource(sourceText)
+
+			targetText := flowEndMembers[1].GetText()
+			succession.SetUnresolvedTarget(targetText)
+		}
+	}
+
+	// Add to current parent (package or action)
+	parent := b.getCurrentParent()
+	if parent != nil {
+		succession.parent = parent
+		if container, ok := parent.(childAdder); ok {
+			container.AddChild(succession)
+		}
+	}
+
+	// Push to element stack for nested content
+	b.elementStack = append(b.elementStack, succession)
+}
+
+// ExitSuccessionFlowUsage pops the succession flow from the element stack.
+func (b *modelBuilder) ExitSuccessionFlowUsage(ctx *parser.SuccessionFlowUsageContext) {
 	if len(b.elementStack) > 0 {
 		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
