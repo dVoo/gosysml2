@@ -30,6 +30,9 @@ type Visitor interface {
 	// VisitCase is called for each case element.
 	VisitCase(case_ *Case) bool
 
+	// VisitIncludeUseCase is called for each include use case element.
+	VisitIncludeUseCase(include *IncludeUseCase) bool
+
 	// VisitAction is called for each action element.
 	VisitAction(action *Action) bool
 
@@ -112,6 +115,7 @@ func (BaseVisitor) VisitConcern(concern *Concern) bool                      { re
 func (BaseVisitor) VisitUseCase(useCase *UseCase) bool                      { return true }
 func (BaseVisitor) VisitAnalysisCase(analysis *AnalysisCase) bool           { return true }
 func (BaseVisitor) VisitCase(case_ *Case) bool                              { return true }
+func (BaseVisitor) VisitIncludeUseCase(include *IncludeUseCase) bool        { return true }
 func (BaseVisitor) VisitAction(action *Action) bool                         { return true }
 func (BaseVisitor) VisitImport(imp *Import) bool                            { return true }
 func (BaseVisitor) VisitComment(comment *Comment) bool                      { return true }
@@ -163,6 +167,8 @@ func visitElement(elem Element, visitor Visitor) {
 		continueVisit = visitor.VisitAnalysisCase(e)
 	case *Case:
 		continueVisit = visitor.VisitCase(e)
+	case *IncludeUseCase:
+		continueVisit = visitor.VisitIncludeUseCase(e)
 	case *Action:
 		continueVisit = visitor.VisitAction(e)
 	case *Import:
@@ -441,6 +447,18 @@ func FindCases(model *Model) []*Case {
 	return result
 }
 
+// FindIncludeUseCases returns all include use cases in the model.
+func FindIncludeUseCases(model *Model) []*IncludeUseCase {
+	var result []*IncludeUseCase
+	Walk(model, func(elem Element, depth int) bool {
+		if inc, ok := elem.(*IncludeUseCase); ok {
+			result = append(result, inc)
+		}
+		return true
+	})
+	return result
+}
+
 // FindActions returns all actions in the model.
 func FindActions(model *Model) []*Action {
 	var result []*Action
@@ -616,6 +634,11 @@ func (c *Counter) VisitAnalysisCase(analysis *AnalysisCase) bool {
 
 func (c *Counter) VisitCase(case_ *Case) bool {
 	c.Counts[KindCase]++
+	return true
+}
+
+func (c *Counter) VisitIncludeUseCase(include *IncludeUseCase) bool {
+	c.Counts[KindIncludeUseCase]++
 	return true
 }
 
