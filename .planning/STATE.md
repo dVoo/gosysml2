@@ -2,7 +2,7 @@
 
 **Project:** SysML v2 Parser
 **Current Milestone:** v0.1 - Modern Go Implementation
-**Active Phase:** Phase 4 - Advanced Features
+**Active Phase:** Phase 5 - Documentation and Examples
 
 ## Status
 - Codebase mapped: ✓
@@ -10,19 +10,17 @@
 - Phase 1: ✓ Complete (4/4 plans)
 - Phase 2: ✓ Complete (3/3 plans)
 - Phase 3: ✓ Complete (2/2 plans)
-- Phase 4 Plan 01: ✓ COMPLETE - Case modeling (CaseDefinition/Usage)
-- Phase 4 Plan 04: ✓ COMPLETE - IncludeUseCaseUsage parsing
-- Phase 4 Plan 06: ✓ COMPLETE - SuccessionFlowUsage parsing
 - Phase 4: ✓ COMPLETE (3/3 plans)
+- Phase 5: Planned (3/3 plans) - Documentation and Examples
 
 ## Current Position
 
-Phase: 04-advanced-features (3 of 3) ✓ COMPLETE
-Plan: 3 of 3 complete
-Status: Phase complete - SuccessionFlowUsage parsing implemented
-Last activity: 2026-02-06 - Completed 04-06-PLAN.md
+Phase: 05-documentation-and-examples (1 of 3) In Progress
+Plan: 1 of 3 complete
+Status: In progress
+Last activity: 2026-02-06 - Completed 05-01-PLAN.md
 
-Progress: [███████████] 90%
+Progress: [█████████████░] 93%
 
 ## Completed Plans
 
@@ -41,6 +39,7 @@ Progress: [███████████] 90%
 | 04-advanced-features | 04 | IncludeUseCaseUsage Parsing | 2026-02-06 | IncludeUseCase type with visitor support, parser handler, reference resolution, and unit tests |
 | 04-advanced-features | 05 | ConjugatedPort Implementation | 2026-02-06 | ConjugatedPort type with OriginalPort reference, auto-creation in PortDefinition, and unit tests |
 | 04-advanced-features | 06 | SuccessionFlowUsage Parsing | 2026-02-06 | SuccessionFlow with reference resolution, parser integration, and comprehensive unit tests |
+| 05-documentation-and-examples | 01 | API Documentation Improvements | 2026-02-06 | Comprehensive godoc for sysml and low packages, updated README with current metrics |
 
 ## Decisions Made
 
@@ -74,21 +73,21 @@ None currently.
 - Phase 2 added: SysML Standard Libraries Support (2026-02-06)
 - Phase 3 complete: Grammar Completion (2026-02-06) - 68% coverage achieved
 - Phase 4 planned: Advanced Features (2026-02-06) - 3 plans created
+- Phase 5 added: Documentation and Examples (2026-02-06)
+- Phase 5 planned: Documentation and Examples (2026-02-06) - 3 plans created
 
 ## Next Steps
 
-- **PHASE 4 COMPLETE** - All advanced features implemented:
-  - Plan 01: Case modeling (CaseDefinition/Usage) ✓
-  - Plan 04: IncludeUseCaseUsage parsing ✓
-  - Plan 06: SuccessionFlowUsage parsing ✓
+- **PHASE 5 IN PROGRESS** - Documentation and Examples:
+  - Plan 01: API documentation improvements ✓
+  - Plan 02: Code examples (next)
+  - Plan 03: Usage guides (pending)
 - Grammar coverage: ~73% (58/80 elements, estimated)
 - Validation success rate: 96.4% (54/56 files) - maintained
-- **Ready for Phase 5: Next milestone**
-  - Review ROADMAP.md for Phase 5 plans
-  - Consider additional P2 elements or move to P1/P0 completion
+- Ready for 05-02: Code examples
 
 ---
 
 *Last session: 2026-02-06*
-*Stopped at: Completed 04-06-PLAN.md - SuccessionFlowUsage parsing*
-*Resume file: None - Phase 4 complete*
+*Stopped at: Completed 05-01-PLAN.md - API Documentation Improvements*
+*Resume file: None - Continuing Phase 5*
