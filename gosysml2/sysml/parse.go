@@ -1977,3 +1977,76 @@ func (b *modelBuilder) ExitFlowUsage(ctx *parser.FlowUsageContext) {
 		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
+
+// EnterControlNode handles control node declarations in activity diagrams.
+// Control nodes manage flow: fork (split), join (synchronize), merge (combine), decision (branch).
+func (b *modelBuilder) EnterControlNode(ctx *parser.ControlNodeContext) {
+	// Determine control node kind from context
+	var kind ControlNodeKind
+	if ctx.MergeNode() != nil {
+		kind = ControlNodeKindMerge
+	} else if ctx.DecisionNode() != nil {
+		kind = ControlNodeKindDecision
+	} else if ctx.JoinNode() != nil {
+		kind = ControlNodeKindJoin
+	} else if ctx.ForkNode() != nil {
+		kind = ControlNodeKindFork
+	} else {
+		kind = ControlNodeKindMerge // default
+	}
+
+	loc := locationFromContext(ctx)
+	node := NewControlNode(kind, loc)
+
+	// Add to current package
+	if b.currentPkg != nil {
+		node.parent = b.currentPkg
+		b.currentPkg.AddChild(node)
+	}
+
+	// Add to model
+	b.model.AddControlNode(node)
+
+	// Push to element stack
+	b.elementStack = append(b.elementStack, node)
+}
+
+// ExitControlNode pops the control node from the element stack.
+func (b *modelBuilder) ExitControlNode(ctx *parser.ControlNodeContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+// EnterOccurrenceDefinition handles occurrence definition declarations.
+// Occurrence definitions define time-based occurrence types.
+func (b *modelBuilder) EnterOccurrenceDefinition(ctx *parser.OccurrenceDefinitionContext) {
+	name := ""
+	if ctx.Definition() != nil && ctx.Definition().DefinitionDeclaration() != nil {
+		if ident := ctx.Definition().DefinitionDeclaration().Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	}
+
+	loc := locationFromContext(ctx)
+	occ := NewOccurrence(name, loc, true, false)
+
+	// Add to current package
+	if b.currentPkg != nil {
+		occ.parent = b.currentPkg
+		b.currentPkg.AddChild(occ)
+	}
+
+	// Add to model
+	b.model.AddOccurrence(occ)
+
+	// Push to element stack
+	b.elementStack = append(b.elementStack, occ)
+}
+
+// ExitOccurrenceDefinition pops the occurrence from the element stack.
+func (b *modelBuilder) ExitOccurrenceDefinition(ctx *parser.OccurrenceDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
