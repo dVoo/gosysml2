@@ -342,6 +342,10 @@ func (b *modelBuilder) getCurrentParent() Element {
 	if len(b.elementStack) > 0 {
 		return b.elementStack[len(b.elementStack)-1]
 	}
+	// Return nil if currentPkg is nil to avoid interface nil pointer issues
+	if b.currentPkg == nil {
+		return nil
+	}
 	return b.currentPkg
 }
 
