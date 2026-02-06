@@ -1969,9 +1969,11 @@ func (m *Model) resolveInterfaceRefs(i *Interface) {
 }
 
 // findElement finds an element by name, considering scope.
-// It first tries qualified name lookup, then searches in parent scopes.
+// It first tries qualified name lookup in the model, then searches in parent scopes,
+// and finally falls back to the library registry if available.
+// User definitions in the model always take precedence over library definitions.
 func (m *Model) findElement(name string, context Element) Element {
-	// First try direct qualified name lookup
+	// First try direct qualified name lookup in model (user definitions take precedence)
 	if elem := m.elementIndex[name]; elem != nil {
 		return elem
 	}
@@ -1996,6 +1998,14 @@ func (m *Model) findElement(name string, context Element) Element {
 	for _, pkg := range m.Packages {
 		fullQN := pkg.Name() + "::" + name
 		if elem := m.elementIndex[fullQN]; elem != nil {
+			return elem
+		}
+	}
+
+	// Finally, try library registry if available
+	// This allows qualified names like "ISQ::mass" or "ScalarValues::Real" to resolve
+	if m.libraryRegistry != nil {
+		if elem := m.libraryRegistry.FindElement(name); elem != nil {
 			return elem
 		}
 	}
