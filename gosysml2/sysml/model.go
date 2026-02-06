@@ -1441,6 +1441,7 @@ type Model struct {
 	Docs         []*Doc
 	Flows        []*Flow
 	ControlNodes []*ControlNode
+	Occurrences  []*Occurrence
 
 	// All top-level elements (for generic traversal)
 	Elements []Element
@@ -1462,6 +1463,7 @@ func NewModel() *Model {
 		Docs:         make([]*Doc, 0),
 		Flows:        make([]*Flow, 0),
 		ControlNodes: make([]*ControlNode, 0),
+		Occurrences:  make([]*Occurrence, 0),
 		Elements:     make([]Element, 0),
 		elementIndex: make(map[string]Element),
 	}
@@ -1501,6 +1503,12 @@ func (m *Model) AddComment(comment *Comment) {
 func (m *Model) AddControlNode(node *ControlNode) {
 	m.ControlNodes = append(m.ControlNodes, node)
 	m.Elements = append(m.Elements, node)
+}
+
+// AddOccurrence adds an occurrence to the model.
+func (m *Model) AddOccurrence(occ *Occurrence) {
+	m.Occurrences = append(m.Occurrences, occ)
+	m.Elements = append(m.Elements, occ)
 }
 
 // FindPackage finds a package by name.
