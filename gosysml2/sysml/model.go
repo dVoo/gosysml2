@@ -1457,9 +1457,10 @@ func NewDoc(body string, loc Location) *Doc {
 // Model represents a complete SysML model (root namespace).
 type Model struct {
 	// Typed top-level element collections
-	Packages []*Package
-	Imports  []*Import
-	Comments []*Comment
+	Packages     []*Package
+	Imports      []*Import
+	Comments     []*Comment
+	Dependencies []*Dependency
 
 	// All top-level elements (for generic traversal)
 	Elements []Element
@@ -1477,9 +1478,16 @@ func NewModel() *Model {
 		Packages:     make([]*Package, 0),
 		Imports:      make([]*Import, 0),
 		Comments:     make([]*Comment, 0),
+		Dependencies: make([]*Dependency, 0),
 		Elements:     make([]Element, 0),
 		elementIndex: make(map[string]Element),
 	}
+}
+
+// AddDependency adds a dependency to the model.
+func (m *Model) AddDependency(dep *Dependency) {
+	m.Dependencies = append(m.Dependencies, dep)
+	m.Elements = append(m.Elements, dep)
 }
 
 // AddPackage adds a package to the model.

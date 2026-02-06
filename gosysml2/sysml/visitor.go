@@ -78,6 +78,9 @@ type Visitor interface {
 	// VisitViewpoint is called for each viewpoint element.
 	VisitViewpoint(viewpoint *Viewpoint) bool
 
+	// VisitDependency is called for each dependency element.
+	VisitDependency(dep *Dependency) bool
+
 	// VisitElement is called for any other element type.
 	VisitElement(elem Element) bool
 }
@@ -110,6 +113,7 @@ func (BaseVisitor) VisitEnumeration(enum *Enumeration) bool            { return 
 func (BaseVisitor) VisitEnumerationValue(value *EnumerationValue) bool { return true }
 func (BaseVisitor) VisitView(view *View) bool                          { return true }
 func (BaseVisitor) VisitViewpoint(viewpoint *Viewpoint) bool           { return true }
+func (BaseVisitor) VisitDependency(dep *Dependency) bool               { return true }
 func (BaseVisitor) VisitElement(elem Element) bool                     { return true }
 
 // Visit traverses a model using the given visitor.
@@ -171,6 +175,8 @@ func visitElement(elem Element, visitor Visitor) {
 		continueVisit = visitor.VisitView(e)
 	case *Viewpoint:
 		continueVisit = visitor.VisitViewpoint(e)
+	case *Dependency:
+		continueVisit = visitor.VisitDependency(e)
 	default:
 		continueVisit = visitor.VisitElement(elem)
 	}
