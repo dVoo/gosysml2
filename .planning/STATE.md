@@ -11,16 +11,17 @@
 - Phase 2: ✓ Complete (3/3 plans)
 - Phase 3: ✓ Complete (2/2 plans)
 - Phase 4 Plan 01: ✓ COMPLETE - Case modeling (CaseDefinition/Usage)
-- Phase 4: In Progress (1/3 plans)
+- Phase 4 Plan 04: ✓ COMPLETE - IncludeUseCaseUsage parsing
+- Phase 4: In Progress (2/3 plans)
 
 ## Current Position
 
-Phase: 04-advanced-features (1 of 3)
-Plan: 1 of 3 complete
-Status: In progress - Case modeling implemented
-Last activity: 2026-02-06 - Completed 04-01-PLAN.md
+Phase: 04-advanced-features (2 of 3)
+Plan: 2 of 3 complete
+Status: In progress - IncludeUseCaseUsage parsing implemented
+Last activity: 2026-02-06 - Completed 04-04-PLAN.md
 
-Progress: [█████████░] 82%
+Progress: [██████████░] 85%
 
 ## Completed Plans
 
@@ -36,6 +37,7 @@ Progress: [█████████░] 82%
 | 03-grammar-completion | 01 | P0 Critical Grammar Elements | 2026-02-06 | Dependency, Comment, Doc, Flow types with parser handlers - zero element discarding |
 | 03-grammar-completion | 02 | P1 High Priority Grammar Elements | 2026-02-06 | ControlNode, Occurrence, BindingConnector, Succession - 68% grammar coverage |
 | 04-advanced-features | 01 | Case Modeling | 2026-02-06 | CaseDefinition and CaseUsage with Subject, Actors, Objectives - ~70% grammar coverage |
+| 04-advanced-features | 04 | IncludeUseCaseUsage Parsing | 2026-02-06 | IncludeUseCase type with visitor support, parser handler, reference resolution, and unit tests |
 
 ## Decisions Made
 
@@ -56,6 +58,8 @@ Progress: [█████████░] 82%
 15. **Succession representation:** Reused existing Transition type rather than creating new type
 16. **Case.Actors type:** Used []Element (matching UseCase pattern) rather than []Ref[Element] for consistency
 17. **Case reference resolution:** Followed AnalysisCase/UseCase pattern with resolveCaseRefs method
+18. **IncludeUseCase.Type() returns nil:** IncludeUseCase doesn't have a type reference like other usages, so Type() returns nil
+19. **IncludeUseCase parser handler uses element stack:** Following the Case pattern, IncludeUseCase is pushed onto element stack for proper parent tracking
 
 ## Blockers/Concerns
 
@@ -70,15 +74,15 @@ None currently.
 ## Next Steps
 
 - Phase 4 Plan 01 COMPLETE - Case modeling implemented
-- Grammar coverage: ~70% (56/80 elements, estimated)
+- Phase 4 Plan 04 COMPLETE - IncludeUseCaseUsage parsing implemented
+- Grammar coverage: ~71% (57/80 elements, estimated) - IncludeUseCase added
 - Validation success rate: 96.4% (54/56 files) - maintained
 - Ready for Phase 4 Plan 02: Use case relationships and Port conjugation
-  - IncludeUseCaseUsage
-  - ConjugatedPortDefinition
+  - ConjugatedPortDefinition (IncludeUseCaseUsage now complete)
 - Phase 4 Plan 03 will integrate and validate all P2 elements
 
 ---
 
 *Last session: 2026-02-06*
-*Stopped at: Completed 04-01-PLAN.md - Case modeling*
+*Stopped at: Completed 04-04-PLAN.md - IncludeUseCaseUsage parsing*
 *Resume file: None - continuing Phase 4*
