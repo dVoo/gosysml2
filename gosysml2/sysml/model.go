@@ -456,6 +456,39 @@ type Port struct {
 	// Typed children
 	ports []*Port
 	parts []*Part
+
+	// Conjugated port - automatically created for each PortDefinition
+	ConjugatedPort *ConjugatedPort
+}
+
+// ConjugatedPort represents a conjugated (inverted) port definition.
+// Per SysML spec, every PortDefinition has an associated ConjugatedPortDefinition
+// with effective name "~" + original port name.
+type ConjugatedPort struct {
+	baseElement
+	OriginalPort           Ref[*Port] // Reference to the original port
+	unresolvedOriginalPort string     // Name before resolution
+}
+
+// isDefinition marks ConjugatedPort as a definition element.
+func (c *ConjugatedPort) isDefinition() {}
+
+// GetOriginalPort returns the original port this conjugated port references.
+func (c *ConjugatedPort) GetOriginalPort() *Port {
+	return c.OriginalPort.Resolved()
+}
+
+// SetUnresolvedOriginalPort sets the unresolved reference to the original port.
+func (c *ConjugatedPort) SetUnresolvedOriginalPort(ref string) {
+	c.unresolvedOriginalPort = ref
+}
+
+// EffectiveName returns the effective name of the conjugated port (~Name).
+func (c *ConjugatedPort) EffectiveName() string {
+	if c.OriginalPort.IsResolved() {
+		return "~" + c.OriginalPort.Resolved().Name()
+	}
+	return "~" + c.name
 }
 
 // PortDirection indicates the direction of a port.
@@ -488,6 +521,18 @@ func NewPort(name string, loc Location, isDefinition bool) *Port {
 		IsDefinition: isDefinition,
 		ports:        make([]*Port, 0),
 		parts:        make([]*Part, 0),
+	}
+}
+
+// NewConjugatedPort creates a new ConjugatedPort element.
+func NewConjugatedPort(name string, loc Location) *ConjugatedPort {
+	return &ConjugatedPort{
+		baseElement: baseElement{
+			kind:     KindConjugatedPort,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
 	}
 }
 
