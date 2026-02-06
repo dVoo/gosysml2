@@ -245,6 +245,7 @@ type Package struct {
 	enumerations []*Enumeration
 	constraints  []*Constraint
 	dependencies []*Dependency
+	docs         []*Doc
 }
 
 // NewPackage creates a new Package element.
@@ -272,6 +273,7 @@ func NewPackage(name string, loc Location) *Package {
 		enumerations: make([]*Enumeration, 0),
 		constraints:  make([]*Constraint, 0),
 		dependencies: make([]*Dependency, 0),
+		docs:         make([]*Doc, 0),
 	}
 }
 
@@ -313,6 +315,8 @@ func (p *Package) AddChild(child Element) {
 		p.constraints = append(p.constraints, c)
 	case *Dependency:
 		p.dependencies = append(p.dependencies, c)
+	case *Doc:
+		p.docs = append(p.docs, c)
 	}
 }
 
@@ -1465,6 +1469,7 @@ type Model struct {
 	Imports      []*Import
 	Comments     []*Comment
 	Dependencies []*Dependency
+	Docs         []*Doc
 
 	// All top-level elements (for generic traversal)
 	Elements []Element
@@ -1483,9 +1488,16 @@ func NewModel() *Model {
 		Imports:      make([]*Import, 0),
 		Comments:     make([]*Comment, 0),
 		Dependencies: make([]*Dependency, 0),
+		Docs:         make([]*Doc, 0),
 		Elements:     make([]Element, 0),
 		elementIndex: make(map[string]Element),
 	}
+}
+
+// AddDoc adds a documentation element to the model.
+func (m *Model) AddDoc(doc *Doc) {
+	m.Docs = append(m.Docs, doc)
+	m.Elements = append(m.Elements, doc)
 }
 
 // AddDependency adds a dependency to the model.

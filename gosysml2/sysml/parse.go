@@ -1888,3 +1888,30 @@ func (b *modelBuilder) EnterComment_(ctx *parser.Comment_Context) {
 		b.model.AddComment(comment)
 	}
 }
+
+// EnterDocumentation handles documentation declarations.
+// Documentation provides inline documentation for model elements.
+func (b *modelBuilder) EnterDocumentation(ctx *parser.DocumentationContext) {
+	// Extract body from REGULAR_COMMENT
+	body := ""
+	if ctx.REGULAR_COMMENT() != nil {
+		body = ctx.REGULAR_COMMENT().GetText()
+	}
+
+	// Extract locale if present
+	locale := ""
+	if ctx.LOCALE() != nil {
+		locale = ctx.LOCALE().GetText()
+	}
+
+	loc := locationFromContext(ctx)
+	doc := NewDoc(body, loc)
+	doc.Locale = locale
+
+	// Add to current package
+	if b.currentPkg != nil {
+		doc.parent = b.currentPkg
+		b.currentPkg.AddChild(doc)
+		b.model.AddDoc(doc)
+	}
+}
