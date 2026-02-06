@@ -1431,46 +1431,6 @@ func NewImport(namespace string, loc Location) *Import {
 	}
 }
 
-// Comment represents a SysML comment.
-type Comment struct {
-	baseElement
-	Body   string
-	Locale string
-
-	// Elements this comment is about (resolved references)
-	About []Element
-}
-
-// NewComment creates a new Comment element.
-func NewComment(body string, loc Location) *Comment {
-	return &Comment{
-		baseElement: baseElement{
-			kind:     KindComment,
-			location: loc,
-		},
-		Body:  body,
-		About: make([]Element, 0),
-	}
-}
-
-// Doc represents inline documentation.
-type Doc struct {
-	baseElement
-	Body   string
-	Locale string
-}
-
-// NewDoc creates a new Doc element.
-func NewDoc(body string, loc Location) *Doc {
-	return &Doc{
-		baseElement: baseElement{
-			kind:     KindDoc,
-			location: loc,
-		},
-		Body: body,
-	}
-}
-
 // Model represents a complete SysML model (root namespace).
 type Model struct {
 	// Typed top-level element collections

@@ -36,6 +36,9 @@ type Visitor interface {
 	// VisitComment is called for each comment element.
 	VisitComment(comment *Comment) bool
 
+	// VisitDoc is called for each documentation element.
+	VisitDoc(doc *Doc) bool
+
 	// VisitPort is called for each port element.
 	VisitPort(port *Port) bool
 
@@ -105,6 +108,7 @@ func (BaseVisitor) VisitAnalysisCase(analysis *AnalysisCase) bool      { return 
 func (BaseVisitor) VisitAction(action *Action) bool                    { return true }
 func (BaseVisitor) VisitImport(imp *Import) bool                       { return true }
 func (BaseVisitor) VisitComment(comment *Comment) bool                 { return true }
+func (BaseVisitor) VisitDoc(doc *Doc) bool                             { return true }
 func (BaseVisitor) VisitPort(port *Port) bool                          { return true }
 func (BaseVisitor) VisitConnection(conn *Connection) bool              { return true }
 func (BaseVisitor) VisitInterface(iface *Interface) bool               { return true }
@@ -155,6 +159,8 @@ func visitElement(elem Element, visitor Visitor) {
 		continueVisit = visitor.VisitImport(e)
 	case *Comment:
 		continueVisit = visitor.VisitComment(e)
+	case *Doc:
+		continueVisit = visitor.VisitDoc(e)
 	case *Port:
 		continueVisit = visitor.VisitPort(e)
 	case *Connection:
