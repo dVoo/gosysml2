@@ -1,127 +1,40 @@
-# Roadmap
+# Roadmap: SysML v2 Parser
 
-**Project:** SysML v2 Parser
-**Current Milestone:** v0.1 - Modern Go Implementation
+## Milestones
+
+- ✅ **v0.1 Modern Go Implementation** — Phases 1-5 (shipped 2026-02-06)
+- 📋 **v0.2** — Phases 6+ (planned)
 
 ## Phases
 
-### Phase 1: Modernize Go codebase
-**Goal:** Update the codebase to the newest Golang version with latest features, optimized for highest performance
+<details>
+<summary>✅ v0.1 Modern Go Implementation (Phases 1-5) — SHIPPED 2026-02-06</summary>
 
-**Status:** ✓ Complete - 4/4 plans finished
+**Full details:** [milestones/v0.1-ROADMAP.md](milestones/v0.1-ROADMAP.md)
 
-**Plans:** 4 plans
+- [x] Phase 1: Modernize Go codebase (4/4 plans) — completed 2026-02-06
+- [x] Phase 2: SysML Standard Libraries Support (3/3 plans) — completed 2026-02-06
+- [x] Phase 3: Grammar Completion (2/2 plans) — completed 2026-02-06
+- [x] Phase 4: Advanced Features (4/4 plans) — completed 2026-02-06
+- [x] Phase 5: Documentation and Examples (3/3 plans) — completed 2026-02-06
 
-Plans:
-- [x] 01-01-PLAN.md -- Go version upgrade + low-level wrapper modernization
-- [x] 01-02-PLAN.md -- Model types + visitor generics and iter.Seq iterators
-- [x] 01-03-PLAN.md -- Parse performance optimization + error handling
-- [x] 01-04-PLAN.md -- Benchmarks, integration tests, and baseline recording
+**Key Deliverables:**
+- 73% grammar coverage (58/80 elements)
+- 96.4% validation success rate (54/56 files)
+- 52 standard library packages supported (2605 elements)
+- Comprehensive documentation with 5 examples
 
-**Success Criteria:**
-- Code uses latest Go language features
-- Performance optimized for parsing speed
-- Modern Go idioms and patterns applied
-- Benchmarks show measurable improvements
+</details>
 
-### Phase 2: SysML Standard Libraries Support
-**Goal:** Allow the usage of SysML standard libraries and validate against comprehensive validation dataset
+### 📋 v0.2 (Planned)
 
-**Status:** ✓ Complete - 3/3 plans finished
+*Next milestone planning needed*
 
-**Depends on:** Phase 1
-**Plans:** 3 plans
-
-Plans:
-- [x] 02-01-PLAN.md -- Library resolution foundation (registry, discovery, indexing)
-- [x] 02-02-PLAN.md -- Import resolution integration (parse pipeline, qualified names)
-- [x] 02-03-PLAN.md -- Validation test suite (18 categories, standalone checker)
-
-**Details:**
-Enable the parser to resolve and use SysML standard library definitions found in `./libraries/*`. Validate implementation against all files in `./validationdata` (renamed from testdata), which contains 18 categories of SysML validation cases including Parts Tree, Function-based Behavior, State-based Behavior, Requirements, Verification, and more.
-
-**Wave Structure:**
-- Wave 1: 02-01 (independent - library foundation)
-- Wave 2: 02-02 (depends on 02-01 - integration)
-- Wave 3: 02-03 (depends on 02-02 - validation)
-
-### Phase 3: Grammar Completion
-**Goal:** Implement full SysML v2 grammar coverage to enable parsing of large enterprise model repositories using complete sysml-core syntax and libraries
-
-**Status:** ✓ Complete - 2/2 plans finished
-
-**Depends on:** Phase 2
-**Plans:** 2 plans
-
-Plans:
-- [x] 03-01-PLAN.md -- P0 Critical Elements (Dependency, Comment, Documentation, Flows)
-- [x] 03-02-PLAN.md -- P1 High Priority (ControlNodes, Occurrences, Bindings, Successions)
-
-**Details:**
-Complete grammar implementation to achieve 80%+ parser handler coverage (currently 10%). Critical requirement: all parsed elements must land in the model — nothing discarded. Focus on elements required for enterprise models: dependencies, documentation, flows, control nodes, occurrences.
-
-**Success Criteria:**
-- 80%+ grammar coverage (up from 10%)
-- 98%+ validation success rate
-- Zero elements discarded during parsing
-- All new handlers have unit tests
-
-### Phase 4: Advanced Features
-**Goal:** Implement P2 medium priority grammar elements for advanced SysML modeling including case modeling, use case relationships, and port conjugation
-
-**Status:** ✓ Complete - 4/4 plans finished
-
-**Depends on:** Phase 3
-**Plans:** 4 plans (including gap closure)
-
-Plans:
-- [x] 04-01-PLAN.md -- Case modeling (CaseDefinition, CaseUsage)
-- [x] 04-04-PLAN.md -- IncludeUseCaseUsage parsing (gap closure)
-- [x] 04-05-PLAN.md -- ConjugatedPort implementation (gap closure)
-- [x] 04-06-PLAN.md -- SuccessionFlowUsage parsing (gap closure)
-
-**Wave Structure:**
-- Wave 1: 04-01, 04-02 (independent - both add new model types)
-- Wave 2: 04-03 (depends on 04-01, 04-02 - integration and validation)
-
-**Details:**
-Complete P2 grammar elements to reach 85%+ coverage. Focus on enterprise modeling features: case definitions and usages for use case modeling, include/extend relationships between use cases, and port conjugation for interface modeling. These elements are essential for full SysML v2 compliance in enterprise contexts.
-
-**Success Criteria:**
-- 85%+ grammar coverage (up from 68%)
-- 98%+ validation success rate maintained
-- All P2 elements have parser handlers
-- Unit tests for all new grammar elements
-
-### Phase 5: Documentation and Examples
-**Goal:** Create comprehensive documentation and code examples to make the library accessible to Go developers
-
-**Status:** ✓ Complete - 3/3 plans finished
-
-**Depends on:** Phase 4
-**Plans:** 3 plans
-
-Plans:
-- [x] 05-01-PLAN.md -- API documentation improvements (godoc, package docs, README updates)
-- [x] 05-02-PLAN.md -- Code examples (basic, requirements, validation, parallel, visitor)
-- [x] 05-03-PLAN.md -- Usage guides (USAGE.md, docs/usage-guide.md)
-
-**Wave Structure:**
-- Wave 1: 05-01, 05-02 (independent - documentation and examples can proceed in parallel)
-- Wave 2: 05-03 (depends on 05-02 - usage guides reference examples)
-
-**Details:**
-Improve library documentation to make it accessible to Go developers. Focus on:
-1. API documentation with godoc comments and package-level documentation
-2. Working code examples demonstrating common use cases
-3. Comprehensive usage guides for different scenarios
-
-**Success Criteria:**
-- All public APIs documented with godoc
-- 5+ working code examples
-- Usage guides cover common scenarios
-- README serves as effective entry point
-- Documentation accurately reflects current API
+Potential focus areas:
+- Grammar completion to 85%+
+- API stabilization and versioning
+- Performance optimization
+- Additional P3 grammar elements
 
 ---
 
