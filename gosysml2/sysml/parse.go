@@ -1915,3 +1915,65 @@ func (b *modelBuilder) EnterDocumentation(ctx *parser.DocumentationContext) {
 		b.model.AddDoc(doc)
 	}
 }
+
+// EnterFlowDefinition handles flow definition declarations.
+// Flow definitions create reusable flow specifications.
+func (b *modelBuilder) EnterFlowDefinition(ctx *parser.FlowDefinitionContext) {
+	name := ""
+	if ctx.Definition() != nil && ctx.Definition().DefinitionDeclaration() != nil {
+		if ident := ctx.Definition().DefinitionDeclaration().Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	}
+
+	loc := locationFromContext(ctx)
+	flow := NewFlow(name, loc, true)
+
+	// Add to current package
+	if b.currentPkg != nil {
+		flow.parent = b.currentPkg
+		b.currentPkg.AddChild(flow)
+		b.model.AddFlow(flow)
+	}
+
+	// Push to element stack for nested content
+	b.elementStack = append(b.elementStack, flow)
+}
+
+// ExitFlowDefinition pops the flow from the element stack.
+func (b *modelBuilder) ExitFlowDefinition(ctx *parser.FlowDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+// EnterFlowUsage handles flow usage declarations.
+// Flow usages instantiate flows within a specific context.
+func (b *modelBuilder) EnterFlowUsage(ctx *parser.FlowUsageContext) {
+	name := ""
+	if ctx.FlowDeclaration() != nil && ctx.FlowDeclaration().UsageDeclaration() != nil {
+		if ident := ctx.FlowDeclaration().UsageDeclaration().Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	}
+
+	loc := locationFromContext(ctx)
+	flow := NewFlow(name, loc, false)
+
+	// Add to current package
+	if b.currentPkg != nil {
+		flow.parent = b.currentPkg
+		b.currentPkg.AddChild(flow)
+		b.model.AddFlow(flow)
+	}
+
+	// Push to element stack for nested content
+	b.elementStack = append(b.elementStack, flow)
+}
+
+// ExitFlowUsage pops the flow from the element stack.
+func (b *modelBuilder) ExitFlowUsage(ctx *parser.FlowUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
