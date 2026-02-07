@@ -26,7 +26,7 @@
 //
 //	import (
 //	    "fmt"
-//	    "github.com/dVoo/gosysml2_oc/low"
+//	    "github.com/dVoo/gosysml2/low"
 //	)
 //
 //	func main() {

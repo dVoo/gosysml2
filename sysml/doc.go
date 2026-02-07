@@ -24,7 +24,7 @@
 //
 //	import (
 //	    "fmt"
-//	    "github.com/dVoo/gosysml2_oc/sysml"
+//	    "github.com/dVoo/gosysml2/sysml"
 //	)
 //
 //	func main() {
@@ -179,7 +179,7 @@
 // For complete API documentation and examples, see:
 //   - README.md in the gosysml2 directory
 //   - examples/ directory for working code samples
-//   - Go doc: https://pkg.go.dev/github.com/dVoo/gosysml2_oc/sysml
+//   - Go doc: https://pkg.go.dev/github.com/dVoo/gosysml2/sysml
 //
 // # Thread Safety
 //

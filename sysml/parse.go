@@ -10,8 +10,8 @@ import (
 	"sync"
 
 	"github.com/antlr4-go/antlr/v4"
-	"github.com/dVoo/gosysml2_oc/internal/parser"
-	"github.com/dVoo/gosysml2_oc/low"
+	"github.com/dVoo/gosysml2/internal/parser"
+	"github.com/dVoo/gosysml2/low"
 )
 
 // childAdder is implemented by elements that can hold children.

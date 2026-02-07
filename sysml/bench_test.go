@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/dVoo/gosysml2_oc/low"
+	"github.com/dVoo/gosysml2/low"
 )
 
 // testdataDir returns the path to testdata relative to the module root.

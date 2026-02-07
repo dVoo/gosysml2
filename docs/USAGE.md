@@ -16,7 +16,7 @@ A comprehensive guide for using the gosysml2 library to parse and work with SysM
 ### Installation
 
 ```bash
-go get github.com/dVoo/gosysml2_oc_oc
+go get github.com/dVoo/gosysml2
 ```
 
 ### First Parse Example
@@ -28,7 +28,7 @@ package main
 
 import (
     "fmt"
-    "github.com/dVoo/gosysml2_oc_oc/sysml"
+    "github.com/dVoo/gosysml2/sysml"
 )
 
 func main() {
@@ -566,7 +566,7 @@ if result.Model != nil {
 For quick syntax checking without building a model:
 
 ```go
-import "github.com/dVoo/gosysml2_oc_oc/low"
+import "github.com/dVoo/gosysml2/low"
 
 // Validate only (faster, no model built)
 errors := low.Validate(input)

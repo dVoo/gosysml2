@@ -1,4 +1,4 @@
-module github.com/dVoo/gosysml2_oc
+module github.com/dVoo/gosysml2
 
 go 1.25
 

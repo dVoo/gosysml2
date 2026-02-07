@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dVoo/gosysml2_oc/sysml"
+	"github.com/dVoo/gosysml2/sysml"
 )
 
 // CategoryStats holds statistics for a single validation category.

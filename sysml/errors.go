@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dVoo/gosysml2_oc/low"
+	"github.com/dVoo/gosysml2/low"
 )
 
 // Error represents a user-friendly SysML parsing error.

@@ -8,7 +8,7 @@ SysML v2 Parser is a Go-based library for parsing SysML v2 models, built with mo
 
 ### Language & Runtime
 - **Go 1.25+** — Primary language with generics and iterator support
-- **Module**: `github.com/dVoo/gosysml2_oc`
+- **Module**: `github.com/dVoo/gosysml2`
 
 ### Parser Generation
 - **ANTLR4** — Parser generator for SysML v2 grammar

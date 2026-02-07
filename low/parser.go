@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/antlr4-go/antlr/v4"
-	"github.com/dVoo/gosysml2_oc/internal/parser"
+	"github.com/dVoo/gosysml2/internal/parser"
 )
 
 // Parser provides low-level access to the SysML v2 parser.

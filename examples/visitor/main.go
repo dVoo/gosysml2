@@ -15,7 +15,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dVoo/gosysml2_oc/sysml"
+	"github.com/dVoo/gosysml2/sysml"
 )
 
 // RequirementAuditVisitor is a custom visitor that audits requirements

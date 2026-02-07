@@ -100,7 +100,7 @@ import (
     "github.com/antlr4-go/antlr/v4"
     
     // Internal
-    "github.com/dVoo/gosysml2_oc/internal/parser"
+    "github.com/dVoo/gosysml2/internal/parser"
 )
 ```
 

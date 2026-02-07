@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dVoo/gosysml2_oc/sysml"
+	"github.com/dVoo/gosysml2/sysml"
 )
 
 func main() {

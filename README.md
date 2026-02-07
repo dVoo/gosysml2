@@ -23,7 +23,7 @@ A Go library for parsing SysML v2 models. Provides both a low-level performance-
 ## Installation
 
 ```bash
-go get github.com/dVoo/gosysml2_oc_oc
+go get github.com/dVoo/gosysml2
 ```
 
 ## Quick Start
@@ -35,7 +35,7 @@ package main
 
 import (
     "fmt"
-    "github.com/dVoo/gosysml2_oc_oc/sysml"
+    "github.com/dVoo/gosysml2/sysml"
 )
 
 func main() {

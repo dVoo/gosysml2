@@ -4,8 +4,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/dVoo/gosysml2_oc/low"
-	"github.com/dVoo/gosysml2_oc/sysml"
+	"github.com/dVoo/gosysml2/low"
+	"github.com/dVoo/gosysml2/sysml"
 )
 
 func main() {

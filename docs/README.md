@@ -30,7 +30,7 @@ A Go library for parsing SysML v2 models. Provides both a low-level performance-
 ## Installation
 
 ```bash
-go get github.com/dVoo/gosysml2_oc_oc
+go get github.com/dVoo/gosysml2
 ```
 
 ## Quick Start
@@ -42,7 +42,7 @@ package main
 
 import (
     "fmt"
-    "github.com/dVoo/gosysml2_oc_oc/sysml"
+    "github.com/dVoo/gosysml2/sysml"
 )
 
 func main() {
@@ -347,7 +347,7 @@ sysml.Walk(model, func(elem sysml.Element, depth int) bool {
 For performance-critical applications or when you need direct access to the parse tree:
 
 ```go
-import "github.com/dVoo/gosysml2_oc_oc/low"
+import "github.com/dVoo/gosysml2/low"
 
 // Parse and get raw parse tree
 tree, errors := low.Parse(input)

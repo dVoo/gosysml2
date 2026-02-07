@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dVoo/gosysml2_oc/sysml"
+	"github.com/dVoo/gosysml2/sysml"
 )
 
 func main() {
