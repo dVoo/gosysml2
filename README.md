@@ -1,6 +1,5 @@
-<Warning>
-  This library and all of the contents are purely vibe-coded without further checks. Use at your own risk!
-</Warning>
+> [!CAUTION]
+> This library and all of the contents are purely vibe-coded without further checks. Use at your own risk!
 
 # SysML v2 Parser
 
