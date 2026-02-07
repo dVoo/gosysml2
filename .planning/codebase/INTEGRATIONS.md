@@ -1,98 +1,45 @@
 # External Integrations
 
-**Analysis Date:** 2026-02-05
-
 ## Overview
 
-This is a **standalone parsing library** with no external service dependencies. It operates entirely within-process without requiring network access, databases, or external APIs.
+The SysML v2 Parser is a self-contained library with minimal external dependencies. It does not integrate with external APIs, databases, or services.
 
-## APIs & External Services
+## Dependencies
 
-**None** - The library is self-contained.
+### ANTLR4 Runtime
+- **Purpose**: Parser runtime for generated parsers
+- **Package**: `github.com/antlr4-go/antlr/v4`
+- **Version**: v4.13.1
+- **Usage**: Tokenization, parsing, parse tree traversal
 
-## Data Storage
+### Standard Library
+The project relies heavily on Go standard library:
+- `iter` — Iterator support (Go 1.23+)
+- `context` — Context cancellation support
+- `fmt`, `strings`, `os`, `path/filepath` — Standard utilities
 
-**Databases:**
-- None - In-memory model representation only
+## No External Services
 
-**File Storage:**
-- Local filesystem only
-  - Read: `ParseFile()`, `ParseDirectory()` in `gosysml2/sysml/parse.go`
-  - Input: `.sysml` files (SysML v2 textual syntax)
+This project does not integrate with:
+- External APIs
+- Databases
+- Authentication providers
+- Message queues
+- Webhooks
+- Cloud services
 
-**Caching:**
-- None - No external caching layer
-- In-memory element index built during parse (`Model.BuildIndex()`)
+## File System Interactions
 
-## Authentication & Identity
+The parser reads from:
+- Local `.sysml` and `.kerml` files
+- `libraries/` directory — SysML standard libraries
+- `validationdata/` directory — Test files
 
-**Auth Provider:**
-- None - No authentication required for library operation
+## Build-Time Dependencies
 
-## Monitoring & Observability
+- **ANTLR4** — Used only at build time to generate parsers from grammar files
+- **Java** — Required for ANTLR tool execution
 
-**Error Tracking:**
-- Custom error collection via `ErrorCollector` (`gosysml2/low/errors.go`)
-- Structured error types: `SyntaxError`, `ParseError` (`gosysml2/sysml/errors.go`)
-- No external error tracking services
+## Summary
 
-**Logs:**
-- No logging framework - returns errors to caller
-- Example programs use `fmt.Println()` for demonstration only
-
-## CI/CD & Deployment
-
-**Hosting:**
-- GitHub (inferred from `.git/` structure)
-
-**CI Pipeline:**
-- None detected - No GitHub Actions, GitLab CI, or other CI configuration found
-
-**Package Distribution:**
-- Go module: `github.com/dVoo/gosysml2`
-- Published via Go module proxy (standard Go mechanism)
-
-## Environment Configuration
-
-**Required env vars:**
-- None
-
-**Optional env vars:**
-- `GOPROXY` - Standard Go module proxy configuration
-- `GOPATH` - Standard Go workspace (if not using modules)
-
-**Secrets location:**
-- Not applicable - No secrets required
-
-## Webhooks & Callbacks
-
-**Incoming:**
-- None
-
-**Outgoing:**
-- None
-
-## Integration Points
-
-**Library Consumers:**
-- Applications import `github.com/dVoo/gosysml2/sysml` for high-level API
-- Applications import `github.com/dVoo/gosysml2/low` for low-level API
-
-**Example Integration:**
-```go
-import "github.com/dVoo/gosysml2/sysml"
-
-result := sysml.ParseFile("model.sysml")
-if !result.Success() {
-    // Handle errors locally
-}
-```
-
-**CLI Tools:** (referenced in README, not in `gosysml2/` module)
-- `cmd/verify-completeness` - Model analysis
-- `cmd/test-attrs` - Requirement attribute testing
-- `cmd/verify-parser` - Parser verification
-
----
-
-*Integration audit: 2026-02-05*
+The SysML v2 Parser is designed to be a standalone, embeddable library with zero runtime dependencies beyond the ANTLR runtime and Go standard library.
