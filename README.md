@@ -1,3 +1,6 @@
+> [!CAUTION]
+> This library and all of the contents are purely vibe-coded without further checks. Use at your own risk!
+
 # SysML v2 Parser
 
 A Go library for parsing SysML v2 models. Provides both a low-level performance-oriented API and a high-level developer-friendly API.
