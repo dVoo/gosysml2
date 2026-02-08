@@ -43,6 +43,47 @@ const (
 	KindSuccessionFlow
 )
 
+// Exported string constants for element kind comparisons.
+// Use these instead of magic strings for compile-time safety.
+const (
+	KindPartStr             = "part"
+	KindPackageStr          = "package"
+	KindItemStr             = "item"
+	KindPortStr             = "port"
+	KindAttributeStr        = "attribute"
+	KindConnectionStr       = "connection"
+	KindInterfaceStr        = "interface"
+	KindAllocationStr       = "allocation"
+	KindActionStr           = "action"
+	KindStateStr            = "state"
+	KindTransitionStr       = "transition"
+	KindConstraintStr       = "constraint"
+	KindRequirementStr      = "requirement"
+	KindConcernStr          = "concern"
+	KindUseCaseStr          = "use case"
+	KindVerificationStr     = "verification"
+	KindAnalysisStr         = "analysis"
+	KindViewStr             = "view"
+	KindViewpointStr        = "viewpoint"
+	KindCommentStr          = "comment"
+	KindDocStr              = "doc"
+	KindMetadataStr         = "metadata"
+	KindImportStr           = "import"
+	KindAliasStr            = "alias"
+	KindDependencyStr       = "dependency"
+	KindFlowStr             = "flow"
+	KindFlowEndStr          = "flow end"
+	KindEnumerationStr      = "enumeration"
+	KindEnumerationValueStr = "enumeration value"
+	KindCalculationStr      = "calculation"
+	KindControlNodeStr      = "control node"
+	KindOccurrenceStr       = "occurrence"
+	KindCaseStr             = "case"
+	KindIncludeUseCaseStr   = "include use case"
+	KindConjugatedPortStr   = "conjugated port"
+	KindSuccessionFlowStr   = "succession flow"
+)
+
 // String returns the string representation of the element kind.
 func (k ElementKind) String() string {
 	switch k {
