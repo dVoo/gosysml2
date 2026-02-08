@@ -350,15 +350,38 @@ func TestPartDefinitionVsUsageDistinction(t *testing.T) {
 // TestTypeReferenceResolution verifies that part usages have their
 // TypeRef populated with the type name from the source
 func TestTypeReferenceResolution(t *testing.T) {
-	result := ParseFile("../validationdata/01-Parts Tree/1a-Parts Tree.sysml")
+	// First, test with a simple case to understand the grammar
+	simpleInput := `
+package Test {
+    part def Vehicle;
+    part def Axle;
+    part myVehicle : Vehicle;
+    part myAxle : Axle;
+}
+`
+	result := ParseString(simpleInput)
+	if !result.Success() {
+		t.Fatalf("Failed to parse simple input: %v", result.Errors)
+	}
+
+	model := result.Model
+	parts := FindAll[*Part](model)
+
+	for _, p := range parts {
+		t.Logf("Found part: name=%s, IsDefinition=%v, TypeRef.Name=%q",
+			p.Name(), p.IsDefinition, p.TypeRef.Name())
+	}
+
+	// Now test with the real file
+	result = ParseFile("../validationdata/01-Parts Tree/1a-Parts Tree.sysml")
 	if !result.Success() {
 		t.Fatalf("Failed to parse file: %v", result.Errors)
 	}
 
-	model := result.Model
+	model = result.Model
 
 	// Find vehicle1 part usage and check its TypeRef
-	parts := FindAll[*Part](model)
+	parts = FindAll[*Part](model)
 
 	tests := []struct {
 		partName         string
@@ -399,6 +422,8 @@ func TestTypeReferenceResolution(t *testing.T) {
 		} else if typeRefName != test.expectedTypeName {
 			t.Errorf("Part usage '%s' should have TypeRef='%s', got TypeRef='%s'",
 				test.partName, test.expectedTypeName, typeRefName)
+		} else {
+			t.Logf("SUCCESS: Part usage '%s' has TypeRef='%s'", test.partName, typeRefName)
 		}
 	}
 }

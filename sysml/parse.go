@@ -464,18 +464,72 @@ func (b *modelBuilder) ExitPartDefinition(ctx *parser.PartDefinitionContext) {
 
 func (b *modelBuilder) EnterPartUsage(ctx *parser.PartUsageContext) {
 	name := ""
+	typeRef := ""
+
 	if ctx.Usage() != nil && ctx.Usage().UsageDeclaration() != nil {
-		if ident := ctx.Usage().UsageDeclaration().Identification(); ident != nil {
+		usageDecl := ctx.Usage().UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		// Extract type reference from FeatureSpecializationPart
+		if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+			typeRef = extractTypeReference(featSpecPart)
 		}
 	}
 
 	part := NewPart(name, locationFromContext(ctx), false)
 	part.parent = b.getCurrentParent()
+	if typeRef != "" {
+		part.TypeRef = NewRef[*Part](typeRef)
+	}
 	b.addToParent(part)
 
 	// Push part onto stack for nested elements (parts can have attributes, ports, etc.)
 	b.elementStack = append(b.elementStack, part)
+}
+
+// Debug helper - temporary for understanding grammar structure
+func debugPrintFeatureSpecializationPart(featSpecPart parser.IFeatureSpecializationPartContext, prefix string) {
+	if featSpecPart == nil {
+		fmt.Printf("%sFeatureSpecializationPart is nil\n", prefix)
+		return
+	}
+
+	featSpecs := featSpecPart.AllFeatureSpecialization()
+	fmt.Printf("%sFeatureSpecializationPart has %d feature specializations\n", prefix, len(featSpecs))
+
+	for i, featSpec := range featSpecs {
+		fmt.Printf("%s  [%d] FeatureSpecialization:\n", prefix, i)
+
+		if typings := featSpec.Typings(); typings != nil {
+			fmt.Printf("%s    Has Typings\n", prefix)
+			ownedTypings := typings.AllOwnedFeatureTyping()
+			fmt.Printf("%s    OwnedFeatureTypings: %d\n", prefix, len(ownedTypings))
+			for j, ot := range ownedTypings {
+				if qname := ot.QualifiedName(); qname != nil {
+					fmt.Printf("%s      [%d] QualifiedName: %s\n", prefix, j, qname.GetText())
+				} else {
+					fmt.Printf("%s      [%d] QualifiedName is nil\n", prefix, j)
+				}
+			}
+		}
+
+		if redef := featSpec.Redefinitions(); redef != nil {
+			fmt.Printf("%s    Has Redefinitions\n", prefix)
+		}
+
+		if subsets := featSpec.Subsettings(); subsets != nil {
+			fmt.Printf("%s    Has Subsettings\n", prefix)
+		}
+
+		if refs := featSpec.References(); refs != nil {
+			fmt.Printf("%s    Has References\n", prefix)
+		}
+
+		if crosses := featSpec.Crosses(); crosses != nil {
+			fmt.Printf("%s    Has Crosses\n", prefix)
+		}
+	}
 }
 
 func (b *modelBuilder) ExitPartUsage(ctx *parser.PartUsageContext) {
@@ -1938,6 +1992,41 @@ func extractRedefinitionName(featSpecPart parser.IFeatureSpecializationPartConte
 			if len(ownedRedefs) > 0 {
 				// Get the qualified name
 				if qname := ownedRedefs[0].QualifiedName(); qname != nil {
+					return qname.GetText()
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+// extractTypeReference extracts the type name from a featureSpecializationPart
+// This handles the "part name: Type" syntax where the type is specified via a typing relationship
+func extractTypeReference(featSpecPart parser.IFeatureSpecializationPartContext) string {
+	if featSpecPart == nil {
+		return ""
+	}
+
+	// Iterate through all feature specializations
+	featSpecs := featSpecPart.AllFeatureSpecialization()
+	for _, featSpec := range featSpecs {
+		// Check if this is a typing (type reference)
+		if typings := featSpec.Typings(); typings != nil {
+			// Try TypedBy first (for "name: Type" syntax)
+			if typedBy := typings.TypedBy(); typedBy != nil {
+				if ownedFeatTyping := typedBy.OwnedFeatureTyping(); ownedFeatTyping != nil {
+					if qname := ownedFeatTyping.QualifiedName(); qname != nil {
+						return qname.GetText()
+					}
+				}
+			}
+
+			// Fallback: Get all owned feature typings
+			ownedTypings := typings.AllOwnedFeatureTyping()
+			if len(ownedTypings) > 0 {
+				// Get the qualified name from the owned feature typing
+				if qname := ownedTypings[0].QualifiedName(); qname != nil {
 					return qname.GetText()
 				}
 			}
