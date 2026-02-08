@@ -11,7 +11,7 @@
   - Phase 1: ✓ Complete (4/4 plans)
   - Phase 2: ✓ Complete (3/3 plans)
   - Phase 3: ✓ Complete (2/2 plans)
-  - Phase 4: ✓ Complete (4/4 plans)
+  - Phase 4: ✓ Complete (6/6 plans)
   - Phase 5: ✓ Complete (3/3 plans)
 
 ## Current Position
@@ -63,12 +63,6 @@ See: .planning/MILESTONES.md (updated 2026-02-06)
 
 None currently.
 
-### Roadmap Evolution
-
-- v0.1 milestone shipped: 5 phases, 16 plans, 2026-02-06
-- Quick task 001: Reorganized project structure (moved gosysml2/ to root)
-- Next: v0.2 planning
-
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Directory |
@@ -76,6 +70,14 @@ None currently.
 | 001 | Reorganize project structure | 2026-02-07 | 84b6d97 | [001-reorganize-project-structure](./quick/001-reorganize-project-structure/) |
 | 003 | Fix parser issues | 2026-02-08 | 9391663 | [003-fix-parser-issues](./quick/003-fix-parser-issues/) |
 | 004 | Implement API improvements | 2026-02-08 | 5c163bc | [004-implement-api-improvements](./quick/004-implement-api-improvements/) |
+
+### Roadmap Evolution
+
+- v0.1 milestone shipped: 5 phases, 16 plans, 2026-02-06
+- Quick task 001: Reorganized project structure (moved gosysml2/ to root)
+- Quick task 003: Fixed parser issues (type references, tests)
+- Quick task 004: Implemented API improvements (kind constants, AllElements())
+- Next: v0.2 planning
 
 ---
 
