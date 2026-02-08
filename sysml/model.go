@@ -1,5 +1,7 @@
 package sysml
 
+import "iter"
+
 // ElementKind represents the kind of a SysML element.
 type ElementKind int
 
@@ -396,6 +398,52 @@ func (p *Package) Actions() []*Action { return p.actions }
 
 // Imports returns all direct child imports.
 func (p *Package) Imports() []*Import { return p.imports }
+
+// AllElements returns an iterator over all direct child elements in the package.
+// This provides a generic way to iterate over children without using type-specific accessors.
+// For recursive traversal of all descendants, use visitor.All() or visitor.Walk().
+func (p *Package) AllElements() iter.Seq[Element] {
+	return func(yield func(Element) bool) {
+		for _, child := range p.children {
+			if !yield(child) {
+				return
+			}
+		}
+	}
+}
+
+// Items returns all direct child items.
+func (p *Package) Items() []*Item { return p.items }
+
+// States returns all direct child states.
+func (p *Package) States() []*State { return p.states }
+
+// Connections returns all direct child connections.
+func (p *Package) Connections() []*Connection { return p.connections }
+
+// Interfaces returns all direct child interfaces.
+func (p *Package) Interfaces() []*Interface { return p.interfaces }
+
+// Allocations returns all direct child allocations.
+func (p *Package) Allocations() []*Allocation { return p.allocations }
+
+// Views returns all direct child views.
+func (p *Package) Views() []*View { return p.views }
+
+// Viewpoints returns all direct child viewpoints.
+func (p *Package) Viewpoints() []*Viewpoint { return p.viewpoints }
+
+// Calculations returns all direct child calculations.
+func (p *Package) Calculations() []*Calculation { return p.calculations }
+
+// Enumerations returns all direct child enumerations.
+func (p *Package) Enumerations() []*Enumeration { return p.enumerations }
+
+// Constraints returns all direct child constraints.
+func (p *Package) Constraints() []*Constraint { return p.constraints }
+
+// Dependencies returns all direct child dependencies.
+func (p *Package) Dependencies() []*Dependency { return p.dependencies }
 
 // Attribute represents a SysML attribute with name, type, and optional value.
 type Attribute struct {
