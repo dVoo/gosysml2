@@ -442,14 +442,28 @@ func (b *modelBuilder) ExitLibraryPackage(ctx *parser.LibraryPackageContext) {
 
 func (b *modelBuilder) EnterPartDefinition(ctx *parser.PartDefinitionContext) {
 	name := ""
+	var subclassPart parser.ISubclassificationPartContext
+
 	if ctx.Definition() != nil && ctx.Definition().DefinitionDeclaration() != nil {
-		if ident := ctx.Definition().DefinitionDeclaration().Identification(); ident != nil {
+		decl := ctx.Definition().DefinitionDeclaration()
+		if ident := decl.Identification(); ident != nil {
 			name = extractName(ident)
 		}
+		// Extract subclassification/specialization reference
+		subclassPart = decl.SubclassificationPart()
 	}
 
 	part := NewPart(name, locationFromContext(ctx), true)
 	part.parent = b.getCurrentParent()
+
+	// Extract and set specialization reference
+	if subclassPart != nil {
+		specRef := extractSpecializationReference(subclassPart)
+		if specRef != "" {
+			part.SetUnresolvedSpecializes(specRef)
+		}
+	}
+
 	b.addToParent(part)
 
 	// Push part onto stack for nested elements (parts can have attributes, ports, etc.)
@@ -540,14 +554,28 @@ func (b *modelBuilder) ExitPartUsage(ctx *parser.PartUsageContext) {
 
 func (b *modelBuilder) EnterItemDefinition(ctx *parser.ItemDefinitionContext) {
 	name := ""
+	var subclassPart parser.ISubclassificationPartContext
+
 	if ctx.Definition() != nil && ctx.Definition().DefinitionDeclaration() != nil {
-		if ident := ctx.Definition().DefinitionDeclaration().Identification(); ident != nil {
+		decl := ctx.Definition().DefinitionDeclaration()
+		if ident := decl.Identification(); ident != nil {
 			name = extractName(ident)
 		}
+		// Extract subclassification/specialization reference
+		subclassPart = decl.SubclassificationPart()
 	}
 
 	item := NewItem(name, locationFromContext(ctx), true)
 	item.parent = b.getCurrentParent()
+
+	// Extract and set specialization reference
+	if subclassPart != nil {
+		specRef := extractSpecializationReference(subclassPart)
+		if specRef != "" {
+			item.SetUnresolvedSpecializes(specRef)
+		}
+	}
+
 	b.addToParent(item)
 }
 
@@ -2030,6 +2058,24 @@ func extractTypeReference(featSpecPart parser.IFeatureSpecializationPartContext)
 					return qname.GetText()
 				}
 			}
+		}
+	}
+
+	return ""
+}
+
+// extractSpecializationReference extracts the specialization/supertype reference
+// from a SubclassificationPart context. This handles the "part def X :> Y" syntax.
+func extractSpecializationReference(subclassPart parser.ISubclassificationPartContext) string {
+	if subclassPart == nil {
+		return ""
+	}
+
+	// Get all owned subclassifications
+	subclassifications := subclassPart.AllOwnedSubclassification()
+	for _, subclass := range subclassifications {
+		if qname := subclass.QualifiedName(); qname != nil {
+			return qname.GetText()
 		}
 	}
 

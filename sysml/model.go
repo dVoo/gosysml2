@@ -1,6 +1,9 @@
 package sysml
 
-import "iter"
+import (
+	"fmt"
+	"iter"
+)
 
 // ElementKind represents the kind of a SysML element.
 type ElementKind int
@@ -482,6 +485,10 @@ type Part struct {
 	IsDefinition bool
 	TypeRef      Ref[*Part] // Reference to the part definition (for usages)
 
+	// Specialization (subclassification) reference for definitions using :> or "specializes"
+	Specializes           Ref[*Part]
+	unresolvedSpecializes string
+
 	// Typed children
 	attributes []*Attribute
 	parts      []*Part
@@ -494,6 +501,16 @@ func (p *Part) isUsage()      {}
 // Type returns the type reference for usages.
 func (p *Part) Type() Element {
 	return p.TypeRef.Resolved()
+}
+
+// SetUnresolvedSpecializes sets the unresolved specialization reference.
+func (p *Part) SetUnresolvedSpecializes(ref string) {
+	p.unresolvedSpecializes = ref
+}
+
+// UnresolvedSpecializes returns the unresolved specialization reference.
+func (p *Part) UnresolvedSpecializes() string {
+	return p.unresolvedSpecializes
 }
 
 // NewPart creates a new Part element.
@@ -534,6 +551,22 @@ func (p *Part) Parts() []*Part { return p.parts }
 
 // Ports returns all ports.
 func (p *Part) Ports() []*Port { return p.ports }
+
+// String returns a string representation of the part for debugging.
+func (p *Part) String() string {
+	typ := "definition"
+	if !p.IsDefinition {
+		typ = "usage"
+	}
+	specializes := ""
+	if p.Specializes.IsResolved() {
+		specializes = fmt.Sprintf(" -> %s", p.Specializes.Resolved().Name())
+	} else if p.unresolvedSpecializes != "" {
+		specializes = fmt.Sprintf(" -> %s (unresolved)", p.unresolvedSpecializes)
+	}
+	return fmt.Sprintf("Part<%s>{%s%s, attrs=%d, parts=%d, ports=%d}",
+		typ, p.name, specializes, len(p.attributes), len(p.parts), len(p.ports))
+}
 
 // Port represents a SysML port definition or usage.
 type Port struct {
@@ -1258,6 +1291,10 @@ type Item struct {
 	IsDefinition bool
 	TypeRef      Ref[*Item]
 
+	// Specialization (subclassification) reference for definitions using :> or "specializes"
+	Specializes           Ref[*Item]
+	unresolvedSpecializes string
+
 	// Typed children
 	attributes []*Attribute
 	items      []*Item
@@ -1269,6 +1306,16 @@ func (i *Item) isUsage()      {}
 // Type returns the type reference for usages.
 func (i *Item) Type() Element {
 	return i.TypeRef.Resolved()
+}
+
+// SetUnresolvedSpecializes sets the unresolved specialization reference.
+func (i *Item) SetUnresolvedSpecializes(ref string) {
+	i.unresolvedSpecializes = ref
+}
+
+// UnresolvedSpecializes returns the unresolved specialization reference.
+func (i *Item) UnresolvedSpecializes() string {
+	return i.unresolvedSpecializes
 }
 
 // NewItem creates a new Item element.
@@ -1303,6 +1350,22 @@ func (i *Item) Attributes() []*Attribute { return i.attributes }
 
 // Items returns all nested items.
 func (i *Item) Items() []*Item { return i.items }
+
+// String returns a string representation of the item for debugging.
+func (i *Item) String() string {
+	typ := "definition"
+	if !i.IsDefinition {
+		typ = "usage"
+	}
+	specializes := ""
+	if i.Specializes.IsResolved() {
+		specializes = fmt.Sprintf(" -> %s", i.Specializes.Resolved().Name())
+	} else if i.unresolvedSpecializes != "" {
+		specializes = fmt.Sprintf(" -> %s (unresolved)", i.unresolvedSpecializes)
+	}
+	return fmt.Sprintf("Item<%s>{%s%s, attrs=%d, items=%d}",
+		typ, i.name, specializes, len(i.attributes), len(i.items))
+}
 
 // Calculation represents a SysML calculation definition or usage.
 type Calculation struct {
@@ -1939,10 +2002,20 @@ func (m *Model) resolveVerificationRefs(v *Verification) {
 }
 
 func (m *Model) resolvePartRefs(p *Part) {
+	// Resolve TypeRef for usages (e.g., "part x : Vehicle")
 	if !p.IsDefinition && p.TypeRef.name != "" {
 		if elem := m.findElement(p.TypeRef.name, p); elem != nil {
 			if part, ok := elem.(*Part); ok {
 				p.TypeRef.Resolve(part)
+			}
+		}
+	}
+
+	// Resolve Specializes reference for definitions (e.g., "part def Car :> Vehicle")
+	if p.IsDefinition && p.unresolvedSpecializes != "" {
+		if elem := m.findElement(p.unresolvedSpecializes, p); elem != nil {
+			if part, ok := elem.(*Part); ok {
+				p.Specializes.Resolve(part)
 			}
 		}
 	}
@@ -2080,10 +2153,20 @@ func (m *Model) resolveIncludeUseCaseRefs(i *IncludeUseCase) {
 }
 
 func (m *Model) resolveItemRefs(i *Item) {
+	// Resolve TypeRef for usages
 	if !i.IsDefinition && i.TypeRef.name != "" {
 		if elem := m.findElement(i.TypeRef.name, i); elem != nil {
 			if item, ok := elem.(*Item); ok {
 				i.TypeRef.Resolve(item)
+			}
+		}
+	}
+
+	// Resolve Specializes reference for definitions
+	if i.IsDefinition && i.unresolvedSpecializes != "" {
+		if elem := m.findElement(i.unresolvedSpecializes, i); elem != nil {
+			if item, ok := elem.(*Item); ok {
+				i.Specializes.Resolve(item)
 			}
 		}
 	}
