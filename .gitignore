@@ -39,6 +39,9 @@ verify-parser
 .DS_Store
 Thumbs.db
 
+# notes
+notes/
+
 # Nix
 result
 result-*
