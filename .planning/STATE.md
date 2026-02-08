@@ -20,7 +20,7 @@
 **Phase:** None
 **Plan:** None
 **Status:** Ready to plan v0.2
-**Last activity:** 2026-02-08 — Completed quick task 003: Fix parser issues
+**Last activity:** 2026-02-08 — Completed quick task 004: Implement API improvements
 
 Progress: [███████████████] 100% v0.1
 
@@ -75,9 +75,10 @@ None currently.
 |---|-------------|------|--------|-----------|
 | 001 | Reorganize project structure | 2026-02-07 | 84b6d97 | [001-reorganize-project-structure](./quick/001-reorganize-project-structure/) |
 | 003 | Fix parser issues | 2026-02-08 | 9391663 | [003-fix-parser-issues](./quick/003-fix-parser-issues/) |
+| 004 | Implement API improvements | 2026-02-08 | 5c163bc | [004-implement-api-improvements](./quick/004-implement-api-improvements/) |
 
 ---
 
 *Last session: 2026-02-08*
-*Stopped at: Completed quick task 003 — Parser issues fixed (type references extracted, tests added)*
+*Stopped at: Completed quick task 004 — API improvements (kind constants, AllElements(), typed accessors)*
 *Resume file: None — Start v0.2 with `/gsd-new-milestone` or more quick tasks with `/gsd-quick`*
