@@ -186,4 +186,23 @@
 // Parser instances are not safe for concurrent use. Create a new parser
 // for each concurrent parsing operation. The resulting Model and its
 // elements are read-only after parsing and safe for concurrent access.
+//
+// # Parent-Child Relationships
+//
+// Elements in a SysML model form a tree structure. Each element (except root elements)
+// has a parent that can be accessed via the Parent() method. The parent reference is
+// set automatically when an element is added to a container (Package, Part, etc.).
+//
+// Important: The Parent() method returns the concrete container type (*Package, *Part, etc.)
+// not *baseElement. This allows type assertions to work correctly:
+//
+//	parent := element.Parent()
+//	if pkg, ok := parent.(*Package); ok {
+//	    fmt.Printf("Parent is package: %s\n", pkg.Name())
+//	} else if part, ok := parent.(*Part); ok {
+//	    fmt.Printf("Parent is part: %s\n", part.Name())
+//	}
+//
+// The parent reference is established during parsing and is available immediately
+// after the element is added to its container via AddChild().
 package sysml
