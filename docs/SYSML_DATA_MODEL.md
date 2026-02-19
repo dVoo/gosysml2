@@ -48,6 +48,7 @@ This document describes the `sysml` package data model as currently implemented 
 - `Attribute`
   - `IsDefinition`, `TypeRef Ref[Element]`
   - `DefaultValue`, `IsReadOnly`, `IsDerived`
+  - for usage forms (`attribute x : T = v`), parser populates both `TypeRef` and `DefaultValue`
 - `Port`
   - `IsDefinition`, `TypeRef Ref[*Port]`, `Direction`
   - optional `ConjugatedPort`

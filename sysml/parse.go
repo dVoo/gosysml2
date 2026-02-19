@@ -1261,10 +1261,14 @@ func (b *modelBuilder) EnterAttributeDefinition(ctx *parser.AttributeDefinitionC
 
 func (b *modelBuilder) EnterAttributeUsage(ctx *parser.AttributeUsageContext) {
 	name := ""
+	typeRef := ""
 	if ctx.Usage() != nil && ctx.Usage().UsageDeclaration() != nil {
 		usageDecl := ctx.Usage().UsageDeclaration()
 		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+			typeRef = extractTypeReference(featSpecPart)
 		}
 		// If no name from identification, check for redefinition
 		if name == "" {
@@ -1284,6 +1288,9 @@ func (b *modelBuilder) EnterAttributeUsage(ctx *parser.AttributeUsageContext) {
 	}
 
 	attr := NewAttribute(name, loc, false)
+	if typeRef != "" {
+		attr.TypeRef = NewRef[Element](typeRef)
+	}
 
 	// Extract default value if present
 	if ctx.Usage() != nil && ctx.Usage().UsageCompletion() != nil {
@@ -2225,6 +2232,17 @@ func extractTypeReference(featSpecPart parser.IFeatureSpecializationPartContext)
 			if len(ownedTypings) > 0 {
 				// Get the qualified name from the owned feature typing
 				if qname := ownedTypings[0].QualifiedName(); qname != nil {
+					return qname.GetText()
+				}
+			}
+		}
+
+		// Fallback: some textual forms (e.g. ":>") are parsed as subsettings.
+		// For high-level typing needs, use the first referenced qualified name.
+		if subsettings := featSpec.Subsettings(); subsettings != nil {
+			ownedSubsettings := subsettings.AllOwnedSubsetting()
+			if len(ownedSubsettings) > 0 {
+				if qname := ownedSubsettings[0].QualifiedName(); qname != nil {
 					return qname.GetText()
 				}
 			}

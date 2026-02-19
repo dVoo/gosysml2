@@ -260,6 +260,91 @@ package VehiclePkg {
 	}
 }
 
+func TestPartAttributeUsageTypingAndDefaultValue(t *testing.T) {
+	input := `
+package VehiclePkg {
+    part def Car {
+        attribute mass : Real = 1500.0;
+        attribute maxSpeed : Integer = 200;
+    }
+}
+`
+
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Errors)
+	}
+
+	var car *Part
+	for _, p := range FindAll[*Part](result.Model) {
+		if p.Name() == "Car" && p.IsDefinition {
+			car = p
+			break
+		}
+	}
+	if car == nil {
+		t.Fatal("expected part definition Car")
+	}
+
+	attrs := car.Attributes()
+	if len(attrs) != 2 {
+		t.Fatalf("expected 2 attributes on Car, got %d", len(attrs))
+	}
+
+	type expected struct {
+		typeRef string
+		value   string
+	}
+	want := map[string]expected{
+		"mass":     {typeRef: "Real", value: "1500.0"},
+		"maxSpeed": {typeRef: "Integer", value: "200"},
+	}
+
+	for _, attr := range attrs {
+		exp, ok := want[attr.Name()]
+		if !ok {
+			continue
+		}
+		if attr.TypeRef.Name() != exp.typeRef {
+			t.Fatalf("expected attribute %q type ref %q, got %q", attr.Name(), exp.typeRef, attr.TypeRef.Name())
+		}
+		if attr.DefaultValue != exp.value {
+			t.Fatalf("expected attribute %q default value %q, got %q", attr.Name(), exp.value, attr.DefaultValue)
+		}
+	}
+}
+
+func TestPartAttributeUsageTypingFromSpecializationForm(t *testing.T) {
+	input := `
+package VehiclePkg {
+    attribute def MassValue;
+    part def Car {
+        attribute mass :> MassValue;
+    }
+}
+`
+
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Errors)
+	}
+
+	var massAttr *Attribute
+	for _, attr := range FindAll[*Attribute](result.Model) {
+		if attr.Name() == "mass" {
+			massAttr = attr
+			break
+		}
+	}
+	if massAttr == nil {
+		t.Fatal("expected attribute usage 'mass'")
+	}
+
+	if massAttr.TypeRef.Name() != "MassValue" {
+		t.Fatalf("expected type ref %q, got %q", "MassValue", massAttr.TypeRef.Name())
+	}
+}
+
 // TestNestedPartsParentChildRelationships verifies that nested parts
 // create proper parent-child relationships via Children()
 func TestNestedPartsParentChildRelationships(t *testing.T) {

@@ -70,6 +70,13 @@ Part usages also preserve multiplicity from `FeatureSpecializationPart`:
 - `part optionalWheel : Wheel[0..1]` -> `Part.Multiplicity == "0..1"`
 - `part anyWheels : Wheel[*]` -> `Part.Multiplicity == "*"`
 
+Attribute usages preserve both typing and inline default values:
+
+- `attribute mass : Real = 1500.0;` ->
+  `Attribute.TypeRef.Name() == "Real"` and `Attribute.DefaultValue == "1500.0"`
+- `attribute maxSpeed : Integer = 200;` ->
+  `Attribute.TypeRef.Name() == "Integer"` and `Attribute.DefaultValue == "200"`
+
 ### Core types
 
 - `ParseResult`
