@@ -2831,3 +2831,9 @@ func (s *BaseSysMLv2ParserListener) EnterName(ctx *NameContext) {}
 
 // ExitName is called when production name is exited.
 func (s *BaseSysMLv2ParserListener) ExitName(ctx *NameContext) {}
+
+// EnterKeywordName is called when production keywordName is entered.
+func (s *BaseSysMLv2ParserListener) EnterKeywordName(ctx *KeywordNameContext) {}
+
+// ExitKeywordName is called when production keywordName is exited.
+func (s *BaseSysMLv2ParserListener) ExitKeywordName(ctx *KeywordNameContext) {}

@@ -85,7 +85,6 @@ var (
 	attributeShortNameKeywordPattern = regexp.MustCompile(`(?m)\battribute\s*<\s*(var)\s*>`)
 	refVarNamePattern                = regexp.MustCompile(`(?m)\bref\s+var(\s*(?:\[|:|::|:>|:>>|;|=))`)
 	assignVarTargetPattern           = regexp.MustCompile(`(?m)\bassign\s+var(\s*:=)`)
-	keywordSpecializationTailPattern = regexp.MustCompile(`(?m)([^;\n]*?)\s+(?:subsets|redefines)\b[^;\n]*;`)
 )
 
 func lineNumberAtOffset(input string, offset int) int {
@@ -151,7 +150,6 @@ func normalizeUnsupportedRequirementSyntax(input string) (string, *parseRewriteH
 	normalized = attributeShortNameKeywordPattern.ReplaceAllString(normalized, `attribute <'$1'>`)
 	normalized = refVarNamePattern.ReplaceAllString(normalized, `ref 'var'$1`)
 	normalized = assignVarTargetPattern.ReplaceAllString(normalized, `assign 'var'$1`)
-	normalized = keywordSpecializationTailPattern.ReplaceAllString(normalized, `$1;`)
 
 	// Gap 14 compatibility: "require { expr };" -> "require __gap14_constraint_N;"
 	matches := requireBlockPattern.FindAllStringSubmatchIndex(normalized, -1)
@@ -783,9 +781,18 @@ func (b *modelBuilder) EnterItemDefinition(ctx *parser.ItemDefinitionContext) {
 
 func (b *modelBuilder) EnterItemUsage(ctx *parser.ItemUsageContext) {
 	name := ""
+	typeRef := ""
+	subsettedRefs := make([]string, 0)
+	redefinedRefs := make([]string, 0)
 	if ctx.Usage() != nil && ctx.Usage().UsageDeclaration() != nil {
-		if ident := ctx.Usage().UsageDeclaration().Identification(); ident != nil {
+		usageDecl := ctx.Usage().UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+			typeRef = extractTypeReference(featSpecPart)
+			subsettedRefs = extractSubsettedFeatureNames(featSpecPart)
+			redefinedRefs = extractRedefinitionNames(featSpecPart)
 		}
 	}
 
@@ -799,6 +806,15 @@ func (b *modelBuilder) EnterItemUsage(ctx *parser.ItemUsageContext) {
 	}
 
 	item := NewItem(name, loc, false)
+	if typeRef != "" {
+		item.TypeRef = NewRef[*Item](typeRef)
+	}
+	for _, ref := range subsettedRefs {
+		item.AddUnresolvedSubsettedFeature(ref)
+	}
+	for _, ref := range redefinedRefs {
+		item.AddUnresolvedRedefinedFeature(ref)
+	}
 
 	if b.currentPkg != nil {
 		item.parent = b.currentPkg

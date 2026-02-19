@@ -1431,6 +1431,13 @@ type Item struct {
 	// Typed children
 	attributes []*Attribute
 	items      []*Item
+
+	// Feature relationships for item usages
+	SubsettedFeatures []Element // Features this item subsets (::>, :>, subsets)
+	RedefinedFeatures []Element // Features this item redefines (:>>, redefines)
+
+	unresolvedSubsettedFeatures []string
+	unresolvedRedefinedFeatures []string
 }
 
 func (i *Item) isDefinition() {}
@@ -1460,9 +1467,13 @@ func NewItem(name string, loc Location, isDefinition bool) *Item {
 			location: loc,
 			children: make([]Element, 0),
 		},
-		IsDefinition: isDefinition,
-		attributes:   make([]*Attribute, 0),
-		items:        make([]*Item, 0),
+		IsDefinition:                isDefinition,
+		attributes:                  make([]*Attribute, 0),
+		items:                       make([]*Item, 0),
+		SubsettedFeatures:           make([]Element, 0),
+		RedefinedFeatures:           make([]Element, 0),
+		unresolvedSubsettedFeatures: make([]string, 0),
+		unresolvedRedefinedFeatures: make([]string, 0),
 	}
 }
 
@@ -1502,6 +1513,22 @@ func (i *Item) String() string {
 	}
 	return fmt.Sprintf("Item<%s>{%s%s, attrs=%d, items=%d}",
 		typ, i.name, specializes, len(i.attributes), len(i.items))
+}
+
+// AddUnresolvedSubsettedFeature adds an unresolved subsetting/reference-subsetting name.
+func (i *Item) AddUnresolvedSubsettedFeature(ref string) {
+	if ref == "" {
+		return
+	}
+	i.unresolvedSubsettedFeatures = append(i.unresolvedSubsettedFeatures, ref)
+}
+
+// AddUnresolvedRedefinedFeature adds an unresolved redefined feature name.
+func (i *Item) AddUnresolvedRedefinedFeature(ref string) {
+	if ref == "" {
+		return
+	}
+	i.unresolvedRedefinedFeatures = append(i.unresolvedRedefinedFeatures, ref)
 }
 
 // Calculation represents a SysML calculation definition or usage.
@@ -2460,6 +2487,18 @@ func (m *Model) resolveItemRefs(i *Item) {
 			if item, ok := elem.(*Item); ok {
 				i.Specializes.Resolve(item)
 			}
+		}
+	}
+
+	for _, name := range i.unresolvedSubsettedFeatures {
+		if elem := m.findElement(name, i); elem != nil {
+			i.SubsettedFeatures = append(i.SubsettedFeatures, elem)
+		}
+	}
+
+	for _, name := range i.unresolvedRedefinedFeatures {
+		if elem := m.findElement(name, i); elem != nil {
+			i.RedefinedFeatures = append(i.RedefinedFeatures, elem)
 		}
 	}
 }

@@ -1351,6 +1351,9 @@ type SysMLv2ParserListener interface {
 	// EnterName is called when entering the name production.
 	EnterName(c *NameContext)
 
+	// EnterKeywordName is called when entering the keywordName production.
+	EnterKeywordName(c *KeywordNameContext)
+
 	// ExitEntryRuleRootNamespace is called when exiting the entryRuleRootNamespace production.
 	ExitEntryRuleRootNamespace(c *EntryRuleRootNamespaceContext)
 
@@ -2694,4 +2697,7 @@ type SysMLv2ParserListener interface {
 
 	// ExitName is called when exiting the name production.
 	ExitName(c *NameContext)
+
+	// ExitKeywordName is called when exiting the keywordName production.
+	ExitKeywordName(c *KeywordNameContext)
 }

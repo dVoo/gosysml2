@@ -2,6 +2,8 @@
 
 A Go library for parsing SysML v2 models. Provides both a low-level performance-oriented API and a high-level developer-friendly API.
 
+Current library version: `0.1` (see root `VERSION` file).
+
 ## Table of Contents
 
 - [Features](#features)

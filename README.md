@@ -7,6 +7,7 @@ A Go library for parsing SysML v2 models. Provides both a low-level performance-
 
 ## Project Status
 
+- **Library Version**: 0.1
 - **Grammar Coverage**: ~73% (58 of ~80 grammar elements implemented)
 - **Validation Success Rate**: 96.4% (54 of 56 validation files pass)
 - **Library Support**: Full SysML v2 standard library resolution (52 packages, 2605 elements)

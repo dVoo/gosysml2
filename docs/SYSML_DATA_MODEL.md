@@ -47,6 +47,9 @@ This document describes the `sysml` package data model as currently implemented 
   - `IsDefinition`, `TypeRef Ref[*Item]`
   - specialization via `Specializes Ref[*Item]`
   - typed children: attributes/items
+  - feature relations (usage forms):
+    - `SubsettedFeatures []Element` for `:>` / `::>` / `subsets`
+    - `RedefinedFeatures []Element` for `:>>` / `redefines`
 - `Attribute`
   - `IsDefinition`, `TypeRef Ref[Element]`
   - `DefaultValue`, `IsReadOnly`, `IsDerived`
@@ -84,13 +87,10 @@ This document describes the `sysml` package data model as currently implemented 
   - `RequirementID` is populated from `declaredShortName` when `<...>` is present
   - `Bindings` is populated from usage argument lists like `[vehicle = myVehicle]`
   - parser compatibility layer also accepts normalized requirement-related and
-    library syntax variants before model construction, including select/filter
-    lambdas in `{in ref x { ... }}` form, reserved-keyword names in specific
-    attribute/alias/short-name contexts, and `var` as a declared member name in
-    reference/assignment contexts.
-  - for library-specific inline `subsets`/`redefines` keyword forms not accepted
-    in certain declaration positions by the current grammar, parser compatibility
-    rewrites drop those unsupported specialization tails to preserve parseability.
+  library syntax variants before model construction, including select/filter
+  lambdas in `{in ref x { ... }}` form, reserved-keyword names in specific
+  attribute/alias/short-name contexts, and `var` as a declared member name in
+  reference/assignment contexts.
   - `Subject Ref[Element]`
   - relationships:
     - `DerivedFrom`, `DerivedReqs`

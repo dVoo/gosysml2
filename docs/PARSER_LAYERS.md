@@ -103,11 +103,8 @@ Requirement compatibility handling includes:
   - `alias multiplicity for ...` -> `alias 'multiplicity' for ...`
   - `attribute <var> ...` -> `attribute <'var'> ...`
   - `ref var[...]` and `assign var := ...` forms -> quoted-name form using `'var'`
-- inline keyword specialization forms in feature/member declarations are normalized
-  for compatibility:
-  - statement tails starting with `subsets`/`redefines` are dropped before parse
-    when the current grammar cannot accept those forms in that declaration position
-    (used by standard library metadata models).
+- inline keyword specialization forms in feature/member declarations are parsed
+  directly by grammar (keyword and symbolic forms are treated equivalently).
 
 Feature relationships are also exposed on `Attribute`:
 

@@ -200,6 +200,7 @@
     "EnterMultiplicityRange",
     "EnterMultiplicityRangeDecl",
     "EnterMultiplicitySubset",
+    "EnterKeywordName",
     "EnterName",
     "EnterNamedArgument",
     "EnterNamedArgumentList",

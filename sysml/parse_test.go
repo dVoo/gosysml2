@@ -333,7 +333,7 @@ package P {
 
 	contains("protected ref 'var'[0..1] :> seq;")
 	contains("assign 'var' := seq#(index);")
-	contains("derived ref item actionDefinition : Behavior[0..*] ordered;")
+	contains("derived ref item actionDefinition : Behavior[0..*] ordered redefines behavior, occurrenceDefinition subsets Metadata::metadataItems;")
 }
 
 func TestCompatibilityGapFilesParse(t *testing.T) {
@@ -355,6 +355,53 @@ func TestCompatibilityGapFilesParse(t *testing.T) {
 		if !result.Success() {
 			t.Fatalf("expected parse success for %s, got errors: %v", rel, result.Errors)
 		}
+	}
+}
+
+func TestInlineSubsetsRedefinesKeywordsCapturedOnItemUsage(t *testing.T) {
+	input := `
+package P {
+    item def TypeX;
+    item def BaseA;
+    item def BaseB;
+    item itemX : TypeX[0..*] ordered redefines BaseA, BaseB subsets BaseA;
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Errors)
+	}
+
+	var actionDef *Item
+	for _, it := range FindAll[*Item](result.Model) {
+		if it.Name() == "itemX" && !it.IsDefinition {
+			actionDef = it
+			break
+		}
+	}
+	if actionDef == nil {
+		t.Fatal("expected item usage itemX")
+	}
+
+	if actionDef.TypeRef.Name() != "TypeX" {
+		t.Fatalf("expected item type ref %q, got %q", "TypeX", actionDef.TypeRef.Name())
+	}
+
+	if len(actionDef.RedefinedFeatures) != 2 {
+		t.Fatalf("expected 2 redefined features, got %d", len(actionDef.RedefinedFeatures))
+	}
+	if actionDef.RedefinedFeatures[0].Name() != "BaseA" {
+		t.Fatalf("expected first redefined feature %q, got %q", "BaseA", actionDef.RedefinedFeatures[0].Name())
+	}
+	if actionDef.RedefinedFeatures[1].Name() != "BaseB" {
+		t.Fatalf("expected second redefined feature %q, got %q", "BaseB", actionDef.RedefinedFeatures[1].Name())
+	}
+
+	if len(actionDef.SubsettedFeatures) != 1 {
+		t.Fatalf("expected 1 subsetted feature, got %d", len(actionDef.SubsettedFeatures))
+	}
+	if actionDef.SubsettedFeatures[0].Name() != "BaseA" {
+		t.Fatalf("expected subsetted feature %q, got %q", "BaseA", actionDef.SubsettedFeatures[0].Name())
 	}
 }
 
