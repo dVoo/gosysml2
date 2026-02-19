@@ -1905,13 +1905,21 @@ func (m *Model) AddFilter(filter *ElementFilter) {
 // AddSatisfy adds a satisfy relationship to the model.
 func (m *Model) AddSatisfy(rel *SatisfyRelationship) {
 	m.Satisfies = append(m.Satisfies, rel)
-	m.Elements = append(m.Elements, rel)
+	// Avoid duplicate traversal: nested relationships are already reachable
+	// via parent.Children() and should not be added as extra model roots.
+	if rel.Parent() == nil {
+		m.Elements = append(m.Elements, rel)
+	}
 }
 
 // AddVerify adds a verify relationship to the model.
 func (m *Model) AddVerify(rel *VerifyRelationship) {
 	m.Verifies = append(m.Verifies, rel)
-	m.Elements = append(m.Elements, rel)
+	// Avoid duplicate traversal: nested relationships are already reachable
+	// via parent.Children() and should not be added as extra model roots.
+	if rel.Parent() == nil {
+		m.Elements = append(m.Elements, rel)
+	}
 }
 
 // FindPackage finds a package by name.

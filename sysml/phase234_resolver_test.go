@@ -176,3 +176,77 @@ func TestPhase234RelationshipRefNamesArePreserved(t *testing.T) {
 		t.Fatalf("expected required ref name 'REQ_1', got %q", ver.Required.Name())
 	}
 }
+
+func TestPhase234NoDuplicateFindAllForSatisfyAndVerify(t *testing.T) {
+	satModel := mustParsePhase5File(t, "../validationdata/08-Requirements/8-Requirements.sysml")
+	satFindAll := FindAll[*SatisfyRelationship](satModel)
+	if len(satFindAll) != len(satModel.Satisfies) {
+		t.Fatalf("expected satisfy FindAll (%d) to match model.Satisfies (%d)", len(satFindAll), len(satModel.Satisfies))
+	}
+
+	verModel := mustParsePhase5File(t, "../validationdata/09-Verification/9-Verification-simplified.sysml")
+	verFindAll := FindAll[*VerifyRelationship](verModel)
+	if len(verFindAll) != len(verModel.Verifies) {
+		t.Fatalf("expected verify FindAll (%d) to match model.Verifies (%d)", len(verFindAll), len(verModel.Verifies))
+	}
+}
+
+func TestPhase234RequirementIDFromDeclaredShortName(t *testing.T) {
+	input := `
+package P {
+	requirement def <'RDef'> MassRequirement;
+	requirement <'R1'> vehicleMassReq : MassRequirement;
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %v", result.Errors)
+	}
+
+	reqs := FindAll[*Requirement](result.Model)
+	if len(reqs) != 2 {
+		t.Fatalf("expected 2 requirements, got %d", len(reqs))
+	}
+
+	for _, req := range reqs {
+		switch req.Name() {
+		case "MassRequirement":
+			if req.RequirementID != "'RDef'" {
+				t.Fatalf("expected MassRequirement.RequirementID to be 'RDef', got %q", req.RequirementID)
+			}
+		case "vehicleMassReq":
+			if req.RequirementID != "'R1'" {
+				t.Fatalf("expected vehicleMassReq.RequirementID to be 'R1', got %q", req.RequirementID)
+			}
+		}
+	}
+}
+
+func TestPhase234VerifyRelationshipUsesEnclosingVerification(t *testing.T) {
+	model := mustParsePhase5File(t, "../validationdata/09-Verification/9-Verification-simplified.sysml")
+	if len(model.Verifies) == 0 {
+		t.Fatal("expected at least one verify relationship")
+	}
+
+	resolvedCount := 0
+	for _, rel := range model.Verifies {
+		if rel.Verifier.IsResolved() {
+			resolvedCount++
+		}
+	}
+	if resolvedCount == 0 {
+		t.Fatal("expected at least one verify relationship with resolved verifier")
+	}
+
+	reqs := FindAll[*Requirement](model)
+	hasVerifiedBy := false
+	for _, req := range reqs {
+		if len(req.VerifiedBy) > 0 {
+			hasVerifiedBy = true
+			break
+		}
+	}
+	if !hasVerifiedBy {
+		t.Fatal("expected at least one requirement to have VerifiedBy populated")
+	}
+}

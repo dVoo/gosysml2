@@ -790,6 +790,7 @@ func (b *modelBuilder) EnterRequirementDefinition(ctx *parser.RequirementDefinit
 
 	req := NewRequirement(name, locationFromContext(ctx), true)
 	req.setDeclaredShortName(shortName)
+	req.RequirementID = shortName
 	req.parent = b.getCurrentParent()
 	b.addToParent(req)
 
@@ -820,6 +821,7 @@ func (b *modelBuilder) EnterRequirementUsage(ctx *parser.RequirementUsageContext
 
 	req := NewRequirement(name, locationFromContext(ctx), false)
 	req.setDeclaredShortName(shortName)
+	req.RequirementID = shortName
 	if typeRef != "" {
 		req.TypeRef = NewRef[*Requirement](typeRef)
 	}
@@ -2758,10 +2760,20 @@ func (b *modelBuilder) EnterSatisfyRequirementUsage(ctx *parser.SatisfyRequireme
 // EnterRequirementVerificationUsage captures verify relationships as typed edges.
 func (b *modelBuilder) EnterRequirementVerificationUsage(ctx *parser.RequirementVerificationUsageContext) {
 	rel := NewVerifyRelationship("", locationFromContext(ctx))
-	if req := ctx.OwnedReferenceSubsetting(); req != nil {
-		rel.SetUnresolvedRequired(extractOwnedReferenceSubsetting(req))
+	switch {
+	case ctx.OwnedReferenceSubsetting() != nil:
+		rel.SetUnresolvedRequired(extractOwnedReferenceSubsetting(ctx.OwnedReferenceSubsetting()))
+	case ctx.ConstraintUsageDeclaration() != nil &&
+		ctx.ConstraintUsageDeclaration().UsageDeclaration() != nil &&
+		ctx.ConstraintUsageDeclaration().UsageDeclaration().Identification() != nil:
+		rel.SetUnresolvedRequired(extractName(ctx.ConstraintUsageDeclaration().UsageDeclaration().Identification()))
 	}
-	if decl := ctx.ConstraintUsageDeclaration(); decl != nil && decl.UsageDeclaration() != nil {
+
+	// In common SysML forms, verify relationships are contained within a verification
+	// definition/usage. Use the enclosing verification as verifier when available.
+	if owner := b.getCurrentVerification(); owner != nil && owner.Name() != "" {
+		rel.SetUnresolvedVerifier(owner.Name())
+	} else if decl := ctx.ConstraintUsageDeclaration(); decl != nil && decl.UsageDeclaration() != nil {
 		if ident := decl.UsageDeclaration().Identification(); ident != nil {
 			rel.SetUnresolvedVerifier(extractName(ident))
 		}
@@ -2769,6 +2781,15 @@ func (b *modelBuilder) EnterRequirementVerificationUsage(ctx *parser.Requirement
 	rel.parent = b.getCurrentParent()
 	b.addToParent(rel)
 	b.model.AddVerify(rel)
+}
+
+func (b *modelBuilder) getCurrentVerification() *Verification {
+	for i := len(b.elementStack) - 1; i >= 0; i-- {
+		if ver, ok := b.elementStack[i].(*Verification); ok {
+			return ver
+		}
+	}
+	return nil
 }
 
 // EnterMessage maps message usage to Message model nodes.

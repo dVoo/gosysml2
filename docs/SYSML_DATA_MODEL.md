@@ -74,6 +74,7 @@ This document describes the `sysml` package data model as currently implemented 
   - `IsAssume`, `Expression`
 - `Requirement`
   - `IsDefinition`, `TypeRef Ref[*Requirement]`, `RequirementID`
+  - `RequirementID` is populated from `declaredShortName` when `<...>` is present
   - `Subject Ref[Element]`
   - relationships:
     - `DerivedFrom`, `DerivedReqs`
@@ -106,6 +107,7 @@ This document describes the `sysml` package data model as currently implemented 
   - `SatisfyRelationship` (`Satisfier -> Requirement`)
   - `VerifyRelationship` (`Verification -> Requirement`)
   - unresolved names are also preserved in `Ref.Name()` for diagnostics
+  - verifier resolution prefers the enclosing `Verification` context when parsing `verify` usage forms
 
 ## Behavioral, flow, and time model elements
 
@@ -200,4 +202,6 @@ This document describes the `sysml` package data model as currently implemented 
 - Most relationship fields are parsed as unresolved names first.
 - `Model.ResolveReferences()` resolves references to typed pointers/`Ref[T]`.
 - `Model.BuildIndex()` creates qualified-name and short-name indices used by lookup.
+- nested `SatisfyRelationship` / `VerifyRelationship` nodes are tracked in
+  `Model.Satisfies` / `Model.Verifies` without duplicate traversal entries in `Model.Elements`.
 - If a `LibraryRegistry` is attached, qualified names can resolve into standard library elements as well.
