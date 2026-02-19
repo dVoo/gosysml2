@@ -154,6 +154,7 @@ type Model struct {
     // FindByQualifiedName(qn string) Element - fast lookup by qualified name
     // BuildIndex() - builds element index (called automatically)
     // ResolveReferences() - resolves all references (called automatically)
+    // Public slices are guaranteed to not contain nil elements
 }
 
 type Package struct {

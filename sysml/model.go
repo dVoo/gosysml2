@@ -3,6 +3,7 @@ package sysml
 import (
 	"fmt"
 	"iter"
+	"reflect"
 	"strings"
 )
 
@@ -311,7 +312,23 @@ func (e *baseElement) QualifiedName() string {
 	return parentQN + "::" + e.name
 }
 
+func isNilValue(v any) bool {
+	if v == nil {
+		return true
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return rv.IsNil()
+	default:
+		return false
+	}
+}
+
 func (e *baseElement) addChild(child Element, parent Element) {
+	if isNilValue(child) {
+		return
+	}
 	e.children = append(e.children, child)
 	child.SetParent(parent)
 }
@@ -377,39 +394,73 @@ func (p *Package) AddChild(child Element) {
 	// Track by type for type-safe access
 	switch c := child.(type) {
 	case *Package:
-		p.packages = append(p.packages, c)
+		if c != nil {
+			p.packages = append(p.packages, c)
+		}
 	case *Part:
-		p.parts = append(p.parts, c)
+		if c != nil {
+			p.parts = append(p.parts, c)
+		}
 	case *Requirement:
-		p.requirements = append(p.requirements, c)
+		if c != nil {
+			p.requirements = append(p.requirements, c)
+		}
 	case *Action:
-		p.actions = append(p.actions, c)
+		if c != nil {
+			p.actions = append(p.actions, c)
+		}
 	case *Import:
-		p.imports = append(p.imports, c)
+		if c != nil {
+			p.imports = append(p.imports, c)
+		}
 	case *Item:
-		p.items = append(p.items, c)
+		if c != nil {
+			p.items = append(p.items, c)
+		}
 	case *State:
-		p.states = append(p.states, c)
+		if c != nil {
+			p.states = append(p.states, c)
+		}
 	case *Connection:
-		p.connections = append(p.connections, c)
+		if c != nil {
+			p.connections = append(p.connections, c)
+		}
 	case *Interface:
-		p.interfaces = append(p.interfaces, c)
+		if c != nil {
+			p.interfaces = append(p.interfaces, c)
+		}
 	case *Allocation:
-		p.allocations = append(p.allocations, c)
+		if c != nil {
+			p.allocations = append(p.allocations, c)
+		}
 	case *View:
-		p.views = append(p.views, c)
+		if c != nil {
+			p.views = append(p.views, c)
+		}
 	case *Viewpoint:
-		p.viewpoints = append(p.viewpoints, c)
+		if c != nil {
+			p.viewpoints = append(p.viewpoints, c)
+		}
 	case *Calculation:
-		p.calculations = append(p.calculations, c)
+		if c != nil {
+			p.calculations = append(p.calculations, c)
+		}
 	case *Enumeration:
-		p.enumerations = append(p.enumerations, c)
+		if c != nil {
+			p.enumerations = append(p.enumerations, c)
+		}
 	case *Constraint:
-		p.constraints = append(p.constraints, c)
+		if c != nil {
+			p.constraints = append(p.constraints, c)
+		}
 	case *Dependency:
-		p.dependencies = append(p.dependencies, c)
+		if c != nil {
+			p.dependencies = append(p.dependencies, c)
+		}
 	case *Doc:
-		p.docs = append(p.docs, c)
+		if c != nil {
+			p.docs = append(p.docs, c)
+		}
 	}
 }
 
@@ -589,11 +640,17 @@ func (p *Part) AddChild(child Element) {
 
 	switch c := child.(type) {
 	case *Attribute:
-		p.attributes = append(p.attributes, c)
+		if c != nil {
+			p.attributes = append(p.attributes, c)
+		}
 	case *Part:
-		p.parts = append(p.parts, c)
+		if c != nil {
+			p.parts = append(p.parts, c)
+		}
 	case *Port:
-		p.ports = append(p.ports, c)
+		if c != nil {
+			p.ports = append(p.ports, c)
+		}
 	}
 }
 
@@ -726,9 +783,13 @@ func (p *Port) AddChild(child Element) {
 
 	switch c := child.(type) {
 	case *Port:
-		p.ports = append(p.ports, c)
+		if c != nil {
+			p.ports = append(p.ports, c)
+		}
 	case *Part:
-		p.parts = append(p.parts, c)
+		if c != nil {
+			p.parts = append(p.parts, c)
+		}
 	}
 }
 
@@ -796,7 +857,9 @@ func (c *Constraint) AddChild(child Element) {
 	c.baseElement.addChild(child, c)
 
 	if nested, ok := child.(*Constraint); ok {
-		c.constraints = append(c.constraints, nested)
+		if nested != nil {
+			c.constraints = append(c.constraints, nested)
+		}
 	}
 }
 
@@ -872,12 +935,16 @@ func (r *Requirement) AddChild(child Element) {
 
 	switch c := child.(type) {
 	case *Requirement:
-		r.requirements = append(r.requirements, c)
+		if c != nil {
+			r.requirements = append(r.requirements, c)
+		}
 	case *RequirementConstraint:
-		if c.IsAssume {
-			r.Assumptions = append(r.Assumptions, c)
-		} else {
-			r.Constraints = append(r.Constraints, c)
+		if c != nil {
+			if c.IsAssume {
+				r.Assumptions = append(r.Assumptions, c)
+			} else {
+				r.Constraints = append(r.Constraints, c)
+			}
 		}
 	}
 }
@@ -950,7 +1017,9 @@ func (a *Action) AddChild(child Element) {
 	a.baseElement.addChild(child, a)
 
 	if c, ok := child.(*Action); ok {
-		a.actions = append(a.actions, c)
+		if c != nil {
+			a.actions = append(a.actions, c)
+		}
 	}
 }
 
@@ -1033,7 +1102,9 @@ func (v *Verification) AddChild(child Element) {
 	v.baseElement.addChild(child, v)
 
 	if c, ok := child.(*Action); ok {
-		v.actions = append(v.actions, c)
+		if c != nil {
+			v.actions = append(v.actions, c)
+		}
 	}
 }
 
@@ -1338,7 +1409,9 @@ func (e *Enumeration) AddChild(child Element) {
 	e.baseElement.addChild(child, e)
 
 	if v, ok := child.(*EnumerationValue); ok {
-		e.values = append(e.values, v)
+		if v != nil {
+			e.values = append(e.values, v)
+		}
 	}
 }
 
@@ -1399,9 +1472,13 @@ func (i *Item) AddChild(child Element) {
 
 	switch c := child.(type) {
 	case *Attribute:
-		i.attributes = append(i.attributes, c)
+		if c != nil {
+			i.attributes = append(i.attributes, c)
+		}
 	case *Item:
-		i.items = append(i.items, c)
+		if c != nil {
+			i.items = append(i.items, c)
+		}
 	}
 }
 
@@ -1509,9 +1586,13 @@ func (s *State) AddChild(child Element) {
 
 	switch c := child.(type) {
 	case *State:
-		s.states = append(s.states, c)
+		if c != nil {
+			s.states = append(s.states, c)
+		}
 	case *Transition:
-		s.transitions = append(s.transitions, c)
+		if c != nil {
+			s.transitions = append(s.transitions, c)
+		}
 	}
 }
 
@@ -1650,7 +1731,9 @@ func (i *Interface) AddChild(child Element) {
 	i.baseElement.addChild(child, i)
 
 	if p, ok := child.(*Port); ok {
-		i.ports = append(i.ports, p)
+		if p != nil {
+			i.ports = append(i.ports, p)
+		}
 	}
 }
 
@@ -1877,78 +1960,117 @@ func NewModel() *Model {
 
 // AddDoc adds a documentation element to the model.
 func (m *Model) AddDoc(doc *Doc) {
+	if doc == nil {
+		return
+	}
 	m.Docs = append(m.Docs, doc)
 	m.Elements = append(m.Elements, doc)
 }
 
 // AddDependency adds a dependency to the model.
 func (m *Model) AddDependency(dep *Dependency) {
+	if dep == nil {
+		return
+	}
 	m.Dependencies = append(m.Dependencies, dep)
 	m.Elements = append(m.Elements, dep)
 }
 
 // AddPackage adds a package to the model.
 func (m *Model) AddPackage(pkg *Package) {
+	if pkg == nil {
+		return
+	}
 	m.Packages = append(m.Packages, pkg)
 	m.Elements = append(m.Elements, pkg)
 }
 
 // AddImport adds an import to the model.
 func (m *Model) AddImport(imp *Import) {
+	if imp == nil {
+		return
+	}
 	m.Imports = append(m.Imports, imp)
 	m.Elements = append(m.Elements, imp)
 }
 
 // AddComment adds a comment to the model.
 func (m *Model) AddComment(comment *Comment) {
+	if comment == nil {
+		return
+	}
 	m.Comments = append(m.Comments, comment)
 	m.Elements = append(m.Elements, comment)
 }
 
 // AddControlNode adds a control node to the model.
 func (m *Model) AddControlNode(node *ControlNode) {
+	if node == nil {
+		return
+	}
 	m.ControlNodes = append(m.ControlNodes, node)
 	m.Elements = append(m.Elements, node)
 }
 
 // AddOccurrence adds an occurrence to the model.
 func (m *Model) AddOccurrence(occ *Occurrence) {
+	if occ == nil {
+		return
+	}
 	m.Occurrences = append(m.Occurrences, occ)
 	m.Elements = append(m.Elements, occ)
 }
 
 // AddAlias adds an alias to the model.
 func (m *Model) AddAlias(alias *Alias) {
+	if alias == nil {
+		return
+	}
 	m.Aliases = append(m.Aliases, alias)
 	m.Elements = append(m.Elements, alias)
 }
 
 // AddMetadata adds metadata to the model.
 func (m *Model) AddMetadata(metadata *Metadata) {
+	if metadata == nil {
+		return
+	}
 	m.Metadata = append(m.Metadata, metadata)
 	m.Elements = append(m.Elements, metadata)
 }
 
 // AddRendering adds rendering to the model.
 func (m *Model) AddRendering(rendering *Rendering) {
+	if rendering == nil {
+		return
+	}
 	m.Renderings = append(m.Renderings, rendering)
 	m.Elements = append(m.Elements, rendering)
 }
 
 // AddMessage adds message usage to the model.
 func (m *Model) AddMessage(message *Message) {
+	if message == nil {
+		return
+	}
 	m.Messages = append(m.Messages, message)
 	m.Elements = append(m.Elements, message)
 }
 
 // AddFilter adds an element filter to the model.
 func (m *Model) AddFilter(filter *ElementFilter) {
+	if filter == nil {
+		return
+	}
 	m.Filters = append(m.Filters, filter)
 	m.Elements = append(m.Elements, filter)
 }
 
 // AddSatisfy adds a satisfy relationship to the model.
 func (m *Model) AddSatisfy(rel *SatisfyRelationship) {
+	if rel == nil {
+		return
+	}
 	m.Satisfies = append(m.Satisfies, rel)
 	// Avoid duplicate traversal: nested relationships are already reachable
 	// via parent.Children() and should not be added as extra model roots.
@@ -1959,6 +2081,9 @@ func (m *Model) AddSatisfy(rel *SatisfyRelationship) {
 
 // AddVerify adds a verify relationship to the model.
 func (m *Model) AddVerify(rel *VerifyRelationship) {
+	if rel == nil {
+		return
+	}
 	m.Verifies = append(m.Verifies, rel)
 	// Avoid duplicate traversal: nested relationships are already reachable
 	// via parent.Children() and should not be added as extra model roots.
@@ -2087,9 +2212,13 @@ func (m *Model) resolveRequirementRefs(r *Requirement) {
 	for _, name := range r.unresolvedDerivedFrom {
 		if elem := m.findElement(name, r); elem != nil {
 			if req, ok := elem.(*Requirement); ok {
-				r.DerivedFrom = append(r.DerivedFrom, req)
+				if req != nil {
+					r.DerivedFrom = append(r.DerivedFrom, req)
+				}
 				// Also set inverse relationship
-				req.DerivedReqs = append(req.DerivedReqs, r)
+				if req != nil && r != nil {
+					req.DerivedReqs = append(req.DerivedReqs, r)
+				}
 			}
 		}
 	}
@@ -2105,7 +2234,9 @@ func (m *Model) resolveRequirementRefs(r *Requirement) {
 	for _, name := range r.unresolvedVerifiedBy {
 		if elem := m.findElement(name, r); elem != nil {
 			if ver, ok := elem.(*Verification); ok {
-				r.VerifiedBy = append(r.VerifiedBy, ver)
+				if ver != nil {
+					r.VerifiedBy = append(r.VerifiedBy, ver)
+				}
 			}
 		}
 	}
@@ -2134,7 +2265,9 @@ func (m *Model) resolveVerificationRefs(v *Verification) {
 			if req, ok := elem.(*Requirement); ok {
 				v.VerifiedRequirement = req
 				// Also set inverse relationship
-				req.VerifiedBy = append(req.VerifiedBy, v)
+				if req != nil && v != nil {
+					req.VerifiedBy = append(req.VerifiedBy, v)
+				}
 			}
 		}
 	}
@@ -2195,7 +2328,9 @@ func (m *Model) resolveUseCaseRefs(u *UseCase) {
 	for _, name := range u.unresolvedIncludedUseCases {
 		if elem := m.findElement(name, u); elem != nil {
 			if uc, ok := elem.(*UseCase); ok {
-				u.IncludedUseCases = append(u.IncludedUseCases, uc)
+				if uc != nil {
+					u.IncludedUseCases = append(u.IncludedUseCases, uc)
+				}
 			}
 		}
 	}
@@ -2272,7 +2407,9 @@ func (m *Model) resolveCaseRefs(c *Case) {
 	for _, name := range c.unresolvedObjectives {
 		if elem := m.findElement(name, c); elem != nil {
 			if req, ok := elem.(*Requirement); ok {
-				c.Objectives = append(c.Objectives, req)
+				if req != nil {
+					c.Objectives = append(c.Objectives, req)
+				}
 			}
 		}
 	}
@@ -2425,7 +2562,9 @@ func (m *Model) resolveViewpointRefs(v *Viewpoint) {
 	for _, cRef := range v.unresolvedConcerns {
 		if elem := m.findElement(cRef, v); elem != nil {
 			if concern, ok := elem.(*Concern); ok {
-				v.Concerns = append(v.Concerns, concern)
+				if concern != nil {
+					v.Concerns = append(v.Concerns, concern)
+				}
 			}
 		}
 	}
@@ -2623,7 +2762,9 @@ func (m *Model) resolveMetadataRefs(md *Metadata) {
 		}
 		if elem := m.findElement(annotation.unresolvedMetadata, md); elem != nil {
 			if target, ok := elem.(*Metadata); ok {
-				annotation.Metadata.Resolve(target)
+				if target != nil {
+					annotation.Metadata.Resolve(target)
+				}
 			}
 		}
 	}
@@ -2663,7 +2804,9 @@ func (m *Model) resolveSatisfyRelationshipRefs(rel *SatisfyRelationship) {
 			if req, ok := elem.(*Requirement); ok {
 				rel.Required.Resolve(req)
 				if rel.Satisfier.IsResolved() {
-					req.SatisfiedBy = append(req.SatisfiedBy, rel.Satisfier.Resolved())
+					if satisfier := rel.Satisfier.Resolved(); !isNilValue(satisfier) && req != nil {
+						req.SatisfiedBy = append(req.SatisfiedBy, satisfier)
+					}
 				}
 			}
 		}
@@ -2683,7 +2826,9 @@ func (m *Model) resolveVerifyRelationshipRefs(rel *VerifyRelationship) {
 			if req, ok := elem.(*Requirement); ok {
 				rel.Required.Resolve(req)
 				if rel.Verifier.IsResolved() {
-					req.VerifiedBy = append(req.VerifiedBy, rel.Verifier.Resolved())
+					if verifier := rel.Verifier.Resolved(); verifier != nil && req != nil {
+						req.VerifiedBy = append(req.VerifiedBy, verifier)
+					}
 				}
 			}
 		}

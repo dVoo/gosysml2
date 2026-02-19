@@ -222,3 +222,5 @@ This document describes the `sysml` package data model as currently implemented 
 - nested `SatisfyRelationship` / `VerifyRelationship` nodes are tracked in
   `Model.Satisfies` / `Model.Verifies` without duplicate traversal entries in `Model.Elements`.
 - If a `LibraryRegistry` is attached, qualified names can resolve into standard library elements as well.
+- Public model slices are guaranteed to contain no `nil` elements (top-level collections,
+  relationship slices, and typed child-accessor returns).
