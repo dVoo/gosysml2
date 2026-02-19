@@ -345,6 +345,48 @@ package VehiclePkg {
 	}
 }
 
+func TestAttributeUsageSubsettingAndRedefinitionReferences(t *testing.T) {
+	input := `
+package VehiclePkg {
+    part def Vehicle {
+        attribute velocity : Real;
+        attribute speedA :> velocity;
+        attribute speedB ::> velocity;
+        attribute speedC :>> velocity;
+    }
+}
+`
+
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Errors)
+	}
+
+	attrs := FindAll[*Attribute](result.Model)
+	byName := map[string]*Attribute{}
+	for _, attr := range attrs {
+		byName[attr.Name()] = attr
+	}
+
+	velocity := byName["velocity"]
+	speedA := byName["speedA"]
+	speedB := byName["speedB"]
+	speedC := byName["speedC"]
+	if velocity == nil || speedA == nil || speedB == nil || speedC == nil {
+		t.Fatalf("expected attributes velocity/speedA/speedB/speedC to be present")
+	}
+
+	if len(speedA.SubsettedFeatures) != 1 || speedA.SubsettedFeatures[0].Name() != "velocity" {
+		t.Fatalf("expected speedA to subset velocity, got %+v", speedA.SubsettedFeatures)
+	}
+	if len(speedB.SubsettedFeatures) != 1 || speedB.SubsettedFeatures[0].Name() != "velocity" {
+		t.Fatalf("expected speedB to subset/reference velocity, got %+v", speedB.SubsettedFeatures)
+	}
+	if len(speedC.RedefinedFeatures) != 1 || speedC.RedefinedFeatures[0].Name() != "velocity" {
+		t.Fatalf("expected speedC to redefine velocity, got %+v", speedC.RedefinedFeatures)
+	}
+}
+
 // TestNestedPartsParentChildRelationships verifies that nested parts
 // create proper parent-child relationships via Children()
 func TestNestedPartsParentChildRelationships(t *testing.T) {

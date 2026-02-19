@@ -180,6 +180,8 @@ type Attribute struct {
     DefaultValue string
     IsReadOnly   bool
     IsDerived    bool
+    SubsettedFeatures []Element  // :> / ::> relationships
+    RedefinedFeatures []Element  // :>> relationships
 }
 
 type Requirement struct {

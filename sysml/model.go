@@ -471,6 +471,13 @@ type Attribute struct {
 	DefaultValue string       // Default value expression (as string for now)
 	IsReadOnly   bool
 	IsDerived    bool
+
+	// Feature relationships
+	SubsettedFeatures []Element // Features this attribute subsets (::>, :>)
+	RedefinedFeatures []Element // Features this attribute redefines (:>>)
+
+	unresolvedSubsettedFeatures []string
+	unresolvedRedefinedFeatures []string
 }
 
 // NewAttribute creates a new Attribute element.
@@ -482,7 +489,11 @@ func NewAttribute(name string, loc Location, isDefinition bool) *Attribute {
 			location: loc,
 			children: make([]Element, 0),
 		},
-		IsDefinition: isDefinition,
+		IsDefinition:                isDefinition,
+		SubsettedFeatures:           make([]Element, 0),
+		RedefinedFeatures:           make([]Element, 0),
+		unresolvedSubsettedFeatures: make([]string, 0),
+		unresolvedRedefinedFeatures: make([]string, 0),
 	}
 }
 
@@ -492,6 +503,22 @@ func (a *Attribute) isUsage()      {}
 // Type returns the type reference for usages.
 func (a *Attribute) Type() Element {
 	return a.TypeRef.Resolved()
+}
+
+// AddUnresolvedSubsettedFeature adds an unresolved subsetting/reference-subsetting name.
+func (a *Attribute) AddUnresolvedSubsettedFeature(ref string) {
+	if ref == "" {
+		return
+	}
+	a.unresolvedSubsettedFeatures = append(a.unresolvedSubsettedFeatures, ref)
+}
+
+// AddUnresolvedRedefinedFeature adds an unresolved redefined feature name.
+func (a *Attribute) AddUnresolvedRedefinedFeature(ref string) {
+	if ref == "" {
+		return
+	}
+	a.unresolvedRedefinedFeatures = append(a.unresolvedRedefinedFeatures, ref)
 }
 
 // Part represents a SysML part definition or usage.
@@ -2496,6 +2523,18 @@ func (m *Model) resolveAttributeRefs(a *Attribute) {
 	if a.TypeRef.name != "" {
 		if elem := m.findElement(a.TypeRef.name, a); elem != nil {
 			a.TypeRef.Resolve(elem)
+		}
+	}
+
+	for _, name := range a.unresolvedSubsettedFeatures {
+		if elem := m.findElement(name, a); elem != nil {
+			a.SubsettedFeatures = append(a.SubsettedFeatures, elem)
+		}
+	}
+
+	for _, name := range a.unresolvedRedefinedFeatures {
+		if elem := m.findElement(name, a); elem != nil {
+			a.RedefinedFeatures = append(a.RedefinedFeatures, elem)
 		}
 	}
 }

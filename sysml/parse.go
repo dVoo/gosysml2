@@ -1262,6 +1262,8 @@ func (b *modelBuilder) EnterAttributeDefinition(ctx *parser.AttributeDefinitionC
 func (b *modelBuilder) EnterAttributeUsage(ctx *parser.AttributeUsageContext) {
 	name := ""
 	typeRef := ""
+	subsettedRefs := make([]string, 0)
+	redefinedRefs := make([]string, 0)
 	if ctx.Usage() != nil && ctx.Usage().UsageDeclaration() != nil {
 		usageDecl := ctx.Usage().UsageDeclaration()
 		if ident := usageDecl.Identification(); ident != nil {
@@ -1269,10 +1271,14 @@ func (b *modelBuilder) EnterAttributeUsage(ctx *parser.AttributeUsageContext) {
 		}
 		if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
 			typeRef = extractTypeReference(featSpecPart)
+			subsettedRefs = extractSubsettedFeatureNames(featSpecPart)
+			redefinedRefs = extractRedefinitionNames(featSpecPart)
 		}
 		// If no name from identification, check for redefinition
 		if name == "" {
-			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+			if len(redefinedRefs) > 0 {
+				name = redefinedRefs[0]
+			} else if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
 				name = extractRedefinitionName(featSpecPart)
 			}
 		}
@@ -1290,6 +1296,12 @@ func (b *modelBuilder) EnterAttributeUsage(ctx *parser.AttributeUsageContext) {
 	attr := NewAttribute(name, loc, false)
 	if typeRef != "" {
 		attr.TypeRef = NewRef[Element](typeRef)
+	}
+	for _, ref := range subsettedRefs {
+		attr.AddUnresolvedSubsettedFeature(ref)
+	}
+	for _, ref := range redefinedRefs {
+		attr.AddUnresolvedRedefinedFeature(ref)
 	}
 
 	// Extract default value if present
@@ -2184,26 +2196,67 @@ func extractVisibilityIndicator(v parser.IVisibilityIndicatorContext) string {
 
 // extractRedefinitionName extracts the name from a redefinition in featureSpecializationPart
 func extractRedefinitionName(featSpecPart parser.IFeatureSpecializationPartContext) string {
-	if featSpecPart == nil {
-		return ""
+	names := extractRedefinitionNames(featSpecPart)
+	if len(names) > 0 {
+		return names[0]
 	}
+	return ""
+}
+
+// extractRedefinitionNames extracts all redefined feature names from a featureSpecializationPart.
+func extractRedefinitionNames(featSpecPart parser.IFeatureSpecializationPartContext) []string {
+	if featSpecPart == nil {
+		return nil
+	}
+
+	names := make([]string, 0)
 
 	// Iterate through all feature specializations
 	for _, featSpec := range featSpecPart.AllFeatureSpecialization() {
 		// Check if this is a redefinition
 		if redef := featSpec.Redefinitions(); redef != nil {
-			// Get the first owned redefinition
-			ownedRedefs := redef.AllOwnedRedefinition()
-			if len(ownedRedefs) > 0 {
-				// Get the qualified name
-				if qname := ownedRedefs[0].QualifiedName(); qname != nil {
-					return qname.GetText()
+			for _, ownedRedef := range redef.AllOwnedRedefinition() {
+				if qname := ownedRedef.QualifiedName(); qname != nil {
+					names = append(names, strings.TrimSpace(qname.GetText()))
+				} else if chain := ownedRedef.OwnedFeatureChain(); chain != nil {
+					names = append(names, strings.TrimSpace(chain.GetText()))
 				}
 			}
 		}
 	}
 
-	return ""
+	return names
+}
+
+// extractSubsettedFeatureNames extracts all subsetted or reference-subsetted feature names.
+func extractSubsettedFeatureNames(featSpecPart parser.IFeatureSpecializationPartContext) []string {
+	if featSpecPart == nil {
+		return nil
+	}
+
+	names := make([]string, 0)
+
+	for _, featSpec := range featSpecPart.AllFeatureSpecialization() {
+		// :> / subsets
+		if subsettings := featSpec.Subsettings(); subsettings != nil {
+			for _, ownedSubsetting := range subsettings.AllOwnedSubsetting() {
+				if qname := ownedSubsetting.QualifiedName(); qname != nil {
+					names = append(names, strings.TrimSpace(qname.GetText()))
+				} else if chain := ownedSubsetting.OwnedFeatureChain(); chain != nil {
+					names = append(names, strings.TrimSpace(chain.GetText()))
+				}
+			}
+		}
+
+		// ::> / references
+		if references := featSpec.References(); references != nil {
+			if ref := references.OwnedReferenceSubsetting(); ref != nil {
+				names = append(names, extractOwnedReferenceSubsetting(ref))
+			}
+		}
+	}
+
+	return names
 }
 
 // extractTypeReference extracts the type name from a featureSpecializationPart

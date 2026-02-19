@@ -77,6 +77,12 @@ Attribute usages preserve both typing and inline default values:
 - `attribute maxSpeed : Integer = 200;` ->
   `Attribute.TypeRef.Name() == "Integer"` and `Attribute.DefaultValue == "200"`
 
+Feature relationships are also exposed on `Attribute`:
+
+- `attribute speedA :> velocity;` -> `speedA.SubsettedFeatures` contains `velocity`
+- `attribute speedB ::> velocity;` -> `speedB.SubsettedFeatures` contains `velocity`
+- `attribute speedC :>> velocity;` -> `speedC.RedefinedFeatures` contains `velocity`
+
 ### Core types
 
 - `ParseResult`
