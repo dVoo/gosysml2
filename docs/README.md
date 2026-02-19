@@ -80,7 +80,7 @@ if !result.Success() {
 }
 
 // Find all parts in the model
-parts := sysml.FindParts(result.Model)
+parts := sysml.FindAll[*sysml.Part](result.Model)
 for _, part := range parts {
     fmt.Printf("Part: %s (definition: %v)\n", part.Name(), part.IsDefinition)
 }
@@ -99,7 +99,7 @@ results, err := sysml.ParseDirectoryParallel("./models", 4) // 4 workers
 err := sysml.ParseDirectoryStream("./models", func(r *sysml.ParseResult) error {
     if r.Success() {
         // Process each model as it's parsed
-        reqs := sysml.FindRequirements(r.Model)
+        reqs := sysml.FindAll[*sysml.Requirement](r.Model)
         fmt.Printf("%s: %d requirements\n", r.Source, len(reqs))
     }
     return nil
@@ -116,6 +116,8 @@ err := sysml.ParseDirectoryStream("./models", func(r *sysml.ParseResult) error {
 |----------|-------------|
 | `ParseString(input, opts...)` | Parse a SysML string |
 | `ParseFile(path, opts...)` | Parse a SysML file |
+| `ParseStringModel(input, opts...)` | Parse a string and return `(*Model, error)` |
+| `ParseFileModel(path, opts...)` | Parse a file and return `(*Model, error)` |
 | `ParseBytes(data, source, opts...)` | Parse from byte slice (avoids copy) |
 | `ParseReader(r, source, opts...)` | Parse from io.Reader |
 | `ParseDirectory(dir, opts...)` | Parse all .sysml files in directory |
@@ -141,6 +143,7 @@ type Ref[T Element] struct {
     // Name() returns the reference name
     // Resolved() returns the resolved element (nil if unresolved)
     // IsResolved() returns true if resolved
+    // EffectiveName() returns resolved.Name() when available, else Name()
 }
 
 type Model struct {
@@ -225,7 +228,7 @@ result := sysml.ParseString(input)
 model := result.Model
 
 // Find a requirement
-reqs := sysml.FindRequirements(model)
+reqs := sysml.FindAll[*sysml.Requirement](model)
 for _, req := range reqs {
     // Access derived requirements (real pointers, not strings!)
     for _, derived := range req.DerivedFrom {
@@ -244,7 +247,7 @@ for _, req := range reqs {
 }
 
 // For usages, access the type definition
-parts := sysml.FindParts(model)
+parts := sysml.FindAll[*sysml.Part](model)
 for _, part := range parts {
     if !part.IsDefinition && part.TypeRef.IsResolved() {
         def := part.TypeRef.Resolved()
@@ -282,20 +285,20 @@ for _, part := range pkg.Parts() {        // Returns []*Part
 
 ```go
 // Find elements by type (returns typed slices)
-packages := sysml.FindPackages(model)         // []*Package
-parts := sysml.FindParts(model)               // []*Part
-requirements := sysml.FindRequirements(model) // []*Requirement
-verifications := sysml.FindVerifications(model)
-concerns := sysml.FindConcerns(model)
-useCases := sysml.FindUseCases(model)
-analysisCases := sysml.FindAnalysisCases(model)
-actions := sysml.FindActions(model)
-attributes := sysml.FindAttributes(model)
-ports := sysml.FindPorts(model)
+packages := sysml.FindAll[*sysml.Package](model)         // []*Package
+parts := sysml.FindAll[*sysml.Part](model)               // []*Part
+requirements := sysml.FindAll[*sysml.Requirement](model) // []*Requirement
+verifications := sysml.FindAll[*sysml.Verification](model)
+concerns := sysml.FindAll[*sysml.Concern](model)
+useCases := sysml.FindAll[*sysml.UseCase](model)
+analysisCases := sysml.FindAll[*sysml.AnalysisCase](model)
+actions := sysml.FindAll[*sysml.Action](model)
+attributes := sysml.FindAll[*sysml.Attribute](model)
+ports := sysml.FindAll[*sysml.Port](model)
 
 // Find definitions vs usages
-definitions := sysml.FindDefinitions(model)  // []Definition interface
-usages := sysml.FindUsages(model)            // []Usage interface
+definitions := sysml.FindAll[sysml.Definition](model)  // []Definition interface
+usages := sysml.FindAll[sysml.Usage](model)            // []Usage interface
 
 // Find by kind or name
 elements := sysml.FindByKind(model, sysml.KindPart)
@@ -464,7 +467,7 @@ if !result.Success() {
     log.Fatal(result.Errors)
 }
 
-for _, req := range sysml.FindRequirements(result.Model) {
+for _, req := range sysml.FindAll[*sysml.Requirement](result.Model) {
     fmt.Printf("Requirement: %s\n", req.Name())
     if req.RequirementID != "" {
         fmt.Printf("  ID: %s\n", req.RequirementID)

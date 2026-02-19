@@ -125,9 +125,9 @@
 //
 // Convenient functions to find elements by type:
 //
-//	parts := sysml.FindParts(model)
-//	requirements := sysml.FindRequirements(model)
-//	verifications := sysml.FindVerifications(model)
+//	parts := sysml.FindAll[*sysml.Part](model)
+//	requirements := sysml.FindAll[*sysml.Requirement](model)
+//	verifications := sysml.FindAll[*sysml.Verification](model)
 //
 //	// Find by qualified name
 //	elem := sysml.FindByQualifiedName(model, "Vehicle::Engine")
@@ -157,7 +157,7 @@
 //	err := sysml.ParseDirectoryStream("./models", func(r *sysml.ParseResult) error {
 //	    if r.Success() {
 //	        // Process each model as it's parsed
-//	        parts := sysml.FindParts(r.Model)
+//	        parts := sysml.FindAll[*sysml.Part](r.Model)
 //	        fmt.Printf("%s: %d parts\n", r.Source, len(parts))
 //	    }
 //	    return nil

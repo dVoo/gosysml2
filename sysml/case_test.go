@@ -165,7 +165,7 @@ func TestFindCases(t *testing.T) {
 	pkg.AddChild(case2)
 	pkg.AddChild(case3)
 
-	cases := FindCases(model)
+	cases := FindAll[*Case](model)
 	if len(cases) != 3 {
 		t.Errorf("Expected 3 cases, got %d", len(cases))
 	}
@@ -205,7 +205,7 @@ func TestParseCaseDefinition(t *testing.T) {
 		t.Fatalf("Parsing failed: %v", result.Errors)
 	}
 
-	cases := FindCases(result.Model)
+	cases := FindAll[*Case](result.Model)
 	if len(cases) != 1 {
 		t.Errorf("Expected 1 case, got %d", len(cases))
 		return
@@ -231,7 +231,7 @@ func TestParseCaseUsage(t *testing.T) {
 		t.Fatalf("Parsing failed: %v", result.Errors)
 	}
 
-	cases := FindCases(result.Model)
+	cases := FindAll[*Case](result.Model)
 	if len(cases) != 1 {
 		t.Errorf("Expected 1 case, got %d", len(cases))
 		return
@@ -261,7 +261,7 @@ func TestParseCaseWithSubject(t *testing.T) {
 		t.Fatalf("Parsing failed: %v", result.Errors)
 	}
 
-	cases := FindCases(result.Model)
+	cases := FindAll[*Case](result.Model)
 	if len(cases) != 1 {
 		t.Errorf("Expected 1 case, got %d", len(cases))
 		return
@@ -288,7 +288,7 @@ func TestParseCaseWithActor(t *testing.T) {
 		t.Fatalf("Parsing failed: %v", result.Errors)
 	}
 
-	cases := FindCases(result.Model)
+	cases := FindAll[*Case](result.Model)
 	if len(cases) != 1 {
 		t.Errorf("Expected 1 case, got %d", len(cases))
 		return
@@ -320,7 +320,7 @@ func TestParseCaseWithObjective(t *testing.T) {
 		t.Fatalf("Parsing failed: %v", result.Errors)
 	}
 
-	cases := FindCases(result.Model)
+	cases := FindAll[*Case](result.Model)
 	if len(cases) != 1 {
 		t.Errorf("Expected 1 case, got %d", len(cases))
 		return
@@ -359,7 +359,7 @@ func TestCaseReferenceResolution(t *testing.T) {
 	result.Model.BuildIndex()
 	result.Model.ResolveReferences()
 
-	cases := FindCases(result.Model)
+	cases := FindAll[*Case](result.Model)
 	if len(cases) != 1 {
 		t.Fatalf("Expected 1 case, got %d", len(cases))
 	}
@@ -404,7 +404,7 @@ func TestParseCaseWithMultipleMembers(t *testing.T) {
 		t.Fatalf("Parsing failed: %v", result.Errors)
 	}
 
-	cases := FindCases(result.Model)
+	cases := FindAll[*Case](result.Model)
 	if len(cases) != 1 {
 		t.Fatalf("Expected 1 case, got %d", len(cases))
 	}
@@ -433,7 +433,7 @@ func TestParseCaseUsageWithType(t *testing.T) {
 		t.Fatalf("Parsing failed: %v", result.Errors)
 	}
 
-	cases := FindCases(result.Model)
+	cases := FindAll[*Case](result.Model)
 	if len(cases) != 2 {
 		t.Errorf("Expected 2 cases, got %d", len(cases))
 		return

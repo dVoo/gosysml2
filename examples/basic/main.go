@@ -61,7 +61,7 @@ package VehicleModel {
 	}
 
 	// Step 4: Find all parts in the model
-	parts := sysml.FindParts(result.Model)
+	parts := sysml.FindAll[*sysml.Part](result.Model)
 	fmt.Printf("\n3. Found %d part(s):\n", len(parts))
 	for _, part := range parts {
 		defType := "usage"
@@ -72,7 +72,7 @@ package VehicleModel {
 	}
 
 	// Step 5: Find all requirements
-	requirements := sysml.FindRequirements(result.Model)
+	requirements := sysml.FindAll[*sysml.Requirement](result.Model)
 	fmt.Printf("\n4. Found %d requirement(s):\n", len(requirements))
 	for _, req := range requirements {
 		fmt.Printf("   - %s\n", req.Name())

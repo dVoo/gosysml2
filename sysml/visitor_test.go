@@ -20,7 +20,7 @@ func TestFindRequirements(t *testing.T) {
 		t.Fatalf("Failed to parse: %v", result.Errors)
 	}
 
-	reqs := FindRequirements(result.Model)
+	reqs := FindAll[*Requirement](result.Model)
 	if len(reqs) != 3 {
 		t.Errorf("Expected 3 requirements, got %d", len(reqs))
 	}
@@ -57,7 +57,7 @@ func TestFindVerifications(t *testing.T) {
 		t.Fatalf("Failed to parse: %v", result.Errors)
 	}
 
-	vers := FindVerifications(result.Model)
+	vers := FindAll[*Verification](result.Model)
 	if len(vers) != 2 {
 		t.Errorf("Expected 2 verifications, got %d", len(vers))
 	}
@@ -88,7 +88,7 @@ func TestFindConcerns(t *testing.T) {
 		t.Fatalf("Failed to parse: %v", result.Errors)
 	}
 
-	concerns := FindConcerns(result.Model)
+	concerns := FindAll[*Concern](result.Model)
 	if len(concerns) != 2 {
 		t.Errorf("Expected 2 concerns, got %d", len(concerns))
 	}
@@ -107,7 +107,7 @@ func TestFindUseCases(t *testing.T) {
 		t.Fatalf("Failed to parse: %v", result.Errors)
 	}
 
-	useCases := FindUseCases(result.Model)
+	useCases := FindAll[*UseCase](result.Model)
 	if len(useCases) != 2 {
 		t.Errorf("Expected 2 use cases, got %d", len(useCases))
 	}
@@ -126,7 +126,7 @@ func TestFindAnalysisCases(t *testing.T) {
 		t.Fatalf("Failed to parse: %v", result.Errors)
 	}
 
-	analyses := FindAnalysisCases(result.Model)
+	analyses := FindAll[*AnalysisCase](result.Model)
 	if len(analyses) != 2 {
 		t.Errorf("Expected 2 analysis cases, got %d", len(analyses))
 	}
@@ -280,7 +280,7 @@ func TestRequirementIsDefinition(t *testing.T) {
 		t.Fatalf("Failed to parse: %v", result.Errors)
 	}
 
-	reqs := FindRequirements(result.Model)
+	reqs := FindAll[*Requirement](result.Model)
 	if len(reqs) != 2 {
 		t.Fatalf("Expected 2 requirements, got %d", len(reqs))
 	}
@@ -380,7 +380,7 @@ func TestDefinitionUsageInterface(t *testing.T) {
 	// implement both Definition and Usage interfaces.
 	// The IsDefinition field is what actually distinguishes them.
 
-	parts := FindParts(result.Model)
+	parts := FindAll[*Part](result.Model)
 	if len(parts) != 2 {
 		t.Fatalf("Expected 2 parts, got %d", len(parts))
 	}
@@ -403,8 +403,8 @@ func TestDefinitionUsageInterface(t *testing.T) {
 	}
 
 	// Verify FindDefinitions and FindUsages work (they find all types that implement the interface)
-	definitions := FindDefinitions(result.Model)
-	usages := FindUsages(result.Model)
+	definitions := FindAll[Definition](result.Model)
+	usages := FindAll[Usage](result.Model)
 
 	// Both should find the same Part elements (since Part implements both interfaces)
 	if len(definitions) < 2 {

@@ -89,7 +89,7 @@ func TestFindIncludeUseCases(t *testing.T) {
 	pkg.AddChild(include2)
 	pkg.AddChild(include3)
 
-	includes := FindIncludeUseCases(model)
+	includes := FindAll[*IncludeUseCase](model)
 	if len(includes) != 3 {
 		t.Errorf("Expected 3 include use cases, got %d", len(includes))
 	}
@@ -133,7 +133,7 @@ func TestParseIncludeUseCaseUsage(t *testing.T) {
 	}
 
 	// Verify use cases were parsed
-	useCases := FindUseCases(result.Model)
+	useCases := FindAll[*UseCase](result.Model)
 	if len(useCases) != 2 {
 		t.Errorf("Expected 2 use cases, got %d", len(useCases))
 	}
@@ -159,7 +159,7 @@ func TestParseIncludeUseCaseWithReference(t *testing.T) {
 	include.SetUnresolvedIncludedUseCase("BaseUseCase")
 	myUseCase.AddChild(include)
 
-	includes := FindIncludeUseCases(model)
+	includes := FindAll[*IncludeUseCase](model)
 	if len(includes) < 1 {
 		t.Fatalf("Expected at least 1 include use case, got %d", len(includes))
 	}
@@ -241,7 +241,7 @@ func TestUseCaseWithMultipleIncludes(t *testing.T) {
 	model.BuildIndex()
 	model.ResolveReferences()
 
-	includes := FindIncludeUseCases(model)
+	includes := FindAll[*IncludeUseCase](model)
 	if len(includes) != 2 {
 		t.Errorf("Expected 2 include use cases, got %d", len(includes))
 	}
@@ -279,13 +279,13 @@ func TestParseIncludeUseCaseMinimal(t *testing.T) {
 	myUseCase.AddChild(include)
 
 	// Should have use cases
-	useCases := FindUseCases(model)
+	useCases := FindAll[*UseCase](model)
 	if len(useCases) != 2 {
 		t.Errorf("Expected 2 use cases, got %d", len(useCases))
 	}
 
 	// Should have includes
-	includes := FindIncludeUseCases(model)
+	includes := FindAll[*IncludeUseCase](model)
 	if len(includes) != 1 {
 		t.Errorf("Expected 1 include use case, got %d", len(includes))
 	}

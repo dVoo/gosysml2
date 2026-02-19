@@ -75,7 +75,7 @@ package RequirementsModel {
 	fmt.Println("   Parsing successful!")
 
 	// Find all requirements
-	requirements := sysml.FindRequirements(result.Model)
+	requirements := sysml.FindAll[*sysml.Requirement](result.Model)
 	fmt.Printf("\n2. Found %d requirement(s):\n", len(requirements))
 
 	// Categorize requirements
@@ -160,7 +160,7 @@ package RequirementsModel {
 	}
 
 	// Find verification cases
-	verifications := sysml.FindVerifications(result.Model)
+	verifications := sysml.FindAll[*sysml.Verification](result.Model)
 	fmt.Printf("\n5. Found %d verification case(s):\n", len(verifications))
 	for _, ver := range verifications {
 		fmt.Printf("   - %s\n", ver.Name())
@@ -170,7 +170,7 @@ package RequirementsModel {
 	}
 
 	// Show parts that could satisfy requirements
-	parts := sysml.FindParts(result.Model)
+	parts := sysml.FindAll[*sysml.Part](result.Model)
 	fmt.Printf("\n6. Found %d part(s) in model:\n", len(parts))
 	for _, part := range parts {
 		defType := "usage"

@@ -108,7 +108,7 @@ type Ref[T Element] struct {
 }
 
 // Example usage
-for _, req := range sysml.FindRequirements(model) {
+for _, req := range sysml.FindAll[*sysml.Requirement](model) {
     if req.Subject.IsResolved() {
         fmt.Printf("Subject: %s\n", req.Subject.Resolved().Name())
     }

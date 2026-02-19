@@ -148,7 +148,7 @@ results, err := sysml.ParseDirectoryParallel("./models", 4)
 for _, r := range results {
     if r.Success() {
         // Process each model
-        reqs := sysml.FindRequirements(r.Model)
+        reqs := sysml.FindAll[*sysml.Requirement](r.Model)
         fmt.Printf("%s: %d requirements\n", r.Source, len(reqs))
     }
 }
@@ -164,7 +164,7 @@ Process files one at a time without loading all into memory:
 err := sysml.ParseDirectoryStream("./models", func(r *sysml.ParseResult) error {
     if r.Success() {
         // Process immediately, then discard
-        reqs := sysml.FindRequirements(r.Model)
+        reqs := sysml.FindAll[*sysml.Requirement](r.Model)
         fmt.Printf("%s: %d requirements\n", r.Source, len(reqs))
     }
     return nil // continue to next file
@@ -199,19 +199,19 @@ The library provides typed finder functions:
 
 ```go
 // Find all elements of a specific type
-parts := sysml.FindParts(model)
-requirements := sysml.FindRequirements(model)
-verifications := sysml.FindVerifications(model)
-concerns := sysml.FindConcerns(model)
-useCases := sysml.FindUseCases(model)
-analysisCases := sysml.FindAnalysisCases(model)
-actions := sysml.FindActions(model)
-attributes := sysml.FindAttributes(model)
-ports := sysml.FindPorts(model)
+parts := sysml.FindAll[*sysml.Part](model)
+requirements := sysml.FindAll[*sysml.Requirement](model)
+verifications := sysml.FindAll[*sysml.Verification](model)
+concerns := sysml.FindAll[*sysml.Concern](model)
+useCases := sysml.FindAll[*sysml.UseCase](model)
+analysisCases := sysml.FindAll[*sysml.AnalysisCase](model)
+actions := sysml.FindAll[*sysml.Action](model)
+attributes := sysml.FindAll[*sysml.Attribute](model)
+ports := sysml.FindAll[*sysml.Port](model)
 
 // Find definitions vs usages
-definitions := sysml.FindDefinitions(model) // []Definition interface
-usages := sysml.FindUsages(model)          // []Usage interface
+definitions := sysml.FindAll[sysml.Definition](model) // []Definition interface
+usages := sysml.FindAll[sysml.Usage](model)          // []Usage interface
 ```
 
 ### Using Typed Accessors
@@ -262,7 +262,7 @@ Example usage:
 
 ```go
 // Find a requirement
-reqs := sysml.FindRequirements(model)
+reqs := sysml.FindAll[*sysml.Requirement](model)
 for _, req := range reqs {
     // Access derived requirements (real pointers!)
     for _, derived := range req.DerivedFrom {
@@ -284,7 +284,7 @@ for _, req := range reqs {
 }
 
 // For usages, access the type definition
-parts := sysml.FindParts(model)
+parts := sysml.FindAll[*sysml.Part](model)
 for _, part := range parts {
     if !part.IsDefinition && part.TypeRef.IsResolved() {
         def := part.TypeRef.Resolved()
@@ -315,7 +315,7 @@ if !result.Success() {
     log.Fatal(result.Errors)
 }
 
-for _, req := range sysml.FindRequirements(result.Model) {
+for _, req := range sysml.FindAll[*sysml.Requirement](result.Model) {
     fmt.Printf("Requirement: %s\n", req.Name())
     
     // Access requirement ID
@@ -350,7 +350,7 @@ See [examples/requirements](examples/requirements) for a complete example.
 ### Finding Parts and Their Types
 
 ```go
-parts := sysml.FindParts(model)
+parts := sysml.FindAll[*sysml.Part](model)
 
 for _, part := range parts {
     if part.IsDefinition {
@@ -370,7 +370,7 @@ for _, part := range parts {
 
 ```go
 // Build a traceability matrix
-requirements := sysml.FindRequirements(model)
+requirements := sysml.FindAll[*sysml.Requirement](model)
 
 for _, req := range requirements {
     fmt.Printf("\n%s:\n", req.Name())

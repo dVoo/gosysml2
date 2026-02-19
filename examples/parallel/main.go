@@ -215,8 +215,8 @@ func main() {
 		}
 
 		// Count specific types
-		requirementCount += len(sysml.FindRequirements(r.Model))
-		partCount += len(sysml.FindParts(r.Model))
+		requirementCount += len(sysml.FindAll[*sysml.Requirement](r.Model))
+		partCount += len(sysml.FindAll[*sysml.Part](r.Model))
 	}
 
 	fmt.Printf("   Total packages found: %d\n", len(packageNames))

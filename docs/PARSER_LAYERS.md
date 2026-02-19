@@ -129,6 +129,8 @@ Feature relationships are also exposed on `Attribute`:
 
 - `sysml.ParseString(input, opts...)`
 - `sysml.ParseFile(path, opts...)`
+- `sysml.ParseStringModel(input, opts...) (*Model, error)` (idiomatic helper)
+- `sysml.ParseFileModel(path, opts...) (*Model, error)` (idiomatic helper)
 - `sysml.ParseBytes(data, source, opts...)`
 - `sysml.ParseReader(r, source, opts...)`
 - `sysml.ParseDirectory(dir, opts...)`
@@ -149,6 +151,7 @@ Feature relationships are also exposed on `Attribute`:
 - domain tooling (requirements traceability, architecture checks)
 - model traversal with visitors/finders
 - working with resolved typed references (`Ref[T]`)
+- getting best-available reference name with `Ref[T].EffectiveName()`
 - grammar-aligned tooling via:
   - `sysml.ResolveANTLRParserRuleName(name)`
   - `sysml.ResolveANTLRTokenName(name)`

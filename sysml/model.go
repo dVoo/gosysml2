@@ -203,6 +203,17 @@ func (r Ref[T]) Name() string {
 	return r.name
 }
 
+// EffectiveName returns the best available reference name.
+// If resolved, it prefers the resolved element's name; otherwise it falls back to unresolved name.
+func (r Ref[T]) EffectiveName() string {
+	if r.IsResolved() {
+		if resolved := r.Resolved(); any(resolved) != nil && resolved.Name() != "" {
+			return resolved.Name()
+		}
+	}
+	return r.name
+}
+
 // Resolved returns the resolved element, or nil if unresolved.
 func (r Ref[T]) Resolved() T {
 	return r.resolved
@@ -2763,6 +2774,15 @@ func (m *Model) Walk(fn func(Element) bool) {
 			return
 		}
 	}
+}
+
+// WalkAll visits all elements in the model depth-first.
+// Use Walk when you need short-circuit traversal.
+func (m *Model) WalkAll(fn func(Element)) {
+	m.Walk(func(elem Element) bool {
+		fn(elem)
+		return true
+	})
 }
 
 func walkElement(elem Element, fn func(Element) bool) bool {

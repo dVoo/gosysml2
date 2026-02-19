@@ -334,7 +334,7 @@ func TestIntegrationIteratorConsistency(t *testing.T) {
 	}
 
 	// Count packages using FindPackages (old API)
-	packagesOld := FindPackages(testModel)
+	packagesOld := FindAll[*Package](testModel)
 
 	// Count packages using OfType iterator
 	packagesIter := 0
@@ -554,7 +554,7 @@ func TestIntegrationVisitPattern(t *testing.T) {
 	Visit(testModel, visitor)
 
 	// Compare with FindPackages
-	packages := FindPackages(testModel)
+	packages := FindAll[*Package](testModel)
 	if visitor.packageCount != len(packages) {
 		t.Errorf("Visitor package count (%d) doesn't match FindPackages count (%d)", visitor.packageCount, len(packages))
 	} else {
@@ -735,7 +735,7 @@ func TestIntegrationParseString(t *testing.T) {
 	}
 
 	// Find the package
-	packages := FindPackages(result.Model)
+	packages := FindAll[*Package](result.Model)
 	if len(packages) == 0 {
 		t.Error("Expected at least one package")
 	} else {

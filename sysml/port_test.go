@@ -97,7 +97,7 @@ func TestConjugatedPortExists(t *testing.T) {
 	}
 
 	// Find ports
-	ports := FindPorts(result.Model)
+	ports := FindAll[*Port](result.Model)
 	if len(ports) != 1 {
 		t.Errorf("Expected 1 port, got %d", len(ports))
 		return
@@ -143,7 +143,7 @@ func TestConjugatedPortOriginalRef(t *testing.T) {
 	result.Model.BuildIndex()
 	result.Model.ResolveReferences()
 
-	ports := FindPorts(result.Model)
+	ports := FindAll[*Port](result.Model)
 	if len(ports) != 1 {
 		t.Fatalf("Expected 1 port, got %d", len(ports))
 	}
@@ -194,7 +194,7 @@ func TestFindConjugatedPorts(t *testing.T) {
 		t.Fatalf("Parsing failed: %v", result.Errors)
 	}
 
-	conjugatedPorts := FindConjugatedPorts(result.Model)
+	conjugatedPorts := FindAll[*ConjugatedPort](result.Model)
 	if len(conjugatedPorts) != 2 {
 		t.Errorf("Expected 2 conjugated ports, got %d", len(conjugatedPorts))
 	}
@@ -222,7 +222,7 @@ func TestParsePortConjugation(t *testing.T) {
 	}
 
 	// Find the port definition
-	ports := FindPorts(result.Model)
+	ports := FindAll[*Port](result.Model)
 
 	// We should have MyPort (definition) and p (usage)
 	var myPortDef *Port
@@ -259,7 +259,7 @@ func TestConjugatedPortOnlyForDefinitions(t *testing.T) {
 		t.Fatalf("Parsing failed: %v", result.Errors)
 	}
 
-	ports := FindPorts(result.Model)
+	ports := FindAll[*Port](result.Model)
 
 	var defCount, usageCount int
 	for _, port := range ports {
@@ -299,7 +299,7 @@ func TestMultipleConjugatedPorts(t *testing.T) {
 		t.Fatalf("Parsing failed: %v", result.Errors)
 	}
 
-	conjugatedPorts := FindConjugatedPorts(result.Model)
+	conjugatedPorts := FindAll[*ConjugatedPort](result.Model)
 	if len(conjugatedPorts) != 3 {
 		t.Fatalf("Expected 3 conjugated ports, got %d", len(conjugatedPorts))
 	}

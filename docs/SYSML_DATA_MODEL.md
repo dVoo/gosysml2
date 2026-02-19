@@ -14,6 +14,8 @@ This document describes the `sysml` package data model as currently implemented 
   - `Documentation()`
 - `Definition` and `Usage` marker interfaces
 - `Ref[T Element]`: typed reference that can be unresolved/resolved
+  - `EffectiveName() string` returns resolved element name when available,
+    otherwise the unresolved reference name
 - concrete elements also preserve `DeclaredShortName()` when source uses `<...>`
 
 ### Root container
@@ -205,10 +207,11 @@ This document describes the `sysml` package data model as currently implemented 
 
 - visitor-based traversal: `Visitor`, `BaseVisitor`, `Visit(model, visitor)`
 - generic traversal: `Walk(model, fn)`
+- no-early-exit traversal helpers: `model.WalkAll(fn)`, `WalkAll(model, fn)`
 - iterators:
   - `All(model)`, `OfType[T](model)`, `OfKind(model, kind)`
 - finder helpers:
-  - `FindPackages`, `FindParts`, `FindRequirements`, `FindVerifications`, etc.
+  - canonical generic lookup: `FindAll[T](model)`
   - `FindByKind`, `FindByName`, `FindByQualifiedName`, `Filter`
 
 ## Notes on resolution behavior

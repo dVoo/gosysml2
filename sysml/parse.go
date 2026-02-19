@@ -265,11 +265,32 @@ func getOrCreateRegistry(cfg *parseConfig) *LibraryRegistry {
 }
 
 // parseWithSource parses SysML input with a specified source identifier.
-func parseWithSource(input, source string, opts ...ParseOption) *ParseResult {
+func parseWithSource(input, source string, opts ...ParseOption) (result *ParseResult) {
 	cfg := &parseConfig{}
 	for _, opt := range opts {
 		opt(cfg)
 	}
+	result = &ParseResult{
+		Source: source,
+	}
+
+	// API-2 ergonomics: parser panics are converted into regular parse errors.
+	defer func() {
+		if r := recover(); r != nil {
+			result.Model = nil
+			result.Tree = nil
+			result.Errors = &ParseError{
+				Errors: []*Error{{
+					Line:    0,
+					Column:  0,
+					Message: fmt.Sprintf("parser panic: %v", r),
+					Context: "panic",
+				}},
+				Source: source,
+				Input:  input,
+			}
+		}
+	}()
 
 	// Get or create library registry
 	registry := getOrCreateRegistry(cfg)
@@ -277,10 +298,6 @@ func parseWithSource(input, source string, opts ...ParseOption) *ParseResult {
 
 	// Use low-level parser
 	tree, lowErrors := low.Parse(normalizedInput)
-
-	result := &ParseResult{
-		Source: source,
-	}
 
 	if !cfg.discardTree {
 		result.Tree = tree
@@ -347,6 +364,31 @@ func ParseReader(r io.Reader, source string, opts ...ParseOption) *ParseResult {
 		}
 	}
 	return parseWithSource(string(content), source, opts...)
+}
+
+func modelOrParseError(result *ParseResult, source string) (*Model, error) {
+	if result == nil {
+		return nil, fmt.Errorf("parse failed for %s: nil result", source)
+	}
+	if !result.Success() {
+		if result.Errors != nil {
+			return nil, result.Errors
+		}
+		return nil, fmt.Errorf("parse failed for %s", source)
+	}
+	return result.Model, nil
+}
+
+// ParseStringModel parses SysML text and returns model/error in idiomatic Go style.
+func ParseStringModel(input string, opts ...ParseOption) (*Model, error) {
+	result := ParseString(input, opts...)
+	return modelOrParseError(result, "<string>")
+}
+
+// ParseFileModel parses a SysML file and returns model/error in idiomatic Go style.
+func ParseFileModel(filename string, opts ...ParseOption) (*Model, error) {
+	result := ParseFile(filename, opts...)
+	return modelOrParseError(result, filename)
 }
 
 // ParseDirectory parses all .sysml files in a directory.

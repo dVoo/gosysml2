@@ -62,7 +62,7 @@ func highLevelExample(input string) {
 	})
 
 	// Find all parts
-	parts := sysml.FindParts(result.Model)
+	parts := sysml.FindAll[*sysml.Part](result.Model)
 	fmt.Printf("\nFound %d parts\n", len(parts))
 	for _, part := range parts {
 		defType := "usage"
