@@ -514,12 +514,14 @@ fmt.Printf("Found %d part definitions\n", len(definitions))
 
 - **[USAGE.md](USAGE.md)** - Comprehensive usage guide covering common scenarios, patterns, and best practices
 - **[PERFORMANCE.md](PERFORMANCE.md)** - Detailed performance optimization strategies and capacity planning
-- **[Examples](examples/)** - Working code examples:
-  - [basic](examples/basic/) - Simple parsing example
-  - [requirements](examples/requirements/) - Requirement traceability
-  - [validation](examples/validation/) - Error handling
-  - [parallel](examples/parallel/) - Parallel parsing
-  - [visitor](examples/visitor/) - Custom visitors
+- **[PARSER_LAYERS.md](PARSER_LAYERS.md)** - Low-level and high-level parser architecture and API boundaries
+- **[SYSML_DATA_MODEL.md](SYSML_DATA_MODEL.md)** - Currently implemented high-level SysML data model inventory
+- **[Examples](../examples/)** - Working code examples:
+  - [basic](../examples/basic/) - Simple parsing example
+  - [requirements](../examples/requirements/) - Requirement traceability
+  - [validation](../examples/validation/) - Error handling
+  - [parallel](../examples/parallel/) - Parallel parsing
+  - [visitor](../examples/visitor/) - Custom visitors
 - **[Project Usage Guide](../docs/usage-guide.md)** - Project-level documentation covering command-line tools and validation data
 
 ## License

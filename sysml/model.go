@@ -3,6 +3,7 @@ package sysml
 import (
 	"fmt"
 	"iter"
+	"strings"
 )
 
 // ElementKind represents the kind of a SysML element.
@@ -262,21 +263,27 @@ type Usage interface {
 
 // baseElement provides common implementation for all elements.
 type baseElement struct {
-	kind          ElementKind
-	name          string
-	location      Location
-	parent        Element
-	children      []Element
-	documentation string
+	kind              ElementKind
+	name              string
+	declaredShortName string
+	location          Location
+	parent            Element
+	children          []Element
+	documentation     string
 }
 
-func (e *baseElement) Kind() ElementKind     { return e.kind }
-func (e *baseElement) Name() string          { return e.name }
-func (e *baseElement) Location() Location    { return e.location }
-func (e *baseElement) Parent() Element       { return e.parent }
-func (e *baseElement) Children() []Element   { return e.children }
-func (e *baseElement) SetParent(p Element)   { e.parent = p }
-func (e *baseElement) Documentation() string { return e.documentation }
+func (e *baseElement) Kind() ElementKind         { return e.kind }
+func (e *baseElement) Name() string              { return e.name }
+func (e *baseElement) Location() Location        { return e.location }
+func (e *baseElement) Parent() Element           { return e.parent }
+func (e *baseElement) Children() []Element       { return e.children }
+func (e *baseElement) SetParent(p Element)       { e.parent = p }
+func (e *baseElement) Documentation() string     { return e.documentation }
+func (e *baseElement) DeclaredShortName() string { return e.declaredShortName }
+
+func (e *baseElement) setDeclaredShortName(name string) {
+	e.declaredShortName = name
+}
 
 func (e *baseElement) SetDocumentation(doc string) {
 	e.documentation = doc
@@ -1792,6 +1799,8 @@ type Model struct {
 
 	// Index for fast lookup by qualified name
 	elementIndex map[string]Element
+	// Index for resolving elements by declared short name (e.g. <'R1'>)
+	shortNameIndex map[string][]Element
 
 	// Library registry for resolving qualified names to library elements
 	libraryRegistry *LibraryRegistry
@@ -1800,23 +1809,24 @@ type Model struct {
 // NewModel creates a new empty model.
 func NewModel() *Model {
 	return &Model{
-		Packages:     make([]*Package, 0),
-		Imports:      make([]*Import, 0),
-		Comments:     make([]*Comment, 0),
-		Dependencies: make([]*Dependency, 0),
-		Docs:         make([]*Doc, 0),
-		Flows:        make([]*Flow, 0),
-		ControlNodes: make([]*ControlNode, 0),
-		Occurrences:  make([]*Occurrence, 0),
-		Aliases:      make([]*Alias, 0),
-		Metadata:     make([]*Metadata, 0),
-		Renderings:   make([]*Rendering, 0),
-		Messages:     make([]*Message, 0),
-		Filters:      make([]*ElementFilter, 0),
-		Satisfies:    make([]*SatisfyRelationship, 0),
-		Verifies:     make([]*VerifyRelationship, 0),
-		Elements:     make([]Element, 0),
-		elementIndex: make(map[string]Element),
+		Packages:       make([]*Package, 0),
+		Imports:        make([]*Import, 0),
+		Comments:       make([]*Comment, 0),
+		Dependencies:   make([]*Dependency, 0),
+		Docs:           make([]*Doc, 0),
+		Flows:          make([]*Flow, 0),
+		ControlNodes:   make([]*ControlNode, 0),
+		Occurrences:    make([]*Occurrence, 0),
+		Aliases:        make([]*Alias, 0),
+		Metadata:       make([]*Metadata, 0),
+		Renderings:     make([]*Rendering, 0),
+		Messages:       make([]*Message, 0),
+		Filters:        make([]*ElementFilter, 0),
+		Satisfies:      make([]*SatisfyRelationship, 0),
+		Verifies:       make([]*VerifyRelationship, 0),
+		Elements:       make([]Element, 0),
+		elementIndex:   make(map[string]Element),
+		shortNameIndex: make(map[string][]Element),
 	}
 }
 
@@ -1929,10 +1939,17 @@ func (m *Model) FindByQualifiedName(qn string) Element {
 // This should be called after parsing is complete.
 func (m *Model) BuildIndex() {
 	m.elementIndex = make(map[string]Element)
+	m.shortNameIndex = make(map[string][]Element)
 	m.Walk(func(elem Element) bool {
 		qn := elem.QualifiedName()
 		if qn != "" {
 			m.elementIndex[qn] = elem
+		}
+		if snElem, ok := elem.(interface{ DeclaredShortName() string }); ok {
+			sn := snElem.DeclaredShortName()
+			if sn != "" {
+				m.shortNameIndex[sn] = append(m.shortNameIndex[sn], elem)
+			}
 		}
 		return true
 	})
@@ -2613,33 +2630,65 @@ func (m *Model) resolveVerifyRelationshipRefs(rel *VerifyRelationship) {
 // and finally falls back to the library registry if available.
 // User definitions in the model always take precedence over library definitions.
 func (m *Model) findElement(name string, context Element) Element {
-	// First try direct qualified name lookup in model (user definitions take precedence)
-	if elem := m.elementIndex[name]; elem != nil {
+	tryByQualifiedLookup := func(candidate string) Element {
+		// First try direct qualified name lookup in model (user definitions take precedence)
+		if elem := m.elementIndex[candidate]; elem != nil {
+			return elem
+		}
+
+		// Try relative to context
+		if context != nil {
+			// Walk up the parent chain
+			current := context.Parent()
+			for current != nil {
+				qn := current.QualifiedName()
+				if qn != "" {
+					fullQN := qn + "::" + candidate
+					if elem := m.elementIndex[fullQN]; elem != nil {
+						return elem
+					}
+				}
+				current = current.Parent()
+			}
+		}
+
+		// Try as simple name in any package
+		for _, pkg := range m.Packages {
+			fullQN := pkg.Name() + "::" + candidate
+			if elem := m.elementIndex[fullQN]; elem != nil {
+				return elem
+			}
+		}
+		return nil
+	}
+
+	if elem := tryByQualifiedLookup(name); elem != nil {
 		return elem
 	}
 
-	// Try relative to context
-	if context != nil {
-		// Walk up the parent chain
-		current := context.Parent()
-		for current != nil {
-			qn := current.QualifiedName()
-			if qn != "" {
-				fullQN := qn + "::" + name
-				if elem := m.elementIndex[fullQN]; elem != nil {
-					return elem
-				}
-			}
-			current = current.Parent()
+	// Support dotted feature-chain notation by mapping dots to namespace separators.
+	// Example: vehicle1.engine1 -> vehicle1::engine1
+	if strings.Contains(name, ".") {
+		if elem := tryByQualifiedLookup(strings.ReplaceAll(name, ".", "::")); elem != nil {
+			return elem
 		}
 	}
 
-	// Try as simple name in any package
-	for _, pkg := range m.Packages {
-		fullQN := pkg.Name() + "::" + name
-		if elem := m.elementIndex[fullQN]; elem != nil {
-			return elem
+	// Resolve by short name (declaredShortName in grammar).
+	if candidates := m.shortNameIndex[name]; len(candidates) > 0 {
+		if len(candidates) == 1 || context == nil {
+			return candidates[0]
 		}
+		// Prefer a candidate in the nearest containing scope.
+		for cur := context.Parent(); cur != nil; cur = cur.Parent() {
+			curQN := cur.QualifiedName()
+			for _, elem := range candidates {
+				if curQN == "" || strings.HasPrefix(elem.QualifiedName(), curQN+"::") {
+					return elem
+				}
+			}
+		}
+		return candidates[0]
 	}
 
 	// Finally, try library registry if available

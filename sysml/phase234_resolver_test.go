@@ -109,3 +109,70 @@ func TestPhase234ResolveNewRepresentationRefs(t *testing.T) {
 		t.Fatal("requirement verified-by inverse relation missing")
 	}
 }
+
+func TestPhase234ModelTracksNestedSatisfyAndVerify(t *testing.T) {
+	satModel := mustParsePhase5File(t, "../validationdata/08-Requirements/8-Requirements.sysml")
+	if len(satModel.Satisfies) == 0 {
+		t.Fatal("expected model.Satisfies to include package-nested satisfy relationships")
+	}
+
+	verModel := mustParsePhase5File(t, "../validationdata/09-Verification/9-Verification-simplified.sysml")
+	if len(verModel.Verifies) == 0 {
+		t.Fatal("expected model.Verifies to include package-nested verify relationships")
+	}
+}
+
+func TestPhase234ResolveByShortNameAndDottedChain(t *testing.T) {
+	loc := Location{Line: 1, Column: 1}
+	m := NewModel()
+	pkg := NewPackage("P", loc)
+	m.AddPackage(pkg)
+
+	req := NewRequirement("vehicleMassReq", loc, true)
+	req.setDeclaredShortName("'R1'")
+	pkg.AddChild(req)
+
+	vehicle := NewPart("vehicle1_c1", loc, true)
+	engine := NewPart("engine_v1", loc, true)
+	vehicle.AddChild(engine)
+	pkg.AddChild(vehicle)
+
+	satisfy := NewSatisfyRelationship("sat", loc)
+	satisfy.SetUnresolvedRequired("'R1'")
+	satisfy.SetUnresolvedSatisfier("vehicle1_c1.engine_v1")
+	pkg.AddChild(satisfy)
+
+	m.BuildIndex()
+	m.ResolveReferences()
+
+	if !satisfy.Required.IsResolved() || satisfy.Required.Resolved() != req {
+		t.Fatal("short-name requirement reference was not resolved")
+	}
+	if !satisfy.Satisfier.IsResolved() || satisfy.Satisfier.Resolved() != engine {
+		t.Fatal("dotted-chain satisfier reference was not resolved")
+	}
+}
+
+func TestPhase234RelationshipRefNamesArePreserved(t *testing.T) {
+	loc := Location{Line: 1, Column: 1}
+
+	sat := NewSatisfyRelationship("sat", loc)
+	sat.SetUnresolvedSatisfier("myCar")
+	sat.SetUnresolvedRequired("vehicleMassReq")
+	if sat.Satisfier.Name() != "myCar" {
+		t.Fatalf("expected satisfier ref name 'myCar', got %q", sat.Satisfier.Name())
+	}
+	if sat.Required.Name() != "vehicleMassReq" {
+		t.Fatalf("expected required ref name 'vehicleMassReq', got %q", sat.Required.Name())
+	}
+
+	ver := NewVerifyRelationship("ver", loc)
+	ver.SetUnresolvedVerifier("V1")
+	ver.SetUnresolvedRequired("REQ_1")
+	if ver.Verifier.Name() != "V1" {
+		t.Fatalf("expected verifier ref name 'V1', got %q", ver.Verifier.Name())
+	}
+	if ver.Required.Name() != "REQ_1" {
+		t.Fatalf("expected required ref name 'REQ_1', got %q", ver.Required.Name())
+	}
+}

@@ -170,11 +170,13 @@ func NewSatisfyRelationship(name string, loc Location) *SatisfyRelationship {
 // SetUnresolvedSatisfier sets the unresolved satisfier reference.
 func (r *SatisfyRelationship) SetUnresolvedSatisfier(ref string) {
 	r.unresolvedSatisfier = ref
+	r.Satisfier = NewRef[Element](ref)
 }
 
 // SetUnresolvedRequired sets the unresolved requirement reference.
 func (r *SatisfyRelationship) SetUnresolvedRequired(ref string) {
 	r.unresolvedRequired = ref
+	r.Required = NewRef[*Requirement](ref)
 }
 
 // VerifyRelationship is a typed edge from a verification case to a requirement.
@@ -202,11 +204,13 @@ func NewVerifyRelationship(name string, loc Location) *VerifyRelationship {
 // SetUnresolvedVerifier sets the unresolved verifier reference.
 func (r *VerifyRelationship) SetUnresolvedVerifier(ref string) {
 	r.unresolvedVerifier = ref
+	r.Verifier = NewRef[*Verification](ref)
 }
 
 // SetUnresolvedRequired sets the unresolved requirement reference.
 func (r *VerifyRelationship) SetUnresolvedRequired(ref string) {
 	r.unresolvedRequired = ref
+	r.Required = NewRef[*Requirement](ref)
 }
 
 // ElementFilter represents an element filter package member.

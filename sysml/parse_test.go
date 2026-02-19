@@ -174,6 +174,48 @@ func TestEmptyInput(t *testing.T) {
 	}
 }
 
+func TestRequirementDeclaredShortNameAndTyping(t *testing.T) {
+	input := `
+package VehicleReqs {
+    requirement def MassRequirement;
+    requirement <'R1'> vehicleMassReq : MassRequirement;
+}
+`
+
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Errors)
+	}
+
+	reqs := FindAll[*Requirement](result.Model)
+	if len(reqs) != 2 {
+		t.Fatalf("expected 2 requirements, got %d", len(reqs))
+	}
+
+	var usage *Requirement
+	for _, r := range reqs {
+		if !r.IsDefinition {
+			usage = r
+			break
+		}
+	}
+	if usage == nil {
+		t.Fatal("expected a requirement usage")
+	}
+
+	if usage.Name() != "vehicleMassReq" {
+		t.Fatalf("expected usage name 'vehicleMassReq', got %q", usage.Name())
+	}
+
+	if usage.DeclaredShortName() != "'R1'" {
+		t.Fatalf("expected declared short name %q, got %q", "'R1'", usage.DeclaredShortName())
+	}
+
+	if usage.TypeRef.Name() != "MassRequirement" {
+		t.Fatalf("expected type ref 'MassRequirement', got %q", usage.TypeRef.Name())
+	}
+}
+
 // TestNestedPartsParentChildRelationships verifies that nested parts
 // create proper parent-child relationships via Children()
 func TestNestedPartsParentChildRelationships(t *testing.T) {

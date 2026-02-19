@@ -210,3 +210,20 @@ func TestWithParseTree(t *testing.T) {
 		t.Errorf("validation failed: %s", p2.Errors())
 	}
 }
+
+func TestParseRequirementWithDeclaredShortName(t *testing.T) {
+	input := `
+package VehicleReqs {
+    requirement def MassRequirement;
+    requirement <'R1'> vehicleMassReq : MassRequirement;
+}
+`
+
+	tree, errors := Parse(input)
+	if errors.HasErrors() {
+		t.Fatalf("parse failed: %s", errors)
+	}
+	if tree == nil {
+		t.Fatal("parse tree is nil")
+	}
+}

@@ -72,6 +72,8 @@ func main() {
 - **[Usage Guide](docs/USAGE.md)** — Comprehensive usage examples and patterns
 - **[Performance Guide](docs/PERFORMANCE.md)** — Performance optimization tips
 - **[Project Usage Guide](docs/usage-guide.md)** — Project-level documentation
+- **[Parser Layers](docs/PARSER_LAYERS.md)** — Low-level vs high-level parser architecture and API usage
+- **[SysML Data Model](docs/SYSML_DATA_MODEL.md)** — Currently implemented high-level `sysml` model types
 
 ## Repository Structure
 

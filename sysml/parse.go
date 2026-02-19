@@ -679,11 +679,22 @@ func (b *modelBuilder) EnterImport_(ctx *parser.Import_Context) {
 
 // EnterAliasMember maps alias members to first-class Alias model elements.
 func (b *modelBuilder) EnterAliasMember(ctx *parser.AliasMemberContext) {
-	name := ""
-	if names := ctx.AllName(); len(names) > 0 {
+	// Grammar (SysML/KerML): 'alias' ( '<' memberShortName = NAME '>' )? ( memberName = NAME )? 'for' ...
+	var shortName, name string
+	names := ctx.AllName()
+	if ctx.LT() != nil {
+		if len(names) > 0 {
+			shortName = strings.TrimSpace(names[0].GetText())
+		}
+		if len(names) > 1 {
+			name = strings.TrimSpace(names[1].GetText())
+		}
+	} else if len(names) > 0 {
 		name = strings.TrimSpace(names[0].GetText())
 	}
+
 	alias := NewAlias(name, locationFromContext(ctx))
+	alias.setDeclaredShortName(shortName)
 	alias.SetUnresolvedTarget(extractQualifiedName(ctx.QualifiedName()))
 	alias.parent = b.getCurrentParent()
 	b.addToParent(alias)
@@ -770,13 +781,15 @@ func (b *modelBuilder) resolveLibraryImport(imp *Import, namespace string) {
 
 func (b *modelBuilder) EnterRequirementDefinition(ctx *parser.RequirementDefinitionContext) {
 	name := ""
+	shortName := ""
 	if decl := ctx.DefinitionDeclaration(); decl != nil {
 		if ident := decl.Identification(); ident != nil {
-			name = extractName(ident)
+			name, shortName = extractIdentificationNames(ident)
 		}
 	}
 
 	req := NewRequirement(name, locationFromContext(ctx), true)
+	req.setDeclaredShortName(shortName)
 	req.parent = b.getCurrentParent()
 	b.addToParent(req)
 
@@ -792,13 +805,24 @@ func (b *modelBuilder) ExitRequirementDefinition(ctx *parser.RequirementDefiniti
 
 func (b *modelBuilder) EnterRequirementUsage(ctx *parser.RequirementUsageContext) {
 	name := ""
+	shortName := ""
+	typeRef := ""
 	if ctx.ConstraintUsageDeclaration() != nil {
-		if ident := ctx.ConstraintUsageDeclaration().UsageDeclaration().Identification(); ident != nil {
-			name = extractName(ident)
+		if usageDecl := ctx.ConstraintUsageDeclaration().UsageDeclaration(); usageDecl != nil {
+			if ident := usageDecl.Identification(); ident != nil {
+				name, shortName = extractIdentificationNames(ident)
+			}
+			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+				typeRef = extractTypeReference(featSpecPart)
+			}
 		}
 	}
 
 	req := NewRequirement(name, locationFromContext(ctx), false)
+	req.setDeclaredShortName(shortName)
+	if typeRef != "" {
+		req.TypeRef = NewRef[*Requirement](typeRef)
+	}
 	req.parent = b.getCurrentParent()
 	b.addToParent(req)
 
@@ -836,13 +860,22 @@ func (b *modelBuilder) ExitVerificationCaseDefinition(ctx *parser.VerificationCa
 
 func (b *modelBuilder) EnterVerificationCaseUsage(ctx *parser.VerificationCaseUsageContext) {
 	name := ""
-	if ctx.ConstraintUsageDeclaration() != nil {
-		if ident := ctx.ConstraintUsageDeclaration().UsageDeclaration().Identification(); ident != nil {
-			name = extractName(ident)
+	shortName := ""
+	typeRef := ""
+	if decl := ctx.ConstraintUsageDeclaration(); decl != nil && decl.UsageDeclaration() != nil {
+		if ident := decl.UsageDeclaration().Identification(); ident != nil {
+			name, shortName = extractIdentificationNames(ident)
+		}
+		if featSpecPart := decl.UsageDeclaration().FeatureSpecializationPart(); featSpecPart != nil {
+			typeRef = extractTypeReference(featSpecPart)
 		}
 	}
 
 	ver := NewVerification(name, locationFromContext(ctx), false)
+	ver.setDeclaredShortName(shortName)
+	if typeRef != "" {
+		ver.TypeRef = NewRef[*Verification](typeRef)
+	}
 	ver.parent = b.getCurrentParent()
 	b.addToParent(ver)
 
@@ -2076,17 +2109,38 @@ func (b *modelBuilder) EnterRequirementConstraintMember(ctx *parser.RequirementC
 
 // extractName extracts the name from an Identification context.
 func extractName(ident parser.IIdentificationContext) string {
+	declaredName, declaredShortName := extractIdentificationNames(ident)
+	if declaredName != "" {
+		return declaredName
+	}
+	return declaredShortName
+}
+
+// extractIdentificationNames extracts the names from an Identification context
+// using grammar semantics:
+//   - declaredShortName: optional '< NAME >'
+//   - declaredName: optional NAME
+//
+// The Identification rule allows either or both.
+func extractIdentificationNames(ident parser.IIdentificationContext) (declaredName, declaredShortName string) {
 	if ident == nil {
-		return ""
+		return "", ""
 	}
 
-	// Try to get the name (use index 0 for the primary name)
 	names := ident.AllName()
-	if len(names) > 0 {
-		return names[0].GetText()
+	switch len(names) {
+	case 0:
+		return "", ""
+	case 1:
+		// If '<' exists, single name is declaredShortName; otherwise declaredName.
+		if ident.LT() != nil {
+			return "", names[0].GetText()
+		}
+		return names[0].GetText(), ""
+	default:
+		// With both present, order in parse tree is: declaredShortName, declaredName.
+		return names[1].GetText(), names[0].GetText()
 	}
-
-	return ""
 }
 
 func extractQualifiedName(qname parser.IQualifiedNameContext) string {
@@ -2698,9 +2752,7 @@ func (b *modelBuilder) EnterSatisfyRequirementUsage(ctx *parser.SatisfyRequireme
 	}
 	rel.parent = b.getCurrentParent()
 	b.addToParent(rel)
-	if b.currentPkg == nil {
-		b.model.AddSatisfy(rel)
-	}
+	b.model.AddSatisfy(rel)
 }
 
 // EnterRequirementVerificationUsage captures verify relationships as typed edges.
@@ -2716,9 +2768,7 @@ func (b *modelBuilder) EnterRequirementVerificationUsage(ctx *parser.Requirement
 	}
 	rel.parent = b.getCurrentParent()
 	b.addToParent(rel)
-	if b.currentPkg == nil {
-		b.model.AddVerify(rel)
-	}
+	b.model.AddVerify(rel)
 }
 
 // EnterMessage maps message usage to Message model nodes.
