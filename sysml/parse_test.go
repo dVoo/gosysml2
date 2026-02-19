@@ -310,12 +310,40 @@ package P {
 	contains("selectOne {in a { a > 0 }}")
 }
 
+func TestCompatibilityRewritesForGap21AndGap22(t *testing.T) {
+	input := `
+package P {
+    action def ForLoopActionDef {
+        protected ref var[0..1] :> seq;
+        assign var := seq#(index);
+    }
+    part def X {
+        derived ref item actionDefinition : Behavior[0..*] ordered redefines behavior, occurrenceDefinition subsets Metadata::metadataItems;
+    }
+}
+`
+	normalized, _ := normalizeUnsupportedRequirementSyntax(input)
+
+	contains := func(want string) {
+		t.Helper()
+		if !strings.Contains(normalized, want) {
+			t.Fatalf("expected normalized input to contain %q, got:\n%s", want, normalized)
+		}
+	}
+
+	contains("protected ref 'var'[0..1] :> seq;")
+	contains("assign 'var' := seq#(index);")
+	contains("derived ref item actionDefinition : Behavior[0..*] ordered;")
+}
+
 func TestCompatibilityGapFilesParse(t *testing.T) {
 	files := []string{
 		"Domain Libraries/Analysis/TradeStudies.sysml",
 		"Domain Libraries/Metadata/ImageMetadata.sysml",
 		"Domain Libraries/Quantities and Units/ISQChemistryMolecular.sysml",
 		"Domain Libraries/Quantities and Units/SI.sysml",
+		"Systems Library/Actions.sysml",
+		"Systems Library/SysML.sysml",
 	}
 
 	for _, rel := range files {

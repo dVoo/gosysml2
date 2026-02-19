@@ -83,8 +83,12 @@ This document describes the `sysml` package data model as currently implemented 
   - `Bindings` is populated from usage argument lists like `[vehicle = myVehicle]`
   - parser compatibility layer also accepts normalized requirement-related and
     library syntax variants before model construction, including select/filter
-    lambdas in `{in ref x { ... }}` form and reserved-keyword names in specific
-    attribute/alias/short-name contexts.
+    lambdas in `{in ref x { ... }}` form, reserved-keyword names in specific
+    attribute/alias/short-name contexts, and `var` as a declared member name in
+    reference/assignment contexts.
+  - for library-specific inline `subsets`/`redefines` keyword forms not accepted
+    in certain declaration positions by the current grammar, parser compatibility
+    rewrites drop those unsupported specialization tails to preserve parseability.
   - `Subject Ref[Element]`
   - relationships:
     - `DerivedFrom`, `DerivedReqs`

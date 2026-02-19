@@ -83,6 +83,9 @@ var (
 	attributeKeywordNamePattern      = regexp.MustCompile(`(?m)\battribute\s+(type)\s*:`)
 	aliasKeywordNamePattern          = regexp.MustCompile(`(?m)\balias\s+(multiplicity)\s+for\b`)
 	attributeShortNameKeywordPattern = regexp.MustCompile(`(?m)\battribute\s*<\s*(var)\s*>`)
+	refVarNamePattern                = regexp.MustCompile(`(?m)\bref\s+var(\s*(?:\[|:|::|:>|:>>|;|=))`)
+	assignVarTargetPattern           = regexp.MustCompile(`(?m)\bassign\s+var(\s*:=)`)
+	keywordSpecializationTailPattern = regexp.MustCompile(`(?m)([^;\n]*?)\s+(?:subsets|redefines)\b[^;\n]*;`)
 )
 
 func lineNumberAtOffset(input string, offset int) int {
@@ -146,6 +149,9 @@ func normalizeUnsupportedRequirementSyntax(input string) (string, *parseRewriteH
 	normalized = attributeKeywordNamePattern.ReplaceAllString(normalized, `attribute '$1' :`)
 	normalized = aliasKeywordNamePattern.ReplaceAllString(normalized, `alias '$1' for`)
 	normalized = attributeShortNameKeywordPattern.ReplaceAllString(normalized, `attribute <'$1'>`)
+	normalized = refVarNamePattern.ReplaceAllString(normalized, `ref 'var'$1`)
+	normalized = assignVarTargetPattern.ReplaceAllString(normalized, `assign 'var'$1`)
+	normalized = keywordSpecializationTailPattern.ReplaceAllString(normalized, `$1;`)
 
 	// Gap 14 compatibility: "require { expr };" -> "require __gap14_constraint_N;"
 	matches := requireBlockPattern.FindAllStringSubmatchIndex(normalized, -1)
