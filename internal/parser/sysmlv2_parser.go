@@ -1,4 +1,4 @@
-// Code generated from SysMLv2Parser.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from antlr/SysMLv2Parser.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
 package parser // SysMLv2Parser
 import (
@@ -105,8 +105,8 @@ func sysmlv2parserParserInit() {
 	staticData.RuleNames = []string{
 		"entryRuleRootNamespace", "rootNamespace", "identification", "relationshipBody",
 		"dependency", "dependencyDeclaration", "annotation", "ownedAnnotation",
-		"annotatingMember", "annotatingElement", "comment_", "documentation",
-		"textualRepresentation", "package_", "libraryPackage", "packageDeclaration",
+		"annotatingMember", "annotatingElement", "comment", "documentation",
+		"textualRepresentation", "package", "libraryPackage", "packageDeclaration",
 		"packageBody", "packageBodyElement", "memberPrefix", "packageMember",
 		"elementFilterMember", "aliasMember", "import_", "importDeclaration",
 		"membershipImport", "namespaceImport", "filterPackage", "filterPackageImportPart",
@@ -208,13 +208,13 @@ func sysmlv2parserParserInit() {
 		"typeRelationshipPart", "disjoiningPart", "ownedDisjoining", "unioningPart",
 		"unioning", "intersectingPart", "intersecting", "differencingPart",
 		"differencing", "typeBody", "featureChain", "classifier", "classifierDeclaration",
-		"superclassingPart", "dataType", "class_", "structure", "metaclass",
+		"superclassingPart", "dataType", "class", "structure", "metaclass",
 		"association", "associationStructure", "interaction", "behavior", "function_",
 		"functionBody", "predicate", "multiplicity", "multiplicitySubset", "multiplicityRangeDecl",
 		"multiplicityBounds", "feature", "endFeaturePrefix", "basicFeaturePrefix",
 		"featurePrefix", "featureDeclaration", "featureIdentification", "featureRelationshipPart",
 		"chainingPart", "invertingPart", "ownedFeatureInverting", "typeFeaturingPart",
-		"ownedTypeFeaturing", "step", "expression_", "booleanExpression", "invariant",
+		"ownedTypeFeaturing", "step", "expression", "booleanExpression", "invariant",
 		"connector", "connectorDeclaration", "binaryConnectorDeclaration", "naryConnectorDeclaration",
 		"bindingConnector", "bindingConnectorDeclaration", "succession", "successionDeclaration",
 		"kermlFlow", "kermlSuccessionFlow", "kermlFlowDeclaration", "kermlPayloadFeatureMember",
@@ -2536,10 +2536,10 @@ const (
 	SysMLv2ParserRULE_ownedAnnotation                    = 7
 	SysMLv2ParserRULE_annotatingMember                   = 8
 	SysMLv2ParserRULE_annotatingElement                  = 9
-	SysMLv2ParserRULE_comment_                           = 10
+	SysMLv2ParserRULE_comment                            = 10
 	SysMLv2ParserRULE_documentation                      = 11
 	SysMLv2ParserRULE_textualRepresentation              = 12
-	SysMLv2ParserRULE_package_                           = 13
+	SysMLv2ParserRULE_package                            = 13
 	SysMLv2ParserRULE_libraryPackage                     = 14
 	SysMLv2ParserRULE_packageDeclaration                 = 15
 	SysMLv2ParserRULE_packageBody                        = 16
@@ -2924,7 +2924,7 @@ const (
 	SysMLv2ParserRULE_classifierDeclaration              = 395
 	SysMLv2ParserRULE_superclassingPart                  = 396
 	SysMLv2ParserRULE_dataType                           = 397
-	SysMLv2ParserRULE_class_                             = 398
+	SysMLv2ParserRULE_class                              = 398
 	SysMLv2ParserRULE_structure                          = 399
 	SysMLv2ParserRULE_metaclass                          = 400
 	SysMLv2ParserRULE_association                        = 401
@@ -2951,7 +2951,7 @@ const (
 	SysMLv2ParserRULE_typeFeaturingPart                  = 422
 	SysMLv2ParserRULE_ownedTypeFeaturing                 = 423
 	SysMLv2ParserRULE_step                               = 424
-	SysMLv2ParserRULE_expression_                        = 425
+	SysMLv2ParserRULE_expression                         = 425
 	SysMLv2ParserRULE_booleanExpression                  = 426
 	SysMLv2ParserRULE_invariant                          = 427
 	SysMLv2ParserRULE_connector                          = 428
@@ -4400,7 +4400,7 @@ type IAnnotatingElementContext interface {
 	GetParser() antlr.Parser
 
 	// Getter signatures
-	Comment_() IComment_Context
+	Comment() ICommentContext
 	Documentation() IDocumentationContext
 	TextualRepresentation() ITextualRepresentationContext
 	MetadataFeature() IMetadataFeatureContext
@@ -4441,10 +4441,10 @@ func NewAnnotatingElementContext(parser antlr.Parser, parent antlr.ParserRuleCon
 
 func (s *AnnotatingElementContext) GetParser() antlr.Parser { return s.parser }
 
-func (s *AnnotatingElementContext) Comment_() IComment_Context {
+func (s *AnnotatingElementContext) Comment() ICommentContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(IComment_Context); ok {
+		if _, ok := ctx.(ICommentContext); ok {
 			t = ctx.(antlr.RuleContext)
 			break
 		}
@@ -4454,7 +4454,7 @@ func (s *AnnotatingElementContext) Comment_() IComment_Context {
 		return nil
 	}
 
-	return t.(IComment_Context)
+	return t.(ICommentContext)
 }
 
 func (s *AnnotatingElementContext) Documentation() IDocumentationContext {
@@ -4539,7 +4539,7 @@ func (p *SysMLv2Parser) AnnotatingElement() (localctx IAnnotatingElementContext)
 		p.EnterOuterAlt(localctx, 1)
 		{
 			p.SetState(963)
-			p.Comment_()
+			p.Comment()
 		}
 
 	case SysMLv2ParserDOC:
@@ -4581,8 +4581,8 @@ errorExit:
 	goto errorExit // Trick to prevent compiler error if the label is not used
 }
 
-// IComment_Context is an interface to support dynamic dispatch.
-type IComment_Context interface {
+// ICommentContext is an interface to support dynamic dispatch.
+type ICommentContext interface {
 	antlr.ParserRuleContext
 
 	// GetParser returns the parser.
@@ -4600,51 +4600,51 @@ type IComment_Context interface {
 	AllCOMMA() []antlr.TerminalNode
 	COMMA(i int) antlr.TerminalNode
 
-	// IsComment_Context differentiates from other interfaces.
-	IsComment_Context()
+	// IsCommentContext differentiates from other interfaces.
+	IsCommentContext()
 }
 
-type Comment_Context struct {
+type CommentContext struct {
 	antlr.BaseParserRuleContext
 	parser antlr.Parser
 }
 
-func NewEmptyComment_Context() *Comment_Context {
-	var p = new(Comment_Context)
+func NewEmptyCommentContext() *CommentContext {
+	var p = new(CommentContext)
 	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = SysMLv2ParserRULE_comment_
+	p.RuleIndex = SysMLv2ParserRULE_comment
 	return p
 }
 
-func InitEmptyComment_Context(p *Comment_Context) {
+func InitEmptyCommentContext(p *CommentContext) {
 	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = SysMLv2ParserRULE_comment_
+	p.RuleIndex = SysMLv2ParserRULE_comment
 }
 
-func (*Comment_Context) IsComment_Context() {}
+func (*CommentContext) IsCommentContext() {}
 
-func NewComment_Context(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *Comment_Context {
-	var p = new(Comment_Context)
+func NewCommentContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *CommentContext {
+	var p = new(CommentContext)
 
 	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
 
 	p.parser = parser
-	p.RuleIndex = SysMLv2ParserRULE_comment_
+	p.RuleIndex = SysMLv2ParserRULE_comment
 
 	return p
 }
 
-func (s *Comment_Context) GetParser() antlr.Parser { return s.parser }
+func (s *CommentContext) GetParser() antlr.Parser { return s.parser }
 
-func (s *Comment_Context) REGULAR_COMMENT() antlr.TerminalNode {
+func (s *CommentContext) REGULAR_COMMENT() antlr.TerminalNode {
 	return s.GetToken(SysMLv2ParserREGULAR_COMMENT, 0)
 }
 
-func (s *Comment_Context) COMMENT() antlr.TerminalNode {
+func (s *CommentContext) COMMENT() antlr.TerminalNode {
 	return s.GetToken(SysMLv2ParserCOMMENT, 0)
 }
 
-func (s *Comment_Context) Identification() IIdentificationContext {
+func (s *CommentContext) Identification() IIdentificationContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
 		if _, ok := ctx.(IIdentificationContext); ok {
@@ -4660,19 +4660,19 @@ func (s *Comment_Context) Identification() IIdentificationContext {
 	return t.(IIdentificationContext)
 }
 
-func (s *Comment_Context) LOCALE() antlr.TerminalNode {
+func (s *CommentContext) LOCALE() antlr.TerminalNode {
 	return s.GetToken(SysMLv2ParserLOCALE, 0)
 }
 
-func (s *Comment_Context) STRING_VALUE() antlr.TerminalNode {
+func (s *CommentContext) STRING_VALUE() antlr.TerminalNode {
 	return s.GetToken(SysMLv2ParserSTRING_VALUE, 0)
 }
 
-func (s *Comment_Context) ABOUT() antlr.TerminalNode {
+func (s *CommentContext) ABOUT() antlr.TerminalNode {
 	return s.GetToken(SysMLv2ParserABOUT, 0)
 }
 
-func (s *Comment_Context) AllAnnotation() []IAnnotationContext {
+func (s *CommentContext) AllAnnotation() []IAnnotationContext {
 	children := s.GetChildren()
 	len := 0
 	for _, ctx := range children {
@@ -4693,7 +4693,7 @@ func (s *Comment_Context) AllAnnotation() []IAnnotationContext {
 	return tst
 }
 
-func (s *Comment_Context) Annotation(i int) IAnnotationContext {
+func (s *CommentContext) Annotation(i int) IAnnotationContext {
 	var t antlr.RuleContext
 	j := 0
 	for _, ctx := range s.GetChildren() {
@@ -4713,37 +4713,37 @@ func (s *Comment_Context) Annotation(i int) IAnnotationContext {
 	return t.(IAnnotationContext)
 }
 
-func (s *Comment_Context) AllCOMMA() []antlr.TerminalNode {
+func (s *CommentContext) AllCOMMA() []antlr.TerminalNode {
 	return s.GetTokens(SysMLv2ParserCOMMA)
 }
 
-func (s *Comment_Context) COMMA(i int) antlr.TerminalNode {
+func (s *CommentContext) COMMA(i int) antlr.TerminalNode {
 	return s.GetToken(SysMLv2ParserCOMMA, i)
 }
 
-func (s *Comment_Context) GetRuleContext() antlr.RuleContext {
+func (s *CommentContext) GetRuleContext() antlr.RuleContext {
 	return s
 }
 
-func (s *Comment_Context) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+func (s *CommentContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
 	return antlr.TreesStringTree(s, ruleNames, recog)
 }
 
-func (s *Comment_Context) EnterRule(listener antlr.ParseTreeListener) {
+func (s *CommentContext) EnterRule(listener antlr.ParseTreeListener) {
 	if listenerT, ok := listener.(SysMLv2ParserListener); ok {
-		listenerT.EnterComment_(s)
+		listenerT.EnterComment(s)
 	}
 }
 
-func (s *Comment_Context) ExitRule(listener antlr.ParseTreeListener) {
+func (s *CommentContext) ExitRule(listener antlr.ParseTreeListener) {
 	if listenerT, ok := listener.(SysMLv2ParserListener); ok {
-		listenerT.ExitComment_(s)
+		listenerT.ExitComment(s)
 	}
 }
 
-func (p *SysMLv2Parser) Comment_() (localctx IComment_Context) {
-	localctx = NewComment_Context(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 20, SysMLv2ParserRULE_comment_)
+func (p *SysMLv2Parser) Comment() (localctx ICommentContext) {
+	localctx = NewCommentContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 20, SysMLv2ParserRULE_comment)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
@@ -5203,8 +5203,8 @@ errorExit:
 	goto errorExit // Trick to prevent compiler error if the label is not used
 }
 
-// IPackage_Context is an interface to support dynamic dispatch.
-type IPackage_Context interface {
+// IPackageContext is an interface to support dynamic dispatch.
+type IPackageContext interface {
 	antlr.ParserRuleContext
 
 	// GetParser returns the parser.
@@ -5216,43 +5216,43 @@ type IPackage_Context interface {
 	AllPrefixMetadataMember() []IPrefixMetadataMemberContext
 	PrefixMetadataMember(i int) IPrefixMetadataMemberContext
 
-	// IsPackage_Context differentiates from other interfaces.
-	IsPackage_Context()
+	// IsPackageContext differentiates from other interfaces.
+	IsPackageContext()
 }
 
-type Package_Context struct {
+type PackageContext struct {
 	antlr.BaseParserRuleContext
 	parser antlr.Parser
 }
 
-func NewEmptyPackage_Context() *Package_Context {
-	var p = new(Package_Context)
+func NewEmptyPackageContext() *PackageContext {
+	var p = new(PackageContext)
 	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = SysMLv2ParserRULE_package_
+	p.RuleIndex = SysMLv2ParserRULE_package
 	return p
 }
 
-func InitEmptyPackage_Context(p *Package_Context) {
+func InitEmptyPackageContext(p *PackageContext) {
 	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = SysMLv2ParserRULE_package_
+	p.RuleIndex = SysMLv2ParserRULE_package
 }
 
-func (*Package_Context) IsPackage_Context() {}
+func (*PackageContext) IsPackageContext() {}
 
-func NewPackage_Context(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *Package_Context {
-	var p = new(Package_Context)
+func NewPackageContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *PackageContext {
+	var p = new(PackageContext)
 
 	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
 
 	p.parser = parser
-	p.RuleIndex = SysMLv2ParserRULE_package_
+	p.RuleIndex = SysMLv2ParserRULE_package
 
 	return p
 }
 
-func (s *Package_Context) GetParser() antlr.Parser { return s.parser }
+func (s *PackageContext) GetParser() antlr.Parser { return s.parser }
 
-func (s *Package_Context) PackageDeclaration() IPackageDeclarationContext {
+func (s *PackageContext) PackageDeclaration() IPackageDeclarationContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
 		if _, ok := ctx.(IPackageDeclarationContext); ok {
@@ -5268,7 +5268,7 @@ func (s *Package_Context) PackageDeclaration() IPackageDeclarationContext {
 	return t.(IPackageDeclarationContext)
 }
 
-func (s *Package_Context) PackageBody() IPackageBodyContext {
+func (s *PackageContext) PackageBody() IPackageBodyContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
 		if _, ok := ctx.(IPackageBodyContext); ok {
@@ -5284,7 +5284,7 @@ func (s *Package_Context) PackageBody() IPackageBodyContext {
 	return t.(IPackageBodyContext)
 }
 
-func (s *Package_Context) AllPrefixMetadataMember() []IPrefixMetadataMemberContext {
+func (s *PackageContext) AllPrefixMetadataMember() []IPrefixMetadataMemberContext {
 	children := s.GetChildren()
 	len := 0
 	for _, ctx := range children {
@@ -5305,7 +5305,7 @@ func (s *Package_Context) AllPrefixMetadataMember() []IPrefixMetadataMemberConte
 	return tst
 }
 
-func (s *Package_Context) PrefixMetadataMember(i int) IPrefixMetadataMemberContext {
+func (s *PackageContext) PrefixMetadataMember(i int) IPrefixMetadataMemberContext {
 	var t antlr.RuleContext
 	j := 0
 	for _, ctx := range s.GetChildren() {
@@ -5325,29 +5325,29 @@ func (s *Package_Context) PrefixMetadataMember(i int) IPrefixMetadataMemberConte
 	return t.(IPrefixMetadataMemberContext)
 }
 
-func (s *Package_Context) GetRuleContext() antlr.RuleContext {
+func (s *PackageContext) GetRuleContext() antlr.RuleContext {
 	return s
 }
 
-func (s *Package_Context) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+func (s *PackageContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
 	return antlr.TreesStringTree(s, ruleNames, recog)
 }
 
-func (s *Package_Context) EnterRule(listener antlr.ParseTreeListener) {
+func (s *PackageContext) EnterRule(listener antlr.ParseTreeListener) {
 	if listenerT, ok := listener.(SysMLv2ParserListener); ok {
-		listenerT.EnterPackage_(s)
+		listenerT.EnterPackage(s)
 	}
 }
 
-func (s *Package_Context) ExitRule(listener antlr.ParseTreeListener) {
+func (s *PackageContext) ExitRule(listener antlr.ParseTreeListener) {
 	if listenerT, ok := listener.(SysMLv2ParserListener); ok {
-		listenerT.ExitPackage_(s)
+		listenerT.ExitPackage(s)
 	}
 }
 
-func (p *SysMLv2Parser) Package_() (localctx IPackage_Context) {
-	localctx = NewPackage_Context(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 26, SysMLv2ParserRULE_package_)
+func (p *SysMLv2Parser) Package_() (localctx IPackageContext) {
+	localctx = NewPackageContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 26, SysMLv2ParserRULE_package)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
@@ -8126,7 +8126,7 @@ type IDefinitionElementContext interface {
 	GetParser() antlr.Parser
 
 	// Getter signatures
-	Package_() IPackage_Context
+	Package_() IPackageContext
 	LibraryPackage() ILibraryPackageContext
 	AnnotatingElement() IAnnotatingElementContext
 	Dependency() IDependencyContext
@@ -8193,10 +8193,10 @@ func NewDefinitionElementContext(parser antlr.Parser, parent antlr.ParserRuleCon
 
 func (s *DefinitionElementContext) GetParser() antlr.Parser { return s.parser }
 
-func (s *DefinitionElementContext) Package_() IPackage_Context {
+func (s *DefinitionElementContext) Package_() IPackageContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(IPackage_Context); ok {
+		if _, ok := ctx.(IPackageContext); ok {
 			t = ctx.(antlr.RuleContext)
 			break
 		}
@@ -8206,7 +8206,7 @@ func (s *DefinitionElementContext) Package_() IPackage_Context {
 		return nil
 	}
 
-	return t.(IPackage_Context)
+	return t.(IPackageContext)
 }
 
 func (s *DefinitionElementContext) LibraryPackage() ILibraryPackageContext {
@@ -64800,7 +64800,7 @@ type INonFeatureElementContext interface {
 	Type_() IType_Context
 	Classifier() IClassifierContext
 	DataType() IDataTypeContext
-	Class_() IClass_Context
+	Class() IClassContext
 	Structure() IStructureContext
 	Metaclass() IMetaclassContext
 	Association() IAssociationContext
@@ -64810,7 +64810,7 @@ type INonFeatureElementContext interface {
 	Function_() IFunction_Context
 	Predicate() IPredicateContext
 	Multiplicity() IMultiplicityContext
-	Package_() IPackage_Context
+	Package_() IPackageContext
 	LibraryPackage() ILibraryPackageContext
 
 	// IsNonFeatureElementContext differentiates from other interfaces.
@@ -64929,10 +64929,10 @@ func (s *NonFeatureElementContext) DataType() IDataTypeContext {
 	return t.(IDataTypeContext)
 }
 
-func (s *NonFeatureElementContext) Class_() IClass_Context {
+func (s *NonFeatureElementContext) Class() IClassContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(IClass_Context); ok {
+		if _, ok := ctx.(IClassContext); ok {
 			t = ctx.(antlr.RuleContext)
 			break
 		}
@@ -64942,7 +64942,7 @@ func (s *NonFeatureElementContext) Class_() IClass_Context {
 		return nil
 	}
 
-	return t.(IClass_Context)
+	return t.(IClassContext)
 }
 
 func (s *NonFeatureElementContext) Structure() IStructureContext {
@@ -65089,10 +65089,10 @@ func (s *NonFeatureElementContext) Multiplicity() IMultiplicityContext {
 	return t.(IMultiplicityContext)
 }
 
-func (s *NonFeatureElementContext) Package_() IPackage_Context {
+func (s *NonFeatureElementContext) Package_() IPackageContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(IPackage_Context); ok {
+		if _, ok := ctx.(IPackageContext); ok {
 			t = ctx.(antlr.RuleContext)
 			break
 		}
@@ -65102,7 +65102,7 @@ func (s *NonFeatureElementContext) Package_() IPackage_Context {
 		return nil
 	}
 
-	return t.(IPackage_Context)
+	return t.(IPackageContext)
 }
 
 func (s *NonFeatureElementContext) LibraryPackage() ILibraryPackageContext {
@@ -65190,7 +65190,7 @@ func (p *SysMLv2Parser) NonFeatureElement() (localctx INonFeatureElementContext)
 		p.EnterOuterAlt(localctx, 6)
 		{
 			p.SetState(3451)
-			p.Class_()
+			p.Class()
 		}
 
 	case 7:
@@ -65297,7 +65297,7 @@ type IFeatureElementContext interface {
 	// Getter signatures
 	Feature() IFeatureContext
 	Step() IStepContext
-	Expression_() IExpression_Context
+	Expression() IExpressionContext
 	BooleanExpression() IBooleanExpressionContext
 	Invariant() IInvariantContext
 	Connector() IConnectorContext
@@ -65374,10 +65374,10 @@ func (s *FeatureElementContext) Step() IStepContext {
 	return t.(IStepContext)
 }
 
-func (s *FeatureElementContext) Expression_() IExpression_Context {
+func (s *FeatureElementContext) Expression() IExpressionContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(IExpression_Context); ok {
+		if _, ok := ctx.(IExpressionContext); ok {
 			t = ctx.(antlr.RuleContext)
 			break
 		}
@@ -65387,7 +65387,7 @@ func (s *FeatureElementContext) Expression_() IExpression_Context {
 		return nil
 	}
 
-	return t.(IExpression_Context)
+	return t.(IExpressionContext)
 }
 
 func (s *FeatureElementContext) BooleanExpression() IBooleanExpressionContext {
@@ -65550,7 +65550,7 @@ func (p *SysMLv2Parser) FeatureElement() (localctx IFeatureElementContext) {
 		p.EnterOuterAlt(localctx, 3)
 		{
 			p.SetState(3467)
-			p.Expression_()
+			p.Expression()
 		}
 
 	case 4:
@@ -71607,8 +71607,8 @@ errorExit:
 	goto errorExit // Trick to prevent compiler error if the label is not used
 }
 
-// IClass_Context is an interface to support dynamic dispatch.
-type IClass_Context interface {
+// IClassContext is an interface to support dynamic dispatch.
+type IClassContext interface {
 	antlr.ParserRuleContext
 
 	// GetParser returns the parser.
@@ -71620,43 +71620,43 @@ type IClass_Context interface {
 	ClassifierDeclaration() IClassifierDeclarationContext
 	TypeBody() ITypeBodyContext
 
-	// IsClass_Context differentiates from other interfaces.
-	IsClass_Context()
+	// IsClassContext differentiates from other interfaces.
+	IsClassContext()
 }
 
-type Class_Context struct {
+type ClassContext struct {
 	antlr.BaseParserRuleContext
 	parser antlr.Parser
 }
 
-func NewEmptyClass_Context() *Class_Context {
-	var p = new(Class_Context)
+func NewEmptyClassContext() *ClassContext {
+	var p = new(ClassContext)
 	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = SysMLv2ParserRULE_class_
+	p.RuleIndex = SysMLv2ParserRULE_class
 	return p
 }
 
-func InitEmptyClass_Context(p *Class_Context) {
+func InitEmptyClassContext(p *ClassContext) {
 	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = SysMLv2ParserRULE_class_
+	p.RuleIndex = SysMLv2ParserRULE_class
 }
 
-func (*Class_Context) IsClass_Context() {}
+func (*ClassContext) IsClassContext() {}
 
-func NewClass_Context(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *Class_Context {
-	var p = new(Class_Context)
+func NewClassContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *ClassContext {
+	var p = new(ClassContext)
 
 	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
 
 	p.parser = parser
-	p.RuleIndex = SysMLv2ParserRULE_class_
+	p.RuleIndex = SysMLv2ParserRULE_class
 
 	return p
 }
 
-func (s *Class_Context) GetParser() antlr.Parser { return s.parser }
+func (s *ClassContext) GetParser() antlr.Parser { return s.parser }
 
-func (s *Class_Context) TypePrefix() ITypePrefixContext {
+func (s *ClassContext) TypePrefix() ITypePrefixContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
 		if _, ok := ctx.(ITypePrefixContext); ok {
@@ -71672,11 +71672,11 @@ func (s *Class_Context) TypePrefix() ITypePrefixContext {
 	return t.(ITypePrefixContext)
 }
 
-func (s *Class_Context) CLASS() antlr.TerminalNode {
+func (s *ClassContext) CLASS() antlr.TerminalNode {
 	return s.GetToken(SysMLv2ParserCLASS, 0)
 }
 
-func (s *Class_Context) ClassifierDeclaration() IClassifierDeclarationContext {
+func (s *ClassContext) ClassifierDeclaration() IClassifierDeclarationContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
 		if _, ok := ctx.(IClassifierDeclarationContext); ok {
@@ -71692,7 +71692,7 @@ func (s *Class_Context) ClassifierDeclaration() IClassifierDeclarationContext {
 	return t.(IClassifierDeclarationContext)
 }
 
-func (s *Class_Context) TypeBody() ITypeBodyContext {
+func (s *ClassContext) TypeBody() ITypeBodyContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
 		if _, ok := ctx.(ITypeBodyContext); ok {
@@ -71708,29 +71708,29 @@ func (s *Class_Context) TypeBody() ITypeBodyContext {
 	return t.(ITypeBodyContext)
 }
 
-func (s *Class_Context) GetRuleContext() antlr.RuleContext {
+func (s *ClassContext) GetRuleContext() antlr.RuleContext {
 	return s
 }
 
-func (s *Class_Context) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+func (s *ClassContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
 	return antlr.TreesStringTree(s, ruleNames, recog)
 }
 
-func (s *Class_Context) EnterRule(listener antlr.ParseTreeListener) {
+func (s *ClassContext) EnterRule(listener antlr.ParseTreeListener) {
 	if listenerT, ok := listener.(SysMLv2ParserListener); ok {
-		listenerT.EnterClass_(s)
+		listenerT.EnterClass(s)
 	}
 }
 
-func (s *Class_Context) ExitRule(listener antlr.ParseTreeListener) {
+func (s *ClassContext) ExitRule(listener antlr.ParseTreeListener) {
 	if listenerT, ok := listener.(SysMLv2ParserListener); ok {
-		listenerT.ExitClass_(s)
+		listenerT.ExitClass(s)
 	}
 }
 
-func (p *SysMLv2Parser) Class_() (localctx IClass_Context) {
-	localctx = NewClass_Context(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 796, SysMLv2ParserRULE_class_)
+func (p *SysMLv2Parser) Class() (localctx IClassContext) {
+	localctx = NewClassContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 796, SysMLv2ParserRULE_class)
 	p.EnterOuterAlt(localctx, 1)
 	{
 		p.SetState(3709)
@@ -76335,8 +76335,8 @@ errorExit:
 	goto errorExit // Trick to prevent compiler error if the label is not used
 }
 
-// IExpression_Context is an interface to support dynamic dispatch.
-type IExpression_Context interface {
+// IExpressionContext is an interface to support dynamic dispatch.
+type IExpressionContext interface {
 	antlr.ParserRuleContext
 
 	// GetParser returns the parser.
@@ -76349,43 +76349,43 @@ type IExpression_Context interface {
 	FunctionBody() IFunctionBodyContext
 	ValuePart() IValuePartContext
 
-	// IsExpression_Context differentiates from other interfaces.
-	IsExpression_Context()
+	// IsExpressionContext differentiates from other interfaces.
+	IsExpressionContext()
 }
 
-type Expression_Context struct {
+type ExpressionContext struct {
 	antlr.BaseParserRuleContext
 	parser antlr.Parser
 }
 
-func NewEmptyExpression_Context() *Expression_Context {
-	var p = new(Expression_Context)
+func NewEmptyExpressionContext() *ExpressionContext {
+	var p = new(ExpressionContext)
 	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = SysMLv2ParserRULE_expression_
+	p.RuleIndex = SysMLv2ParserRULE_expression
 	return p
 }
 
-func InitEmptyExpression_Context(p *Expression_Context) {
+func InitEmptyExpressionContext(p *ExpressionContext) {
 	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
-	p.RuleIndex = SysMLv2ParserRULE_expression_
+	p.RuleIndex = SysMLv2ParserRULE_expression
 }
 
-func (*Expression_Context) IsExpression_Context() {}
+func (*ExpressionContext) IsExpressionContext() {}
 
-func NewExpression_Context(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *Expression_Context {
-	var p = new(Expression_Context)
+func NewExpressionContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *ExpressionContext {
+	var p = new(ExpressionContext)
 
 	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
 
 	p.parser = parser
-	p.RuleIndex = SysMLv2ParserRULE_expression_
+	p.RuleIndex = SysMLv2ParserRULE_expression
 
 	return p
 }
 
-func (s *Expression_Context) GetParser() antlr.Parser { return s.parser }
+func (s *ExpressionContext) GetParser() antlr.Parser { return s.parser }
 
-func (s *Expression_Context) FeaturePrefix() IFeaturePrefixContext {
+func (s *ExpressionContext) FeaturePrefix() IFeaturePrefixContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
 		if _, ok := ctx.(IFeaturePrefixContext); ok {
@@ -76401,11 +76401,11 @@ func (s *Expression_Context) FeaturePrefix() IFeaturePrefixContext {
 	return t.(IFeaturePrefixContext)
 }
 
-func (s *Expression_Context) EXPR() antlr.TerminalNode {
+func (s *ExpressionContext) EXPR() antlr.TerminalNode {
 	return s.GetToken(SysMLv2ParserEXPR, 0)
 }
 
-func (s *Expression_Context) FeatureDeclaration() IFeatureDeclarationContext {
+func (s *ExpressionContext) FeatureDeclaration() IFeatureDeclarationContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
 		if _, ok := ctx.(IFeatureDeclarationContext); ok {
@@ -76421,7 +76421,7 @@ func (s *Expression_Context) FeatureDeclaration() IFeatureDeclarationContext {
 	return t.(IFeatureDeclarationContext)
 }
 
-func (s *Expression_Context) FunctionBody() IFunctionBodyContext {
+func (s *ExpressionContext) FunctionBody() IFunctionBodyContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
 		if _, ok := ctx.(IFunctionBodyContext); ok {
@@ -76437,7 +76437,7 @@ func (s *Expression_Context) FunctionBody() IFunctionBodyContext {
 	return t.(IFunctionBodyContext)
 }
 
-func (s *Expression_Context) ValuePart() IValuePartContext {
+func (s *ExpressionContext) ValuePart() IValuePartContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
 		if _, ok := ctx.(IValuePartContext); ok {
@@ -76453,29 +76453,29 @@ func (s *Expression_Context) ValuePart() IValuePartContext {
 	return t.(IValuePartContext)
 }
 
-func (s *Expression_Context) GetRuleContext() antlr.RuleContext {
+func (s *ExpressionContext) GetRuleContext() antlr.RuleContext {
 	return s
 }
 
-func (s *Expression_Context) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+func (s *ExpressionContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
 	return antlr.TreesStringTree(s, ruleNames, recog)
 }
 
-func (s *Expression_Context) EnterRule(listener antlr.ParseTreeListener) {
+func (s *ExpressionContext) EnterRule(listener antlr.ParseTreeListener) {
 	if listenerT, ok := listener.(SysMLv2ParserListener); ok {
-		listenerT.EnterExpression_(s)
+		listenerT.EnterExpression(s)
 	}
 }
 
-func (s *Expression_Context) ExitRule(listener antlr.ParseTreeListener) {
+func (s *ExpressionContext) ExitRule(listener antlr.ParseTreeListener) {
 	if listenerT, ok := listener.(SysMLv2ParserListener); ok {
-		listenerT.ExitExpression_(s)
+		listenerT.ExitExpression(s)
 	}
 }
 
-func (p *SysMLv2Parser) Expression_() (localctx IExpression_Context) {
-	localctx = NewExpression_Context(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 850, SysMLv2ParserRULE_expression_)
+func (p *SysMLv2Parser) Expression() (localctx IExpressionContext) {
+	localctx = NewExpressionContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 850, SysMLv2ParserRULE_expression)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)

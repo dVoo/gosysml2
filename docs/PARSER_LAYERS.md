@@ -31,6 +31,16 @@ The `low` package gives direct access to lexing/parsing with minimal abstraction
 - `low.WithParseTree(bool)`: enable/disable parse tree construction
 - `low.WithContext(ctx)`: cancellation support
 
+### Grammar naming alignment helpers
+
+To bridge official KEBNF naming and ANTLR-generated names:
+
+- `low.NormalizeGrammarName(name)`
+- `low.ResolveParserRuleName(name)`
+- `low.ResolveTokenName(name)`
+- `low.ParserRuleNameCandidates(name)`
+- `low.TokenNameCandidates(name)`
+
 ### Typical use cases
 
 - custom parse-tree walking on ANTLR contexts
@@ -84,6 +94,14 @@ Requirement compatibility handling includes:
 - requirement usage argument lists after typing are accepted:
   `requirement <'R1'> massReq : MassRequirement [vehicle = myVehicle]`
   and exposed via `Requirement.Bindings`.
+- lambda parameters in select/filter blocks written as
+  `{in ref a { ... }}` are accepted via compatibility normalization and parsed as
+  `{in a { ... }}`.
+- reserved-keyword naming forms seen in library models are accepted via compatibility
+  normalization, including:
+  - `attribute type : ...` -> `attribute 'type' : ...`
+  - `alias multiplicity for ...` -> `alias 'multiplicity' for ...`
+  - `attribute <var> ...` -> `attribute <'var'> ...`
 
 Feature relationships are also exposed on `Attribute`:
 
@@ -125,6 +143,9 @@ Feature relationships are also exposed on `Attribute`:
 - domain tooling (requirements traceability, architecture checks)
 - model traversal with visitors/finders
 - working with resolved typed references (`Ref[T]`)
+- grammar-aligned tooling via:
+  - `sysml.ResolveANTLRParserRuleName(name)`
+  - `sysml.ResolveANTLRTokenName(name)`
 
 ## Choosing the right layer
 

@@ -1,4 +1,4 @@
-// Code generated from SysMLv2Parser.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from antlr/SysMLv2Parser.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
 package parser // SysMLv2Parser
 import "github.com/antlr4-go/antlr/v4"
@@ -80,11 +80,11 @@ func (s *BaseSysMLv2ParserListener) EnterAnnotatingElement(ctx *AnnotatingElemen
 // ExitAnnotatingElement is called when production annotatingElement is exited.
 func (s *BaseSysMLv2ParserListener) ExitAnnotatingElement(ctx *AnnotatingElementContext) {}
 
-// EnterComment_ is called when production comment_ is entered.
-func (s *BaseSysMLv2ParserListener) EnterComment_(ctx *Comment_Context) {}
+// EnterComment is called when production comment is entered.
+func (s *BaseSysMLv2ParserListener) EnterComment(ctx *CommentContext) {}
 
-// ExitComment_ is called when production comment_ is exited.
-func (s *BaseSysMLv2ParserListener) ExitComment_(ctx *Comment_Context) {}
+// ExitComment is called when production comment is exited.
+func (s *BaseSysMLv2ParserListener) ExitComment(ctx *CommentContext) {}
 
 // EnterDocumentation is called when production documentation is entered.
 func (s *BaseSysMLv2ParserListener) EnterDocumentation(ctx *DocumentationContext) {}
@@ -98,11 +98,11 @@ func (s *BaseSysMLv2ParserListener) EnterTextualRepresentation(ctx *TextualRepre
 // ExitTextualRepresentation is called when production textualRepresentation is exited.
 func (s *BaseSysMLv2ParserListener) ExitTextualRepresentation(ctx *TextualRepresentationContext) {}
 
-// EnterPackage_ is called when production package_ is entered.
-func (s *BaseSysMLv2ParserListener) EnterPackage_(ctx *Package_Context) {}
+// EnterPackage is called when production package is entered.
+func (s *BaseSysMLv2ParserListener) EnterPackage(ctx *PackageContext) {}
 
-// ExitPackage_ is called when production package_ is exited.
-func (s *BaseSysMLv2ParserListener) ExitPackage_(ctx *Package_Context) {}
+// ExitPackage is called when production package is exited.
+func (s *BaseSysMLv2ParserListener) ExitPackage(ctx *PackageContext) {}
 
 // EnterLibraryPackage is called when production libraryPackage is entered.
 func (s *BaseSysMLv2ParserListener) EnterLibraryPackage(ctx *LibraryPackageContext) {}
@@ -2520,11 +2520,11 @@ func (s *BaseSysMLv2ParserListener) EnterDataType(ctx *DataTypeContext) {}
 // ExitDataType is called when production dataType is exited.
 func (s *BaseSysMLv2ParserListener) ExitDataType(ctx *DataTypeContext) {}
 
-// EnterClass_ is called when production class_ is entered.
-func (s *BaseSysMLv2ParserListener) EnterClass_(ctx *Class_Context) {}
+// EnterClass is called when production class is entered.
+func (s *BaseSysMLv2ParserListener) EnterClass(ctx *ClassContext) {}
 
-// ExitClass_ is called when production class_ is exited.
-func (s *BaseSysMLv2ParserListener) ExitClass_(ctx *Class_Context) {}
+// ExitClass is called when production class is exited.
+func (s *BaseSysMLv2ParserListener) ExitClass(ctx *ClassContext) {}
 
 // EnterStructure is called when production structure is entered.
 func (s *BaseSysMLv2ParserListener) EnterStructure(ctx *StructureContext) {}
@@ -2684,11 +2684,11 @@ func (s *BaseSysMLv2ParserListener) EnterStep(ctx *StepContext) {}
 // ExitStep is called when production step is exited.
 func (s *BaseSysMLv2ParserListener) ExitStep(ctx *StepContext) {}
 
-// EnterExpression_ is called when production expression_ is entered.
-func (s *BaseSysMLv2ParserListener) EnterExpression_(ctx *Expression_Context) {}
+// EnterExpression is called when production expression is entered.
+func (s *BaseSysMLv2ParserListener) EnterExpression(ctx *ExpressionContext) {}
 
-// ExitExpression_ is called when production expression_ is exited.
-func (s *BaseSysMLv2ParserListener) ExitExpression_(ctx *Expression_Context) {}
+// ExitExpression is called when production expression is exited.
+func (s *BaseSysMLv2ParserListener) ExitExpression(ctx *ExpressionContext) {}
 
 // EnterBooleanExpression is called when production booleanExpression is entered.
 func (s *BaseSysMLv2ParserListener) EnterBooleanExpression(ctx *BooleanExpressionContext) {}

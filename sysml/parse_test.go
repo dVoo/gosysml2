@@ -1,6 +1,9 @@
 package sysml
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -276,6 +279,54 @@ package P {
 	}
 	if usage.Bindings["threshold"] != "42" {
 		t.Fatalf("expected threshold binding %q, got %q", "42", usage.Bindings["threshold"])
+	}
+}
+
+func TestCompatibilityRewritesForNewGaps(t *testing.T) {
+	input := `
+package P {
+    part def X {
+        attribute type : String[0..1];
+        attribute <var> myVar : Real;
+    }
+    alias multiplicity for X;
+    calc f {
+        return result = values->selectOne {in ref a { a > 0 }};
+    }
+}
+`
+	normalized, _ := normalizeUnsupportedRequirementSyntax(input)
+
+	contains := func(want string) {
+		t.Helper()
+		if !strings.Contains(normalized, want) {
+			t.Fatalf("expected normalized input to contain %q, got:\n%s", want, normalized)
+		}
+	}
+
+	contains("attribute 'type' :")
+	contains("attribute <'var'> myVar : Real;")
+	contains("alias 'multiplicity' for X;")
+	contains("selectOne {in a { a > 0 }}")
+}
+
+func TestCompatibilityGapFilesParse(t *testing.T) {
+	files := []string{
+		"Domain Libraries/Analysis/TradeStudies.sysml",
+		"Domain Libraries/Metadata/ImageMetadata.sysml",
+		"Domain Libraries/Quantities and Units/ISQChemistryMolecular.sysml",
+		"Domain Libraries/Quantities and Units/SI.sysml",
+	}
+
+	for _, rel := range files {
+		path := filepath.Join("..", "libraries", "sysml.library", filepath.FromSlash(rel))
+		if _, err := os.Stat(path); err != nil {
+			t.Skipf("required library file not found: %s (%v)", path, err)
+		}
+		result := ParseFile(path)
+		if !result.Success() {
+			t.Fatalf("expected parse success for %s, got errors: %v", rel, result.Errors)
+		}
 	}
 }
 

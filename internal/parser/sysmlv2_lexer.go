@@ -1,4 +1,4 @@
-// Code generated from SysMLv2Lexer.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from antlr/SysMLv2Lexer.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
 package parser
 

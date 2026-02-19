@@ -78,6 +78,11 @@ var (
 	requireBlockPattern = regexp.MustCompile(`(?s)require\s*\{\s*(.*?)\s*\}\s*;`)
 	reqBindingPattern   = regexp.MustCompile(`(?m)(requirement\b[^\n\r;{]*?:\s*[^\[\n\r;{]+?)\s*\[([^\]\n\r]*)\](\s*(?:\{|;))`)
 	identTokenPattern   = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*`)
+	inRefLambdaPattern  = regexp.MustCompile(`\{\s*in\s+ref\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{`)
+
+	attributeKeywordNamePattern      = regexp.MustCompile(`(?m)\battribute\s+(type)\s*:`)
+	aliasKeywordNamePattern          = regexp.MustCompile(`(?m)\balias\s+(multiplicity)\s+for\b`)
+	attributeShortNameKeywordPattern = regexp.MustCompile(`(?m)\battribute\s*<\s*(var)\s*>`)
 )
 
 func lineNumberAtOffset(input string, offset int) int {
@@ -131,6 +136,16 @@ func extractRequirementUsageName(requirementPrefix string) string {
 func normalizeUnsupportedRequirementSyntax(input string) (string, *parseRewriteHints) {
 	hints := newParseRewriteHints()
 	normalized := input
+
+	// Gap 16 compatibility: lambda parameters written as "{in ref a { ... }}"
+	// are normalized to "{in a { ... }}" for current grammar support.
+	normalized = inRefLambdaPattern.ReplaceAllString(normalized, `{in $1 {`)
+
+	// Gap 19/20 compatibility: allow reserved keywords as declared names
+	// in forms seen in standard library models.
+	normalized = attributeKeywordNamePattern.ReplaceAllString(normalized, `attribute '$1' :`)
+	normalized = aliasKeywordNamePattern.ReplaceAllString(normalized, `alias '$1' for`)
+	normalized = attributeShortNameKeywordPattern.ReplaceAllString(normalized, `attribute <'$1'>`)
 
 	// Gap 14 compatibility: "require { expr };" -> "require __gap14_constraint_N;"
 	matches := requireBlockPattern.FindAllStringSubmatchIndex(normalized, -1)
@@ -497,7 +512,7 @@ func (b *modelBuilder) addOccurrenceToModel(occ *Occurrence) {
 	b.model.AddOccurrence(occ)
 }
 
-func (b *modelBuilder) EnterPackage_(ctx *parser.Package_Context) {
+func (b *modelBuilder) EnterPackage(ctx *parser.PackageContext) {
 	name := ""
 	if ctx.PackageDeclaration() != nil {
 		if ident := ctx.PackageDeclaration().Identification(); ident != nil {
@@ -520,7 +535,7 @@ func (b *modelBuilder) EnterPackage_(ctx *parser.Package_Context) {
 	b.currentPkg = pkg
 }
 
-func (b *modelBuilder) ExitPackage_(ctx *parser.Package_Context) {
+func (b *modelBuilder) ExitPackage(ctx *parser.PackageContext) {
 	// Pop from element stack
 	if len(b.elementStack) > 0 {
 		b.elementStack = b.elementStack[:len(b.elementStack)-1]
@@ -2614,9 +2629,9 @@ func (b *modelBuilder) ExitDependency(ctx *parser.DependencyContext) {
 	}
 }
 
-// EnterComment_ handles comment declarations.
+// EnterComment handles comment declarations.
 // Comments provide documentation and annotations for model elements.
-func (b *modelBuilder) EnterComment_(ctx *parser.Comment_Context) {
+func (b *modelBuilder) EnterComment(ctx *parser.CommentContext) {
 	// Extract body from REGULAR_COMMENT or COMMENT
 	body := ""
 	if ctx.REGULAR_COMMENT() != nil {

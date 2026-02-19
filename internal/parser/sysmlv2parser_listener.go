@@ -1,4 +1,4 @@
-// Code generated from SysMLv2Parser.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from antlr/SysMLv2Parser.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
 package parser // SysMLv2Parser
 import "github.com/antlr4-go/antlr/v4"
@@ -37,8 +37,8 @@ type SysMLv2ParserListener interface {
 	// EnterAnnotatingElement is called when entering the annotatingElement production.
 	EnterAnnotatingElement(c *AnnotatingElementContext)
 
-	// EnterComment_ is called when entering the comment_ production.
-	EnterComment_(c *Comment_Context)
+	// EnterComment is called when entering the comment production.
+	EnterComment(c *CommentContext)
 
 	// EnterDocumentation is called when entering the documentation production.
 	EnterDocumentation(c *DocumentationContext)
@@ -46,8 +46,8 @@ type SysMLv2ParserListener interface {
 	// EnterTextualRepresentation is called when entering the textualRepresentation production.
 	EnterTextualRepresentation(c *TextualRepresentationContext)
 
-	// EnterPackage_ is called when entering the package_ production.
-	EnterPackage_(c *Package_Context)
+	// EnterPackage is called when entering the package production.
+	EnterPackage(c *PackageContext)
 
 	// EnterLibraryPackage is called when entering the libraryPackage production.
 	EnterLibraryPackage(c *LibraryPackageContext)
@@ -1201,8 +1201,8 @@ type SysMLv2ParserListener interface {
 	// EnterDataType is called when entering the dataType production.
 	EnterDataType(c *DataTypeContext)
 
-	// EnterClass_ is called when entering the class_ production.
-	EnterClass_(c *Class_Context)
+	// EnterClass is called when entering the class production.
+	EnterClass(c *ClassContext)
 
 	// EnterStructure is called when entering the structure production.
 	EnterStructure(c *StructureContext)
@@ -1282,8 +1282,8 @@ type SysMLv2ParserListener interface {
 	// EnterStep is called when entering the step production.
 	EnterStep(c *StepContext)
 
-	// EnterExpression_ is called when entering the expression_ production.
-	EnterExpression_(c *Expression_Context)
+	// EnterExpression is called when entering the expression production.
+	EnterExpression(c *ExpressionContext)
 
 	// EnterBooleanExpression is called when entering the booleanExpression production.
 	EnterBooleanExpression(c *BooleanExpressionContext)
@@ -1381,8 +1381,8 @@ type SysMLv2ParserListener interface {
 	// ExitAnnotatingElement is called when exiting the annotatingElement production.
 	ExitAnnotatingElement(c *AnnotatingElementContext)
 
-	// ExitComment_ is called when exiting the comment_ production.
-	ExitComment_(c *Comment_Context)
+	// ExitComment is called when exiting the comment production.
+	ExitComment(c *CommentContext)
 
 	// ExitDocumentation is called when exiting the documentation production.
 	ExitDocumentation(c *DocumentationContext)
@@ -1390,8 +1390,8 @@ type SysMLv2ParserListener interface {
 	// ExitTextualRepresentation is called when exiting the textualRepresentation production.
 	ExitTextualRepresentation(c *TextualRepresentationContext)
 
-	// ExitPackage_ is called when exiting the package_ production.
-	ExitPackage_(c *Package_Context)
+	// ExitPackage is called when exiting the package production.
+	ExitPackage(c *PackageContext)
 
 	// ExitLibraryPackage is called when exiting the libraryPackage production.
 	ExitLibraryPackage(c *LibraryPackageContext)
@@ -2545,8 +2545,8 @@ type SysMLv2ParserListener interface {
 	// ExitDataType is called when exiting the dataType production.
 	ExitDataType(c *DataTypeContext)
 
-	// ExitClass_ is called when exiting the class_ production.
-	ExitClass_(c *Class_Context)
+	// ExitClass is called when exiting the class production.
+	ExitClass(c *ClassContext)
 
 	// ExitStructure is called when exiting the structure production.
 	ExitStructure(c *StructureContext)
@@ -2626,8 +2626,8 @@ type SysMLv2ParserListener interface {
 	// ExitStep is called when exiting the step production.
 	ExitStep(c *StepContext)
 
-	// ExitExpression_ is called when exiting the expression_ production.
-	ExitExpression_(c *Expression_Context)
+	// ExitExpression is called when exiting the expression production.
+	ExitExpression(c *ExpressionContext)
 
 	// ExitBooleanExpression is called when exiting the booleanExpression production.
 	ExitBooleanExpression(c *BooleanExpressionContext)
