@@ -167,6 +167,7 @@ type Package struct {
 type Part struct {
     IsDefinition bool
     TypeRef      Ref[*Part]  // Type-safe reference to part definition
+    Multiplicity string      // Usage multiplicity, e.g. "4", "0..1", "*"
 
     // Typed accessors
     // Attributes() []*Attribute

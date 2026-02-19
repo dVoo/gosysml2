@@ -38,6 +38,7 @@ This document describes the `sysml` package data model as currently implemented 
   - typed children accessors (`Packages()`, `Parts()`, `Requirements()`, etc.)
 - `Part` (definition or usage)
   - `IsDefinition`, `TypeRef Ref[*Part]`
+  - `Multiplicity string` (for usages, extracted from `[ ... ]` bounds such as `4`, `0..1`, `*`)
   - specialization via `Specializes Ref[*Part]`
   - typed children: attributes/parts/ports
 - `Item` (definition or usage)

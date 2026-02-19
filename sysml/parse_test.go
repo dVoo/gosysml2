@@ -216,6 +216,50 @@ package VehicleReqs {
 	}
 }
 
+func TestPartUsageMultiplicity(t *testing.T) {
+	input := `
+package VehiclePkg {
+    part def Wheel;
+    part wheel1 : Wheel[1];
+    part wheels : Wheel[4];
+    part optionalWheel : Wheel[0..1];
+    part anyWheels : Wheel[*];
+}
+`
+
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Errors)
+	}
+
+	parts := FindAll[*Part](result.Model)
+	want := map[string]string{
+		"wheel1":        "1",
+		"wheels":        "4",
+		"optionalWheel": "0..1",
+		"anyWheels":     "*",
+	}
+
+	for name, expectedMultiplicity := range want {
+		var found *Part
+		for _, p := range parts {
+			if p.Name() == name {
+				found = p
+				break
+			}
+		}
+		if found == nil {
+			t.Fatalf("expected part usage %q to be parsed", name)
+		}
+		if found.IsDefinition {
+			t.Fatalf("expected %q to be usage, but got definition", name)
+		}
+		if found.Multiplicity != expectedMultiplicity {
+			t.Fatalf("expected multiplicity for %q to be %q, got %q", name, expectedMultiplicity, found.Multiplicity)
+		}
+	}
+}
+
 // TestNestedPartsParentChildRelationships verifies that nested parts
 // create proper parent-child relationships via Children()
 func TestNestedPartsParentChildRelationships(t *testing.T) {

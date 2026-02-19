@@ -64,6 +64,12 @@ The high-level layer now treats these separately:
 Reference resolution consults both normal qualified-name lookup and
 short-name lookup, so relationships can resolve by long name or short name.
 
+Part usages also preserve multiplicity from `FeatureSpecializationPart`:
+
+- `part wheels : Wheel[4]` -> `Part.Multiplicity == "4"`
+- `part optionalWheel : Wheel[0..1]` -> `Part.Multiplicity == "0..1"`
+- `part anyWheels : Wheel[*]` -> `Part.Multiplicity == "*"`
+
 ### Core types
 
 - `ParseResult`

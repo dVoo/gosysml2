@@ -485,6 +485,7 @@ func (b *modelBuilder) ExitPartDefinition(ctx *parser.PartDefinitionContext) {
 func (b *modelBuilder) EnterPartUsage(ctx *parser.PartUsageContext) {
 	name := ""
 	typeRef := ""
+	multiplicity := ""
 
 	if ctx.Usage() != nil && ctx.Usage().UsageDeclaration() != nil {
 		usageDecl := ctx.Usage().UsageDeclaration()
@@ -494,6 +495,7 @@ func (b *modelBuilder) EnterPartUsage(ctx *parser.PartUsageContext) {
 		// Extract type reference from FeatureSpecializationPart
 		if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
 			typeRef = extractTypeReference(featSpecPart)
+			multiplicity = extractMultiplicity(featSpecPart)
 		}
 	}
 
@@ -502,6 +504,7 @@ func (b *modelBuilder) EnterPartUsage(ctx *parser.PartUsageContext) {
 	if typeRef != "" {
 		part.TypeRef = NewRef[*Part](typeRef)
 	}
+	part.Multiplicity = multiplicity
 	b.addToParent(part)
 
 	// Push part onto stack for nested elements (parts can have attributes, ports, etc.)
@@ -2229,6 +2232,44 @@ func extractTypeReference(featSpecPart parser.IFeatureSpecializationPartContext)
 	}
 
 	return ""
+}
+
+// extractMultiplicity extracts a usage multiplicity from a featureSpecializationPart.
+// Returned values are normalized without brackets, e.g. "4", "0..1", "*".
+func extractMultiplicity(featSpecPart parser.IFeatureSpecializationPartContext) string {
+	if featSpecPart == nil || featSpecPart.MultiplicityPart() == nil {
+		return ""
+	}
+
+	multiplicityPart := featSpecPart.MultiplicityPart()
+	if multiplicityPart.OwnedMultiplicity() == nil {
+		return ""
+	}
+
+	multiplicityRange := multiplicityPart.OwnedMultiplicity().MultiplicityRange()
+	if multiplicityRange == nil {
+		return ""
+	}
+
+	members := multiplicityRange.AllMultiplicityExpressionMember()
+	switch len(members) {
+	case 0:
+		return ""
+	case 1:
+		return strings.TrimSpace(members[0].GetText())
+	default:
+		lower := strings.TrimSpace(members[0].GetText())
+		upper := strings.TrimSpace(members[1].GetText())
+		if lower != "" && upper != "" {
+			return lower + ".." + upper
+		}
+	}
+
+	// Fallback to direct multiplicity range text if members are unexpectedly empty.
+	text := strings.TrimSpace(multiplicityRange.GetText())
+	text = strings.TrimPrefix(text, "[")
+	text = strings.TrimSuffix(text, "]")
+	return strings.TrimSpace(text)
 }
 
 // extractSpecializationReference extracts the specialization/supertype reference

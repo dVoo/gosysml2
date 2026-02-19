@@ -499,6 +499,7 @@ type Part struct {
 	baseElement
 	IsDefinition bool
 	TypeRef      Ref[*Part] // Reference to the part definition (for usages)
+	Multiplicity string     // Usage multiplicity, e.g. "4", "0..1", "*"
 
 	// Specialization (subclassification) reference for definitions using :> or "specializes"
 	Specializes           Ref[*Part]
@@ -573,6 +574,10 @@ func (p *Part) String() string {
 	if !p.IsDefinition {
 		typ = "usage"
 	}
+	multiplicity := ""
+	if p.Multiplicity != "" {
+		multiplicity = fmt.Sprintf("[%s]", p.Multiplicity)
+	}
 	specializes := ""
 	if p.Specializes.IsResolved() {
 		specializes = fmt.Sprintf(" -> %s", p.Specializes.Resolved().Name())
@@ -580,7 +585,7 @@ func (p *Part) String() string {
 		specializes = fmt.Sprintf(" -> %s (unresolved)", p.unresolvedSpecializes)
 	}
 	return fmt.Sprintf("Part<%s>{%s%s, attrs=%d, parts=%d, ports=%d}",
-		typ, p.name, specializes, len(p.attributes), len(p.parts), len(p.ports))
+		typ, p.name, multiplicity+specializes, len(p.attributes), len(p.parts), len(p.ports))
 }
 
 // Port represents a SysML port definition or usage.
