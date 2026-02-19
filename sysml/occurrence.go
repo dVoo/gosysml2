@@ -132,7 +132,7 @@ func (o *Occurrence) LifeStep() LifeStep {
 
 // AddChild adds a child element with type tracking.
 func (o *Occurrence) AddChild(child Element) {
-	o.baseElement.addChild(child)
+	o.baseElement.addChild(child, o)
 
 	if occ, ok := child.(*Occurrence); ok {
 		o.occurrences = append(o.occurrences, occ)

@@ -15,9 +15,6 @@
 go.work
 
 # Build artifacts
-/cmd/*/cmd
-/cmd/*/*
-!/cmd/*/main.go
 test-attrs
 test-low-level
 test-requirement-attributes
@@ -45,3 +42,6 @@ notes/
 # Nix
 result
 result-*
+
+# Local Go build cache (workspace-local)
+.gocache/

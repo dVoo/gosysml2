@@ -88,5 +88,5 @@ func (c *ControlNode) IsDecision() bool {
 // Control nodes typically don't have children in the traditional sense,
 // but this method satisfies the Element interface.
 func (c *ControlNode) AddChild(child Element) {
-	c.baseElement.addChild(child)
+	c.baseElement.addChild(child, c)
 }

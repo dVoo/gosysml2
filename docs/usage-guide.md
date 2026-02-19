@@ -59,7 +59,7 @@ direnv allow
 cd gosysml2
 go build -o ../bin/verify-completeness ./cmd/verify-completeness
 go build -o ../bin/verify-parser ./cmd/verify-parser
-go build -o ../bin/check_validation ./cmd/check_validation
+go build -o ../bin/check-validation ./cmd/check-validation
 ```
 
 ### Running First Parse
@@ -77,9 +77,9 @@ go run examples/parallel/main.go
 
 ## Library Usage
 
-### Reference to gosysml2/USAGE.md
+### Reference to docs/USAGE.md
 
-For detailed library usage documentation, see [gosysml2/USAGE.md](../gosysml2/USAGE.md).
+For detailed library usage documentation, see [docs/USAGE.md](./USAGE.md).
 
 ### Key Concepts
 
@@ -183,20 +183,20 @@ Validates parser output against expected results.
 - Element structure matches expectations
 - Qualified names are correct
 
-### check_validation
+### check-validation
 
 Runs the validation test suite against all validation data files.
 
 ```bash
 # Run full validation suite
 cd gosysml2
-go run ./cmd/check_validation/main.go
+go run ./cmd/check-validation
 
 # With verbose output
-go run ./cmd/check_validation/main.go -v
+go run ./cmd/check-validation -v
 
 # Check specific category
-go run ./cmd/check_validation/main.go -category parts-tree
+go run ./cmd/check-validation -category parts-tree
 ```
 
 **What it checks:**
@@ -312,7 +312,7 @@ Parse error at line 10: unexpected token 'part'
 3. Using unsupported grammar elements
 
 **Solution:**
-- Check [PERFORMANCE.md](../gosysml2/PERFORMANCE.md) for grammar coverage
+- Check [PERFORMANCE.md](./PERFORMANCE.md) for grammar coverage
 - Verify syntax against SysML v2 specification
 - Check validation data for examples of supported syntax
 
@@ -382,7 +382,7 @@ go tool pprof mem.prof
 
 ## Additional Resources
 
-- [Library Usage Guide](../gosysml2/USAGE.md) - Detailed API documentation
-- [Performance Guide](../gosysml2/PERFORMANCE.md) - Optimization strategies
-- [Examples](../gosysml2/examples/) - Working code samples
-- [README](../gosysml2/README.md) - Project overview and quick reference
+- [Library Usage Guide](./USAGE.md) - Detailed API documentation
+- [Performance Guide](./PERFORMANCE.md) - Optimization strategies
+- [Examples](../examples/) - Working code samples
+- [README](../README.md) - Project overview and quick reference

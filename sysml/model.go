@@ -34,6 +34,8 @@ const (
 	KindMetadata
 	KindImport
 	KindAlias
+	KindRendering
+	KindMessage
 	KindDependency
 	KindFlow
 	KindFlowEnd
@@ -75,6 +77,8 @@ const (
 	KindMetadataStr         = "metadata"
 	KindImportStr           = "import"
 	KindAliasStr            = "alias"
+	KindRenderingStr        = "rendering"
+	KindMessageStr          = "message"
 	KindDependencyStr       = "dependency"
 	KindFlowStr             = "flow"
 	KindFlowEndStr          = "flow end"
@@ -138,6 +142,10 @@ func (k ElementKind) String() string {
 		return "import"
 	case KindAlias:
 		return "alias"
+	case KindRendering:
+		return "rendering"
+	case KindMessage:
+		return "message"
 	case KindDependency:
 		return "dependency"
 	case KindFlow:
@@ -285,9 +293,9 @@ func (e *baseElement) QualifiedName() string {
 	return parentQN + "::" + e.name
 }
 
-func (e *baseElement) addChild(child Element) {
+func (e *baseElement) addChild(child Element, parent Element) {
 	e.children = append(e.children, child)
-	child.SetParent(e)
+	child.SetParent(parent)
 }
 
 // Package represents a SysML package.
@@ -346,7 +354,7 @@ func NewPackage(name string, loc Location) *Package {
 
 // AddChild adds a child element to the package with proper type tracking.
 func (p *Package) AddChild(child Element) {
-	p.baseElement.addChild(child)
+	p.baseElement.addChild(child, p)
 
 	// Track by type for type-safe access
 	switch c := child.(type) {
@@ -531,7 +539,7 @@ func NewPart(name string, loc Location, isDefinition bool) *Part {
 
 // AddChild adds a child element with type tracking.
 func (p *Part) AddChild(child Element) {
-	p.baseElement.addChild(child)
+	p.baseElement.addChild(child, p)
 
 	switch c := child.(type) {
 	case *Attribute:
@@ -664,7 +672,7 @@ func NewConjugatedPort(name string, loc Location) *ConjugatedPort {
 
 // AddChild adds a child element with type tracking.
 func (p *Port) AddChild(child Element) {
-	p.baseElement.addChild(child)
+	p.baseElement.addChild(child, p)
 
 	switch c := child.(type) {
 	case *Port:
@@ -735,7 +743,7 @@ func NewConstraint(name string, loc Location, isDefinition bool) *Constraint {
 
 // AddChild adds a child element with type tracking.
 func (c *Constraint) AddChild(child Element) {
-	c.baseElement.addChild(child)
+	c.baseElement.addChild(child, c)
 
 	if nested, ok := child.(*Constraint); ok {
 		c.constraints = append(c.constraints, nested)
@@ -808,7 +816,7 @@ func NewRequirement(name string, loc Location, isDefinition bool) *Requirement {
 
 // AddChild adds a child element with type tracking.
 func (r *Requirement) AddChild(child Element) {
-	r.baseElement.addChild(child)
+	r.baseElement.addChild(child, r)
 
 	switch c := child.(type) {
 	case *Requirement:
@@ -887,7 +895,7 @@ func NewAction(name string, loc Location, isDefinition bool) *Action {
 
 // AddChild adds a child element with type tracking.
 func (a *Action) AddChild(child Element) {
-	a.baseElement.addChild(child)
+	a.baseElement.addChild(child, a)
 
 	if c, ok := child.(*Action); ok {
 		a.actions = append(a.actions, c)
@@ -970,7 +978,7 @@ func NewVerification(name string, loc Location, isDefinition bool) *Verification
 
 // AddChild adds a child element with type tracking.
 func (v *Verification) AddChild(child Element) {
-	v.baseElement.addChild(child)
+	v.baseElement.addChild(child, v)
 
 	if c, ok := child.(*Action); ok {
 		v.actions = append(v.actions, c)
@@ -1077,7 +1085,7 @@ func NewUseCase(name string, loc Location, isDefinition bool) *UseCase {
 
 // AddChild adds a child element to the use case.
 func (u *UseCase) AddChild(child Element) {
-	u.baseElement.addChild(child)
+	u.baseElement.addChild(child, u)
 }
 
 // IncludeUseCase represents a use case inclusion relationship.
@@ -1221,7 +1229,7 @@ func (c *Case) AddUnresolvedObjective(ref string) {
 
 // AddChild adds a child element to the case.
 func (c *Case) AddChild(child Element) {
-	c.baseElement.addChild(child)
+	c.baseElement.addChild(child, c)
 }
 
 // EnumerationValue represents a single value within an enumeration.
@@ -1275,7 +1283,7 @@ func NewEnumeration(name string, loc Location, isDefinition bool) *Enumeration {
 
 // AddChild adds a child element with type tracking.
 func (e *Enumeration) AddChild(child Element) {
-	e.baseElement.addChild(child)
+	e.baseElement.addChild(child, e)
 
 	if v, ok := child.(*EnumerationValue); ok {
 		e.values = append(e.values, v)
@@ -1335,7 +1343,7 @@ func NewItem(name string, loc Location, isDefinition bool) *Item {
 
 // AddChild adds a child element with type tracking.
 func (i *Item) AddChild(child Element) {
-	i.baseElement.addChild(child)
+	i.baseElement.addChild(child, i)
 
 	switch c := child.(type) {
 	case *Attribute:
@@ -1445,7 +1453,7 @@ func NewState(name string, loc Location, isDefinition bool) *State {
 
 // AddChild adds a child element with type tracking.
 func (s *State) AddChild(child Element) {
-	s.baseElement.addChild(child)
+	s.baseElement.addChild(child, s)
 
 	switch c := child.(type) {
 	case *State:
@@ -1587,7 +1595,7 @@ func NewInterface(name string, loc Location, isDefinition bool) *Interface {
 
 // AddChild adds a child element with type tracking.
 func (i *Interface) AddChild(child Element) {
-	i.baseElement.addChild(child)
+	i.baseElement.addChild(child, i)
 
 	if p, ok := child.(*Port); ok {
 		i.ports = append(i.ports, p)
@@ -1736,8 +1744,12 @@ func (v *View) SetUnresolvedViewpoint(ref string) {
 type Import struct {
 	baseElement
 	ImportedNamespace string
+	Visibility        string   // public/private/protected/default
+	IsMembership      bool     // import member(s)
+	IsNamespace       bool     // import namespace/package
 	IsRecursive       bool     // true for ::**
 	IsAll             bool     // true for ::*
+	FilterExpressions []string // filter package expressions
 	ResolvedElement   Element  // The resolved imported element (if single import)
 	ResolvedPackage   *Package // The resolved library package (if namespace is a library package)
 	IsResolved        bool     // true if the import was successfully resolved
@@ -1752,6 +1764,7 @@ func NewImport(namespace string, loc Location) *Import {
 			location: loc,
 		},
 		ImportedNamespace: namespace,
+		FilterExpressions: make([]string, 0),
 	}
 }
 
@@ -1766,6 +1779,13 @@ type Model struct {
 	Flows        []*Flow
 	ControlNodes []*ControlNode
 	Occurrences  []*Occurrence
+	Aliases      []*Alias
+	Metadata     []*Metadata
+	Renderings   []*Rendering
+	Messages     []*Message
+	Filters      []*ElementFilter
+	Satisfies    []*SatisfyRelationship
+	Verifies     []*VerifyRelationship
 
 	// All top-level elements (for generic traversal)
 	Elements []Element
@@ -1788,6 +1808,13 @@ func NewModel() *Model {
 		Flows:        make([]*Flow, 0),
 		ControlNodes: make([]*ControlNode, 0),
 		Occurrences:  make([]*Occurrence, 0),
+		Aliases:      make([]*Alias, 0),
+		Metadata:     make([]*Metadata, 0),
+		Renderings:   make([]*Rendering, 0),
+		Messages:     make([]*Message, 0),
+		Filters:      make([]*ElementFilter, 0),
+		Satisfies:    make([]*SatisfyRelationship, 0),
+		Verifies:     make([]*VerifyRelationship, 0),
 		Elements:     make([]Element, 0),
 		elementIndex: make(map[string]Element),
 	}
@@ -1833,6 +1860,48 @@ func (m *Model) AddControlNode(node *ControlNode) {
 func (m *Model) AddOccurrence(occ *Occurrence) {
 	m.Occurrences = append(m.Occurrences, occ)
 	m.Elements = append(m.Elements, occ)
+}
+
+// AddAlias adds an alias to the model.
+func (m *Model) AddAlias(alias *Alias) {
+	m.Aliases = append(m.Aliases, alias)
+	m.Elements = append(m.Elements, alias)
+}
+
+// AddMetadata adds metadata to the model.
+func (m *Model) AddMetadata(metadata *Metadata) {
+	m.Metadata = append(m.Metadata, metadata)
+	m.Elements = append(m.Elements, metadata)
+}
+
+// AddRendering adds rendering to the model.
+func (m *Model) AddRendering(rendering *Rendering) {
+	m.Renderings = append(m.Renderings, rendering)
+	m.Elements = append(m.Elements, rendering)
+}
+
+// AddMessage adds message usage to the model.
+func (m *Model) AddMessage(message *Message) {
+	m.Messages = append(m.Messages, message)
+	m.Elements = append(m.Elements, message)
+}
+
+// AddFilter adds an element filter to the model.
+func (m *Model) AddFilter(filter *ElementFilter) {
+	m.Filters = append(m.Filters, filter)
+	m.Elements = append(m.Elements, filter)
+}
+
+// AddSatisfy adds a satisfy relationship to the model.
+func (m *Model) AddSatisfy(rel *SatisfyRelationship) {
+	m.Satisfies = append(m.Satisfies, rel)
+	m.Elements = append(m.Elements, rel)
+}
+
+// AddVerify adds a verify relationship to the model.
+func (m *Model) AddVerify(rel *VerifyRelationship) {
+	m.Verifies = append(m.Verifies, rel)
+	m.Elements = append(m.Elements, rel)
 }
 
 // FindPackage finds a package by name.
@@ -1922,6 +1991,22 @@ func (m *Model) ResolveReferences() {
 			m.resolveInterfaceRefs(e)
 		case *SuccessionFlow:
 			m.resolveSuccessionFlowRefs(e)
+		case *Dependency:
+			m.resolveDependencyRefs(e)
+		case *Comment:
+			m.resolveCommentRefs(e)
+		case *Alias:
+			m.resolveAliasRefs(e)
+		case *Metadata:
+			m.resolveMetadataRefs(e)
+		case *Rendering:
+			m.resolveRenderingRefs(e)
+		case *Message:
+			m.resolveMessageRefs(e)
+		case *SatisfyRelationship:
+			m.resolveSatisfyRelationshipRefs(e)
+		case *VerifyRelationship:
+			m.resolveVerifyRelationshipRefs(e)
 		}
 		return true
 	})
@@ -2408,6 +2493,117 @@ func (m *Model) resolveSuccessionFlowRefs(s *SuccessionFlow) {
 	if s.unresolvedTarget != "" {
 		if elem := m.findElement(s.unresolvedTarget, s); elem != nil {
 			s.Target.Resolve(elem)
+		}
+	}
+}
+
+func (m *Model) resolveDependencyRefs(d *Dependency) {
+	for _, name := range d.unresolvedClient {
+		if elem := m.findElement(name, d); elem != nil {
+			d.Client = append(d.Client, elem)
+		}
+	}
+	for _, name := range d.unresolvedSupplier {
+		if elem := m.findElement(name, d); elem != nil {
+			d.Supplier = append(d.Supplier, elem)
+		}
+	}
+}
+
+func (m *Model) resolveCommentRefs(c *Comment) {
+	for _, name := range c.unresolvedAbout {
+		if elem := m.findElement(name, c); elem != nil {
+			c.About = append(c.About, elem)
+		}
+	}
+}
+
+func (m *Model) resolveAliasRefs(a *Alias) {
+	if a.unresolvedTarget == "" {
+		return
+	}
+	if elem := m.findElement(a.unresolvedTarget, a); elem != nil {
+		a.Target.Resolve(elem)
+	}
+}
+
+func (m *Model) resolveMetadataRefs(md *Metadata) {
+	if !md.IsDefinition && md.TypeRef.name != "" {
+		if elem := m.findElement(md.TypeRef.name, md); elem != nil {
+			if target, ok := elem.(*Metadata); ok {
+				md.TypeRef.Resolve(target)
+			}
+		}
+	}
+	for _, annotation := range md.annotations {
+		if annotation.unresolvedMetadata == "" {
+			continue
+		}
+		if elem := m.findElement(annotation.unresolvedMetadata, md); elem != nil {
+			if target, ok := elem.(*Metadata); ok {
+				annotation.Metadata.Resolve(target)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveRenderingRefs(r *Rendering) {
+	if !r.IsDefinition && r.TypeRef.name != "" {
+		if elem := m.findElement(r.TypeRef.name, r); elem != nil {
+			if target, ok := elem.(*Rendering); ok {
+				r.TypeRef.Resolve(target)
+			}
+		}
+	}
+}
+
+func (m *Model) resolveMessageRefs(msg *Message) {
+	if msg.unresolvedSender != "" {
+		if elem := m.findElement(msg.unresolvedSender, msg); elem != nil {
+			msg.Sender.Resolve(elem)
+		}
+	}
+	if msg.unresolvedReceiver != "" {
+		if elem := m.findElement(msg.unresolvedReceiver, msg); elem != nil {
+			msg.Receiver.Resolve(elem)
+		}
+	}
+}
+
+func (m *Model) resolveSatisfyRelationshipRefs(rel *SatisfyRelationship) {
+	if rel.unresolvedSatisfier != "" {
+		if elem := m.findElement(rel.unresolvedSatisfier, rel); elem != nil {
+			rel.Satisfier.Resolve(elem)
+		}
+	}
+	if rel.unresolvedRequired != "" {
+		if elem := m.findElement(rel.unresolvedRequired, rel); elem != nil {
+			if req, ok := elem.(*Requirement); ok {
+				rel.Required.Resolve(req)
+				if rel.Satisfier.IsResolved() {
+					req.SatisfiedBy = append(req.SatisfiedBy, rel.Satisfier.Resolved())
+				}
+			}
+		}
+	}
+}
+
+func (m *Model) resolveVerifyRelationshipRefs(rel *VerifyRelationship) {
+	if rel.unresolvedVerifier != "" {
+		if elem := m.findElement(rel.unresolvedVerifier, rel); elem != nil {
+			if ver, ok := elem.(*Verification); ok {
+				rel.Verifier.Resolve(ver)
+			}
+		}
+	}
+	if rel.unresolvedRequired != "" {
+		if elem := m.findElement(rel.unresolvedRequired, rel); elem != nil {
+			if req, ok := elem.(*Requirement); ok {
+				rel.Required.Resolve(req)
+				if rel.Verifier.IsResolved() {
+					req.VerifiedBy = append(req.VerifiedBy, rel.Verifier.Resolved())
+				}
+			}
 		}
 	}
 }

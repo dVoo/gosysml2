@@ -105,6 +105,27 @@ This project uses Nix flakes for environment management:
 nix develop          # Enter dev shell with antlr, openjdk, claude-code
 ```
 
+## Version Control
+
+This repository uses `jj` (Jujutsu) with the Git backend.
+
+```bash
+# Inspect working copy changes
+jj st
+
+# Edit current change description
+jj describe -m "your change description"
+
+# Start a new change on top of current one
+jj new
+
+# See bookmarks (similar to branches)
+jj bookmark list
+
+# Push current bookmark(s) to Git remote
+jj git push --bookmark <bookmark-name>
+```
+
 ## Building
 
 ```bash
@@ -128,12 +149,12 @@ Analyzes SysML files and provides detailed statistics:
 go run ./cmd/verify-completeness validationdata/parts-tree/
 ```
 
-### check_validation
+### check-validation
 
 Validates the parser against the test suite:
 
 ```bash
-go run ./cmd/check_validation
+go run ./cmd/check-validation
 ```
 
 ## Validation

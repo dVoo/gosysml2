@@ -361,6 +361,12 @@ func (b *modelBuilder) addToParent(elem Element) {
 	}
 }
 
+func (b *modelBuilder) addOccurrenceToModel(occ *Occurrence) {
+	occ.parent = b.getCurrentParent()
+	b.addToParent(occ)
+	b.model.AddOccurrence(occ)
+}
+
 func (b *modelBuilder) EnterPackage_(ctx *parser.Package_Context) {
 	name := ""
 	if ctx.PackageDeclaration() != nil {
@@ -605,28 +611,106 @@ func (b *modelBuilder) EnterItemUsage(ctx *parser.ItemUsageContext) {
 }
 
 func (b *modelBuilder) EnterImport_(ctx *parser.Import_Context) {
-	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
-		Column: ctx.GetStart().GetColumn(),
+	loc := locationFromContext(ctx)
+	namespace := ""
+	imp := NewImport(namespace, loc)
+	imp.Visibility = extractVisibilityIndicator(ctx.VisibilityIndicator())
+
+	if decl := ctx.ImportDeclaration(); decl != nil {
+		if membership := decl.MembershipImport(); membership != nil {
+			imp.IsMembership = true
+			namespace = extractQualifiedName(membership.QualifiedName())
+			imp.ImportedNamespace = namespace
+			if membership.COLONCOLON() != nil && membership.STARSTAR() != nil {
+				imp.IsAll = true
+				imp.IsRecursive = true
+			}
+		}
+		if ns := decl.NamespaceImport(); ns != nil {
+			imp.IsNamespace = true
+			if ns.FilterPackage() != nil {
+				filter := ns.FilterPackage()
+				if filterImport := filter.FilterPackageImportPart(); filterImport != nil {
+					namespace = extractQualifiedName(filterImport.QualifiedName())
+					imp.ImportedNamespace = namespace
+					imp.IsAll = filterImport.STAR() != nil
+					imp.IsRecursive = filterImport.STARSTAR() != nil
+				}
+				for _, member := range filter.AllFilterPackageMember() {
+					if expr := member.OwnedExpression(); expr != nil {
+						imp.FilterExpressions = append(imp.FilterExpressions, expr.GetText())
+					}
+				}
+			} else {
+				namespace = extractQualifiedName(ns.QualifiedName())
+				imp.ImportedNamespace = namespace
+				if ns.STAR() != nil {
+					imp.IsAll = true
+				}
+				if ns.STARSTAR() != nil {
+					imp.IsAll = true
+					imp.IsRecursive = true
+				}
+			}
+		}
+	}
+	if imp.ImportedNamespace == "" {
+		imp.ImportedNamespace = namespace
+	}
+	if imp.ImportedNamespace == "" {
+		imp.ImportedNamespace = ctx.GetText()
 	}
 
-	namespace := ctx.GetText()
-	imp := NewImport(namespace, loc)
-
 	// Parse import patterns and detect wildcards
-	b.parseImportPattern(imp, namespace)
+	b.parseImportPattern(imp, imp.ImportedNamespace)
 
 	// Try to resolve library import if registry is available
 	if b.libraryRegistry != nil {
-		b.resolveLibraryImport(imp, namespace)
+		b.resolveLibraryImport(imp, imp.ImportedNamespace)
 	}
 
 	if b.currentPkg != nil {
+		imp.parent = b.currentPkg
 		b.currentPkg.AddChild(imp)
 	} else {
 		b.model.AddImport(imp)
 	}
 }
+
+// EnterAliasMember maps alias members to first-class Alias model elements.
+func (b *modelBuilder) EnterAliasMember(ctx *parser.AliasMemberContext) {
+	name := ""
+	if names := ctx.AllName(); len(names) > 0 {
+		name = strings.TrimSpace(names[0].GetText())
+	}
+	alias := NewAlias(name, locationFromContext(ctx))
+	alias.SetUnresolvedTarget(extractQualifiedName(ctx.QualifiedName()))
+	alias.parent = b.getCurrentParent()
+	b.addToParent(alias)
+	if b.currentPkg == nil {
+		b.model.AddAlias(alias)
+	}
+}
+
+// EnterElementFilterMember captures element filter members.
+func (b *modelBuilder) EnterElementFilterMember(ctx *parser.ElementFilterMemberContext) {
+	expr := strings.TrimSpace(ctx.GetText())
+	filter := NewElementFilter("", locationFromContext(ctx), expr)
+	filter.parent = b.getCurrentParent()
+	b.addToParent(filter)
+	if b.currentPkg == nil {
+		b.model.AddFilter(filter)
+	}
+}
+
+// EnterMembershipImport is tracked by EnterImport_ for semantic extraction.
+func (b *modelBuilder) EnterMembershipImport(ctx *parser.MembershipImportContext) {}
+
+// EnterNamespaceImport is tracked by EnterImport_ for semantic extraction.
+func (b *modelBuilder) EnterNamespaceImport(ctx *parser.NamespaceImportContext) {}
+
+// EnterFilterPackage is tracked by EnterImport_ for semantic extraction.
+func (b *modelBuilder) EnterFilterPackage(ctx *parser.FilterPackageContext) {}
 
 // parseImportPattern detects wildcard patterns in import statements.
 // Sets IsAll for "::*" and IsRecursive for "::**" patterns.
@@ -2005,6 +2089,33 @@ func extractName(ident parser.IIdentificationContext) string {
 	return ""
 }
 
+func extractQualifiedName(qname parser.IQualifiedNameContext) string {
+	if qname == nil {
+		return ""
+	}
+	return strings.TrimSpace(qname.GetText())
+}
+
+func extractOwnedReferenceSubsetting(ref parser.IOwnedReferenceSubsettingContext) string {
+	if ref == nil {
+		return ""
+	}
+	if qname := ref.QualifiedName(); qname != nil {
+		return extractQualifiedName(qname)
+	}
+	if chain := ref.OwnedFeatureChain(); chain != nil {
+		return strings.TrimSpace(chain.GetText())
+	}
+	return ""
+}
+
+func extractVisibilityIndicator(v parser.IVisibilityIndicatorContext) string {
+	if v == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.GetText())
+}
+
 // extractRedefinitionName extracts the name from a redefinition in featureSpecializationPart
 func extractRedefinitionName(featSpecPart parser.IFeatureSpecializationPartContext) string {
 	if featSpecPart == nil {
@@ -2139,15 +2250,27 @@ func (b *modelBuilder) EnterDependency(ctx *parser.DependencyContext) {
 
 	// Extract client/supplier from DependencyDeclaration
 	if decl := ctx.DependencyDeclaration(); decl != nil {
-		// Get all qualified names (client and supplier references)
+		// Collect all qualified names. Grammar allows lists on both client and supplier sides.
 		names := decl.AllQualifiedName()
-		if len(names) > 0 {
-			// First qualified name is the client
-			dep.AddUnresolvedClient(names[0].GetText())
+		toIndex := len(names)
+		if decl.TO() != nil {
+			// For grammar shape: one or more clients before TO, suppliers after TO.
+			// Split at the last client position conservatively if TO is present.
+			// Minimum valid shape is client TO supplier.
+			if len(names) > 1 {
+				toIndex = len(names) - 1
+			}
 		}
-		if len(names) > 1 {
-			// Second qualified name is the supplier (after TO keyword)
-			dep.AddUnresolvedSupplier(names[1].GetText())
+		for i, qn := range names {
+			name := extractQualifiedName(qn)
+			if name == "" {
+				continue
+			}
+			if i < toIndex {
+				dep.AddUnresolvedClient(name)
+			} else {
+				dep.AddUnresolvedSupplier(name)
+			}
 		}
 	}
 
@@ -2192,6 +2315,15 @@ func (b *modelBuilder) EnterComment_(ctx *parser.Comment_Context) {
 	loc := locationFromContext(ctx)
 	comment := NewComment(body, loc)
 	comment.Locale = locale
+	for _, annotation := range ctx.AllAnnotation() {
+		if annotation == nil || annotation.QualifiedName() == nil {
+			continue
+		}
+		name := extractQualifiedName(annotation.QualifiedName())
+		if name != "" {
+			comment.AddUnresolvedAbout(name)
+		}
+	}
 
 	// Add to current package
 	if b.currentPkg != nil {
@@ -2420,6 +2552,293 @@ func (b *modelBuilder) EnterOccurrenceDefinition(ctx *parser.OccurrenceDefinitio
 func (b *modelBuilder) ExitOccurrenceDefinition(ctx *parser.OccurrenceDefinitionContext) {
 	if len(b.elementStack) > 0 {
 		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+// EnterIndividualDefinition handles individual definition declarations.
+func (b *modelBuilder) EnterIndividualDefinition(ctx *parser.IndividualDefinitionContext) {
+	name := ""
+	if ctx.Definition() != nil && ctx.Definition().DefinitionDeclaration() != nil {
+		if ident := ctx.Definition().DefinitionDeclaration().Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	}
+
+	occ := NewOccurrence(name, locationFromContext(ctx), true, true)
+	b.addOccurrenceToModel(occ)
+	b.elementStack = append(b.elementStack, occ)
+}
+
+func (b *modelBuilder) ExitIndividualDefinition(ctx *parser.IndividualDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+// EnterIndividualUsage handles individual usage declarations.
+func (b *modelBuilder) EnterIndividualUsage(ctx *parser.IndividualUsageContext) {
+	name := ""
+	if usage := ctx.Usage(); usage != nil && usage.UsageDeclaration() != nil {
+		if ident := usage.UsageDeclaration().Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	}
+	occ := NewOccurrence(name, locationFromContext(ctx), false, true)
+	b.addOccurrenceToModel(occ)
+	b.elementStack = append(b.elementStack, occ)
+}
+
+func (b *modelBuilder) ExitIndividualUsage(ctx *parser.IndividualUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+// EnterPortionUsage handles snapshot/timeslice portion usages.
+func (b *modelBuilder) EnterPortionUsage(ctx *parser.PortionUsageContext) {
+	name := ""
+	if usage := ctx.Usage(); usage != nil && usage.UsageDeclaration() != nil {
+		if ident := usage.UsageDeclaration().Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	}
+	occ := NewOccurrence(name, locationFromContext(ctx), false, ctx.INDIVIDUAL() != nil)
+	if kind := ctx.PortionKind(); kind != nil {
+		switch {
+		case kind.SNAPSHOT() != nil:
+			occ.SetPortionKind(PortionKindSnapshot)
+			occ.IsSnapshot = true
+		case kind.TIMESLICE() != nil:
+			occ.SetPortionKind(PortionKindTimeslice)
+			occ.IsTimeSlice = true
+		}
+	}
+	b.addOccurrenceToModel(occ)
+	b.elementStack = append(b.elementStack, occ)
+}
+
+func (b *modelBuilder) ExitPortionUsage(ctx *parser.PortionUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+// EnterEventOccurrenceUsage handles event occurrence usages.
+func (b *modelBuilder) EnterEventOccurrenceUsage(ctx *parser.EventOccurrenceUsageContext) {
+	name := ""
+	if decl := ctx.UsageDeclaration(); decl != nil {
+		if ident := decl.Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	}
+	occ := NewEventOccurrence(name, locationFromContext(ctx))
+	b.addOccurrenceToModel(occ)
+	b.elementStack = append(b.elementStack, occ)
+}
+
+func (b *modelBuilder) ExitEventOccurrenceUsage(ctx *parser.EventOccurrenceUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+// EnterPerformActionUsage handles perform-action usage declarations.
+func (b *modelBuilder) EnterPerformActionUsage(ctx *parser.PerformActionUsageContext) {
+	name := ""
+	if decl := ctx.PerformActionUsageDeclaration(); decl != nil && decl.UsageDeclaration() != nil {
+		if ident := decl.UsageDeclaration().Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	}
+	action := NewAction(name, locationFromContext(ctx), false)
+	action.parent = b.getCurrentParent()
+	b.addToParent(action)
+	b.elementStack = append(b.elementStack, action)
+}
+
+func (b *modelBuilder) ExitPerformActionUsage(ctx *parser.PerformActionUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+// EnterExhibitStateUsage handles exhibit-state usage declarations.
+func (b *modelBuilder) EnterExhibitStateUsage(ctx *parser.ExhibitStateUsageContext) {
+	name := ""
+	if decl := ctx.UsageDeclaration(); decl != nil {
+		if ident := decl.Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	} else if ref := ctx.OwnedReferenceSubsetting(); ref != nil {
+		name = extractOwnedReferenceSubsetting(ref)
+	}
+	state := NewState(name, locationFromContext(ctx), false)
+	state.parent = b.getCurrentParent()
+	b.addToParent(state)
+	b.elementStack = append(b.elementStack, state)
+}
+
+func (b *modelBuilder) ExitExhibitStateUsage(ctx *parser.ExhibitStateUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+// EnterSatisfyRequirementUsage captures satisfy relationships as typed edges.
+func (b *modelBuilder) EnterSatisfyRequirementUsage(ctx *parser.SatisfyRequirementUsageContext) {
+	rel := NewSatisfyRelationship("", locationFromContext(ctx))
+	if subj := ctx.SatisfactionSubjectMember(); subj != nil && subj.SatisfactionParameter() != nil {
+		rel.SetUnresolvedSatisfier(strings.TrimSpace(subj.SatisfactionParameter().GetText()))
+	}
+	switch {
+	case ctx.OwnedReferenceSubsetting() != nil:
+		rel.SetUnresolvedRequired(extractOwnedReferenceSubsetting(ctx.OwnedReferenceSubsetting()))
+	case ctx.UsageDeclaration() != nil && ctx.UsageDeclaration().Identification() != nil:
+		rel.SetUnresolvedRequired(extractName(ctx.UsageDeclaration().Identification()))
+	}
+	rel.parent = b.getCurrentParent()
+	b.addToParent(rel)
+	if b.currentPkg == nil {
+		b.model.AddSatisfy(rel)
+	}
+}
+
+// EnterRequirementVerificationUsage captures verify relationships as typed edges.
+func (b *modelBuilder) EnterRequirementVerificationUsage(ctx *parser.RequirementVerificationUsageContext) {
+	rel := NewVerifyRelationship("", locationFromContext(ctx))
+	if req := ctx.OwnedReferenceSubsetting(); req != nil {
+		rel.SetUnresolvedRequired(extractOwnedReferenceSubsetting(req))
+	}
+	if decl := ctx.ConstraintUsageDeclaration(); decl != nil && decl.UsageDeclaration() != nil {
+		if ident := decl.UsageDeclaration().Identification(); ident != nil {
+			rel.SetUnresolvedVerifier(extractName(ident))
+		}
+	}
+	rel.parent = b.getCurrentParent()
+	b.addToParent(rel)
+	if b.currentPkg == nil {
+		b.model.AddVerify(rel)
+	}
+}
+
+// EnterMessage maps message usage to Message model nodes.
+func (b *modelBuilder) EnterMessage(ctx *parser.MessageContext) {
+	name := ""
+	if decl := ctx.MessageDeclaration(); decl != nil && decl.UsageDeclaration() != nil {
+		if ident := decl.UsageDeclaration().Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	}
+	msg := NewMessage(name, locationFromContext(ctx))
+	if decl := ctx.MessageDeclaration(); decl != nil {
+		events := decl.AllMessageEventMember()
+		if len(events) >= 2 {
+			if left := events[0].MessageEvent(); left != nil && left.OwnedReferenceSubsetting() != nil {
+				msg.SetUnresolvedSender(extractOwnedReferenceSubsetting(left.OwnedReferenceSubsetting()))
+			}
+			if right := events[1].MessageEvent(); right != nil && right.OwnedReferenceSubsetting() != nil {
+				msg.SetUnresolvedReceiver(extractOwnedReferenceSubsetting(right.OwnedReferenceSubsetting()))
+			}
+		}
+		if payload := decl.FlowPayloadFeatureMember(); payload != nil {
+			msg.Payload = payload.GetText()
+		}
+	}
+	msg.parent = b.getCurrentParent()
+	b.addToParent(msg)
+	if b.currentPkg == nil {
+		b.model.AddMessage(msg)
+	}
+}
+
+// EnterRenderingDefinition handles rendering definitions.
+func (b *modelBuilder) EnterRenderingDefinition(ctx *parser.RenderingDefinitionContext) {
+	name := ""
+	if def := ctx.Definition(); def != nil && def.DefinitionDeclaration() != nil {
+		if ident := def.DefinitionDeclaration().Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	}
+	rendering := NewRendering(name, locationFromContext(ctx), true)
+	rendering.parent = b.getCurrentParent()
+	b.addToParent(rendering)
+	if b.currentPkg == nil {
+		b.model.AddRendering(rendering)
+	}
+}
+
+// EnterRenderingUsage handles rendering usages.
+func (b *modelBuilder) EnterRenderingUsage(ctx *parser.RenderingUsageContext) {
+	name := ""
+	if usage := ctx.Usage(); usage != nil && usage.UsageDeclaration() != nil {
+		if ident := usage.UsageDeclaration().Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	}
+	rendering := NewRendering(name, locationFromContext(ctx), false)
+	if usage := ctx.Usage(); usage != nil && usage.UsageDeclaration() != nil && usage.UsageDeclaration().FeatureSpecializationPart() != nil {
+		typeRef := extractTypeReference(usage.UsageDeclaration().FeatureSpecializationPart())
+		if typeRef != "" {
+			rendering.TypeRef = NewRef[*Rendering](typeRef)
+		}
+	}
+	rendering.parent = b.getCurrentParent()
+	b.addToParent(rendering)
+	if b.currentPkg == nil {
+		b.model.AddRendering(rendering)
+	}
+}
+
+// EnterMetadataDefinition handles metadata definitions.
+func (b *modelBuilder) EnterMetadataDefinition(ctx *parser.MetadataDefinitionContext) {
+	name := ""
+	if def := ctx.Definition(); def != nil && def.DefinitionDeclaration() != nil {
+		if ident := def.DefinitionDeclaration().Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	}
+	md := NewMetadata(name, locationFromContext(ctx), true)
+	md.parent = b.getCurrentParent()
+	b.addToParent(md)
+	if b.currentPkg == nil {
+		b.model.AddMetadata(md)
+	}
+	b.elementStack = append(b.elementStack, md)
+}
+
+func (b *modelBuilder) ExitMetadataDefinition(ctx *parser.MetadataDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+// EnterMetadataUsage handles metadata usages.
+func (b *modelBuilder) EnterMetadataUsage(ctx *parser.MetadataUsageContext) {
+	name := ""
+	typeRef := ""
+	if decl := ctx.MetadataUsageDeclaration(); decl != nil {
+		if ident := decl.Identification(); ident != nil {
+			name = extractName(ident)
+		}
+		if typing := decl.OwnedFeatureTyping(); typing != nil && typing.QualifiedName() != nil {
+			typeRef = extractQualifiedName(typing.QualifiedName())
+		}
+	}
+	md := NewMetadata(name, locationFromContext(ctx), false)
+	if typeRef != "" {
+		md.TypeRef = NewRef[*Metadata](typeRef)
+	}
+	for _, ann := range ctx.AllAnnotation() {
+		if ann != nil && ann.QualifiedName() != nil {
+			node := NewPrefixMetadataAnnotation(locationFromContext(ctx))
+			node.SetUnresolvedMetadata(extractQualifiedName(ann.QualifiedName()))
+			md.AddChild(node)
+		}
+	}
+	md.parent = b.getCurrentParent()
+	b.addToParent(md)
+	if b.currentPkg == nil {
+		b.model.AddMetadata(md)
 	}
 }
 
