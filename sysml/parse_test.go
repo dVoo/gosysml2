@@ -216,6 +216,69 @@ package VehicleReqs {
 	}
 }
 
+func TestRequirementDefinitionRequireBlockExpressionCompatibility(t *testing.T) {
+	input := `
+package P {
+    requirement def MassRequirement {
+        require { massActual <= massLimit };
+    }
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Errors)
+	}
+
+	reqs := FindAll[*Requirement](result.Model)
+	if len(reqs) != 1 {
+		t.Fatalf("expected 1 requirement, got %d", len(reqs))
+	}
+
+	req := reqs[0]
+	if len(req.Constraints) != 1 {
+		t.Fatalf("expected 1 requirement constraint, got %d", len(req.Constraints))
+	}
+	if req.Constraints[0].Expression != "massActual <= massLimit" {
+		t.Fatalf("expected constraint expression %q, got %q", "massActual <= massLimit", req.Constraints[0].Expression)
+	}
+}
+
+func TestRequirementUsageBindingListCompatibility(t *testing.T) {
+	input := `
+package P {
+    requirement def MassRequirement;
+    requirement <'R1'> massReq : MassRequirement [vehicle = myVehicle, threshold = 42];
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Errors)
+	}
+
+	reqs := FindAll[*Requirement](result.Model)
+	if len(reqs) != 2 {
+		t.Fatalf("expected 2 requirements, got %d", len(reqs))
+	}
+
+	var usage *Requirement
+	for _, r := range reqs {
+		if !r.IsDefinition {
+			usage = r
+			break
+		}
+	}
+	if usage == nil {
+		t.Fatal("expected requirement usage")
+	}
+
+	if usage.Bindings["vehicle"] != "myVehicle" {
+		t.Fatalf("expected vehicle binding %q, got %q", "myVehicle", usage.Bindings["vehicle"])
+	}
+	if usage.Bindings["threshold"] != "42" {
+		t.Fatalf("expected threshold binding %q, got %q", "42", usage.Bindings["threshold"])
+	}
+}
+
 func TestPartUsageMultiplicity(t *testing.T) {
 	input := `
 package VehiclePkg {

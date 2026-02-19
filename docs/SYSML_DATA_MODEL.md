@@ -78,8 +78,9 @@ This document describes the `sysml` package data model as currently implemented 
 - `RequirementConstraint`
   - `IsAssume`, `Expression`
 - `Requirement`
-  - `IsDefinition`, `TypeRef Ref[*Requirement]`, `RequirementID`
+  - `IsDefinition`, `TypeRef Ref[*Requirement]`, `RequirementID`, `Bindings map[string]string`
   - `RequirementID` is populated from `declaredShortName` when `<...>` is present
+  - `Bindings` is populated from usage argument lists like `[vehicle = myVehicle]`
   - `Subject Ref[Element]`
   - relationships:
     - `DerivedFrom`, `DerivedReqs`

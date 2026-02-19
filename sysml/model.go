@@ -798,6 +798,7 @@ type Requirement struct {
 	IsDefinition  bool
 	TypeRef       Ref[*Requirement] // Reference to the requirement definition (for usages)
 	RequirementID string            // Optional requirement ID (e.g., "REQ-001")
+	Bindings      map[string]string // Optional usage argument bindings, e.g. [arg = value]
 
 	// Subject
 	Subject Ref[Element] // Reference to the subject element
@@ -840,6 +841,7 @@ func NewRequirement(name string, loc Location, isDefinition bool) *Requirement {
 			children: make([]Element, 0),
 		},
 		IsDefinition:          isDefinition,
+		Bindings:              make(map[string]string),
 		DerivedFrom:           make([]*Requirement, 0),
 		DerivedReqs:           make([]*Requirement, 0),
 		SatisfiedBy:           make([]Element, 0),

@@ -188,6 +188,7 @@ type Requirement struct {
     IsDefinition  bool
     TypeRef       Ref[*Requirement]  // Reference to requirement definition
     RequirementID string
+    Bindings      map[string]string  // Usage argument bindings, e.g. [vehicle = myVehicle]
     Subject       Ref[Element]       // Reference to subject element
 
     // Relationships with REAL references (not strings!)

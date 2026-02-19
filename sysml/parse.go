@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -57,6 +58,132 @@ type parseConfig struct {
 	libraryRegistry   *LibraryRegistry
 	autoLoadLibraries bool
 	libraryPath       string
+}
+
+type parseRewriteHints struct {
+	requireConstraintExprByPlaceholder map[string]string
+	requirementBindingsByLine          map[int]map[string]string
+	requirementBindingsByName          map[string][]map[string]string
+}
+
+func newParseRewriteHints() *parseRewriteHints {
+	return &parseRewriteHints{
+		requireConstraintExprByPlaceholder: make(map[string]string),
+		requirementBindingsByLine:          make(map[int]map[string]string),
+		requirementBindingsByName:          make(map[string][]map[string]string),
+	}
+}
+
+var (
+	requireBlockPattern = regexp.MustCompile(`(?s)require\s*\{\s*(.*?)\s*\}\s*;`)
+	reqBindingPattern   = regexp.MustCompile(`(?m)(requirement\b[^\n\r;{]*?:\s*[^\[\n\r;{]+?)\s*\[([^\]\n\r]*)\](\s*(?:\{|;))`)
+	identTokenPattern   = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*`)
+)
+
+func lineNumberAtOffset(input string, offset int) int {
+	if offset <= 0 {
+		return 1
+	}
+	if offset > len(input) {
+		offset = len(input)
+	}
+	return 1 + strings.Count(input[:offset], "\n")
+}
+
+func parseBindings(bindingsText string) map[string]string {
+	result := make(map[string]string)
+	for _, part := range strings.Split(bindingsText, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		kv := strings.SplitN(part, "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(kv[0])
+		value := strings.TrimSpace(kv[1])
+		if key != "" {
+			result[key] = value
+		}
+	}
+	return result
+}
+
+func extractRequirementUsageName(requirementPrefix string) string {
+	colon := strings.LastIndex(requirementPrefix, ":")
+	if colon < 0 {
+		return ""
+	}
+	left := requirementPrefix[:colon]
+	tokens := identTokenPattern.FindAllString(left, -1)
+	if len(tokens) == 0 {
+		return ""
+	}
+	// "requirement def X : T" is a definition form, not usage.
+	if len(tokens) >= 2 && tokens[0] == "requirement" && tokens[1] == "def" {
+		return ""
+	}
+	// For usage forms, the last identifier before ':' is the declared name.
+	return tokens[len(tokens)-1]
+}
+
+func normalizeUnsupportedRequirementSyntax(input string) (string, *parseRewriteHints) {
+	hints := newParseRewriteHints()
+	normalized := input
+
+	// Gap 14 compatibility: "require { expr };" -> "require __gap14_constraint_N;"
+	matches := requireBlockPattern.FindAllStringSubmatchIndex(normalized, -1)
+	if len(matches) > 0 {
+		var out strings.Builder
+		last := 0
+		for i, match := range matches {
+			start, end := match[0], match[1]
+			exprStart, exprEnd := match[2], match[3]
+			out.WriteString(normalized[last:start])
+			placeholder := fmt.Sprintf("__gap14_constraint_%d", i+1)
+			out.WriteString("require " + placeholder + ";")
+			hints.requireConstraintExprByPlaceholder[placeholder] = strings.TrimSpace(normalized[exprStart:exprEnd])
+			last = end
+		}
+		out.WriteString(normalized[last:])
+		normalized = out.String()
+	}
+
+	// Gap 15 compatibility: remove usage binding list syntax and capture values.
+	matches = reqBindingPattern.FindAllStringSubmatchIndex(normalized, -1)
+	if len(matches) > 0 {
+		var out strings.Builder
+		last := 0
+		for _, match := range matches {
+			start, end := match[0], match[1]
+			prefixStart, prefixEnd := match[2], match[3]
+			bindingsStart, bindingsEnd := match[4], match[5]
+			suffixStart, suffixEnd := match[6], match[7]
+
+			prefix := normalized[prefixStart:prefixEnd]
+			bindingsText := normalized[bindingsStart:bindingsEnd]
+			suffix := normalized[suffixStart:suffixEnd]
+
+			out.WriteString(normalized[last:start])
+			out.WriteString(prefix)
+			out.WriteString(suffix)
+
+			bindings := parseBindings(bindingsText)
+			if len(bindings) > 0 {
+				line := lineNumberAtOffset(normalized, start)
+				hints.requirementBindingsByLine[line] = bindings
+				if name := extractRequirementUsageName(prefix); name != "" {
+					hints.requirementBindingsByName[name] = append(hints.requirementBindingsByName[name], bindings)
+				}
+			}
+			last = end
+		}
+		out.WriteString(normalized[last:])
+		normalized = out.String()
+	}
+
+	return normalized, hints
 }
 
 // WithDiscardTree discards the parse tree after building the model.
@@ -125,9 +252,10 @@ func parseWithSource(input, source string, opts ...ParseOption) *ParseResult {
 
 	// Get or create library registry
 	registry := getOrCreateRegistry(cfg)
+	normalizedInput, rewriteHints := normalizeUnsupportedRequirementSyntax(input)
 
 	// Use low-level parser
-	tree, lowErrors := low.Parse(input)
+	tree, lowErrors := low.Parse(normalizedInput)
 
 	result := &ParseResult{
 		Source: source,
@@ -144,7 +272,7 @@ func parseWithSource(input, source string, opts ...ParseOption) *ParseResult {
 
 	// Build model from parse tree
 	if tree != nil {
-		result.Model = buildModel(tree, registry)
+		result.Model = buildModel(tree, registry, rewriteHints)
 	}
 
 	return result
@@ -298,7 +426,7 @@ func ParseDirectoryStream(dir string, handler func(*ParseResult) error, opts ...
 
 // buildModel converts the parse tree to a high-level Model.
 // If registry is provided, it will be used for resolving library imports and qualified names.
-func buildModel(tree parser.IEntryRuleRootNamespaceContext, registry *LibraryRegistry) *Model {
+func buildModel(tree parser.IEntryRuleRootNamespaceContext, registry *LibraryRegistry, rewriteHints *parseRewriteHints) *Model {
 	if tree == nil {
 		return nil
 	}
@@ -309,6 +437,7 @@ func buildModel(tree parser.IEntryRuleRootNamespaceContext, registry *LibraryReg
 		libraryRegistry: registry,
 		elementStack:    make([]Element, 0, 16),
 		packageStack:    make([]*Package, 0, 8),
+		rewriteHints:    rewriteHints,
 	}
 	antlr.ParseTreeWalkerDefault.Walk(builder, tree)
 
@@ -332,6 +461,7 @@ type modelBuilder struct {
 	currentPkg      *Package
 	packageStack    []*Package // Stack of packages for nested package handling
 	elementStack    []Element  // Stack of elements (parts, requirements, etc.) for parent tracking
+	rewriteHints    *parseRewriteHints
 }
 
 // getCurrentParent returns the current parent element for adding children.
@@ -827,6 +957,21 @@ func (b *modelBuilder) EnterRequirementUsage(ctx *parser.RequirementUsageContext
 	req.RequirementID = shortName
 	if typeRef != "" {
 		req.TypeRef = NewRef[*Requirement](typeRef)
+	}
+	if b.rewriteHints != nil {
+		line := ctx.GetStart().GetLine()
+		if bindings, ok := b.rewriteHints.requirementBindingsByLine[line]; ok {
+			for k, v := range bindings {
+				req.Bindings[k] = v
+			}
+		} else if name != "" {
+			if queue, ok := b.rewriteHints.requirementBindingsByName[name]; ok && len(queue) > 0 {
+				for k, v := range queue[0] {
+					req.Bindings[k] = v
+				}
+				b.rewriteHints.requirementBindingsByName[name] = queue[1:]
+			}
+		}
 	}
 	req.parent = b.getCurrentParent()
 	b.addToParent(req)
@@ -2110,6 +2255,12 @@ func (b *modelBuilder) EnterRequirementConstraintMember(ctx *parser.RequirementC
 
 	if expr == "" {
 		return
+	}
+	if b.rewriteHints != nil {
+		placeholder := strings.TrimSuffix(strings.TrimSpace(expr), ";")
+		if replacementExpr, ok := b.rewriteHints.requireConstraintExprByPlaceholder[placeholder]; ok {
+			expr = replacementExpr
+		}
 	}
 
 	loc := Location{

@@ -77,6 +77,14 @@ Attribute usages preserve both typing and inline default values:
 - `attribute maxSpeed : Integer = 200;` ->
   `Attribute.TypeRef.Name() == "Integer"` and `Attribute.DefaultValue == "200"`
 
+Requirement compatibility handling includes:
+
+- `require { massActual <= massLimit };` inside a requirement definition
+  is accepted and exposed as `RequirementConstraint.Expression == "massActual <= massLimit"`.
+- requirement usage argument lists after typing are accepted:
+  `requirement <'R1'> massReq : MassRequirement [vehicle = myVehicle]`
+  and exposed via `Requirement.Bindings`.
+
 Feature relationships are also exposed on `Attribute`:
 
 - `attribute speedA :> velocity;` -> `speedA.SubsettedFeatures` contains `velocity`
