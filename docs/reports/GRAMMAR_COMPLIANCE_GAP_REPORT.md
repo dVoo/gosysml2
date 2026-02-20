@@ -152,7 +152,7 @@ Phase 5 gates are now enforced in tests:
 1. Listener rule classification gate:
    - `sysml/grammar_compliance_phase0_test.go`
    - Fails on any unclassified parser `Enter*` rule.
-   - Requires each rule to be either implemented in `modelBuilder` or listed in `analysis/grammar_coverage_classification.json`.
+   - Requires each rule to be either implemented in `modelBuilder` or listed in `sysml/testdata/grammar_coverage_classification.json`.
 
 2. No-silent-drop gate for supported rules:
    - `sysml/phase5_definition_of_done_test.go` (`TestPhase5RepresentativeSupportedRulesNotDropped`)
@@ -174,15 +174,15 @@ Phase 5 gates are now enforced in tests:
      - filter expressions
 
 4. Traceable coverage artifacts:
-   - Rule classification file: `analysis/grammar_coverage_classification.json`
-   - Gap/status report: `analysis/GRAMMAR_COMPLIANCE_GAP_REPORT.md`
+   - Rule classification file: `sysml/testdata/grammar_coverage_classification.json`
+   - Gap/status report: `docs/reports/GRAMMAR_COMPLIANCE_GAP_REPORT.md`
 
 ## Open TODOs after Phase 5
 
 Yes. There are still open items to maximize standards compliance:
 
 1. Large intentionally-ignored surface remains:
-   - `analysis/grammar_coverage_classification.json` currently lists 369 `Enter*` rules as `intentionally_ignored`.
+   - `sysml/testdata/grammar_coverage_classification.json` currently lists 369 `Enter*` rules as `intentionally_ignored`.
    - This preserves test traceability but is not semantic compliance.
 
 2. Semantic loss hotspots still exist in parser extraction:

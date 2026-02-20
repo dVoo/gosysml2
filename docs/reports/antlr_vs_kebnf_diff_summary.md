@@ -12,7 +12,7 @@ This summarizes the structural diff between:
 
 The complete machine-generated list is in:
 
-- `analysis/antlr_vs_kebnf_diff_report.md`
+- `docs/reports/antlr_vs_kebnf_diff_report.md`
 
 ## Snapshot counts
 
@@ -69,7 +69,7 @@ Diffs are now considered closed when they fall into one of these buckets:
 
 5. High-level scope closure:
 - ANTLR constructs not handled in `modelBuilder` are either implemented or
-  explicitly tracked as intentionally ignored in `analysis/grammar_coverage_classification.json`.
+  explicitly tracked as intentionally ignored in `sysml/testdata/grammar_coverage_classification.json`.
 
 ## Verification
 

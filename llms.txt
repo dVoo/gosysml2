@@ -1,0 +1,71 @@
+# gosysml2: LLM/Agent Context
+
+## Project Purpose
+`gosysml2` is a Go library that parses SysML v2 and KerML textual models.
+It exposes:
+- low-level parser access in `low` (ANTLR-oriented)
+- high-level typed semantic model in `sysml`
+
+## Current Version
+`v0.2.1` (source of truth: `VERSION`).
+
+## Canonical Entry Points
+- High-level parsing:
+  - `sysml.ParseString`, `sysml.ParseFile`, `sysml.ParseBytes`, `sysml.ParseReader`
+  - `sysml.ParseDirectory`, `sysml.ParseDirectoryParallel`, `sysml.ParseDirectoryStream`
+  - `sysml.ParseStringModel`, `sysml.ParseFileModel`
+- Low-level parsing:
+  - `low.Parse`, `low.ParseBytes`, `low.ParseWithContext`
+  - `low.Validate`, `low.ValidateBytes`
+
+## Model and Query API (High-Level)
+- Root: `*sysml.Model`
+- Common element types: `Package`, `Part`, `Item`, `Attribute`, `Requirement`, `Verification`, `Action`, `State`, `Flow`, `Import`, `Alias`, `Metadata`
+- Query/traversal:
+  - `sysml.FindAll[T]`
+  - `sysml.Filter`, `sysml.FindByQualifiedName`, `sysml.FindByKind`, `sysml.FindByName`
+  - `sysml.Walk`, `sysml.Visit`, `sysml.All`, `sysml.OfType`, `sysml.OfKind`
+
+## Reference Semantics
+- References are `Ref[T]` and may be unresolved.
+- Use `IsResolved()`, `Resolved()`, `Name()`, `EffectiveName()`.
+- Name model semantics:
+  - `Name()` = declared name
+  - `DeclaredShortName()` = short-name form `<...>` when present
+
+## Parse Result Contract
+High-level parse returns `*sysml.ParseResult`:
+- `Model *Model`
+- `Errors *ParseError`
+- `Tree antlr.Tree` (optional; can be dropped)
+- `Source string`
+- `Success() bool`
+
+## Options
+- `sysml.WithDiscardTree()`
+- `sysml.WithStandardLibrary()`
+- `sysml.WithLibraryPath(path)`
+- `sysml.WithLibraryRegistry(reg)`
+- `low.WithParseTree(bool)`
+- `low.WithContext(ctx)`
+
+## Documentation Map
+- Quick start: `docs/QUICKSTART.md`
+- Low-level guide: `docs/LOW_LEVEL_GUIDE.md`
+- High-level guide: `docs/HIGH_LEVEL_GUIDE.md`
+- Examples index: `docs/EXAMPLES.md`
+- Layer architecture: `docs/PARSER_LAYERS.md`
+- Implemented high-level datamodel: `docs/SYSML_DATA_MODEL.md`
+- Grammar docs: `docs/bnf/SysML-textual-bnf.kebnf`, `docs/bnf/KerML-textual-bnf.kebnf`
+
+## Example Programs
+- `examples/basic/main.go`
+- `examples/requirements/main.go`
+- `examples/parallel/main.go`
+- `examples/validation/main.go`
+- `examples/visitor/main.go`
+
+## Agent Guidance
+- Prefer `sysml` API for user-facing integrations.
+- Use `low` only when ANTLR/tree-level behavior is explicitly needed.
+- Treat `VERSION` as the source of truth for release version.

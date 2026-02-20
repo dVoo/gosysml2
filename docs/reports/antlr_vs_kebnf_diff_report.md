@@ -7,7 +7,7 @@ It records closure status after:
 - source-level ANTLR grammar renames (`antlr/SysMLv2Parser.g4`)
 - parser regeneration (`internal/parser/*`)
 - low/high naming-alignment APIs (`low/*`, `sysml/*`)
-- coverage classification alignment (`analysis/grammar_coverage_classification.json`)
+- coverage classification alignment (`sysml/testdata/grammar_coverage_classification.json`)
 
 ## Resolution outcome
 
@@ -62,7 +62,7 @@ ANTLR lexer exposes concrete tokens/symbols rather than preserving macro names 1
 KEBNF constructs present in ANTLR but not implemented as dedicated `modelBuilder` handlers are closed via:
 
 - implemented handlers in `sysml/parse.go`, or
-- explicit intentional omission in `analysis/grammar_coverage_classification.json`
+- explicit intentional omission in `sysml/testdata/grammar_coverage_classification.json`
 
 This keeps the high-level model scope explicit while avoiding false-positive “open diff” status.
 

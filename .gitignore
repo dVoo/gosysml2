@@ -18,8 +18,8 @@ go.work
 test-attrs
 test-low-level
 test-requirement-attributes
-verify-completeness
-verify-parser
+check-testdata
+check-validation
 
 # ANTLR generated files (optional - commit if needed)
 *.interp
@@ -45,3 +45,4 @@ result-*
 
 # Local Go build cache (workspace-local)
 .gocache/
+.gomodcache/

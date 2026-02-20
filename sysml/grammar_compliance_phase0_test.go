@@ -71,7 +71,7 @@ func TestGrammarEnterRuleCoverageClassification(t *testing.T) {
 	if len(missing) > 0 {
 		sort.Strings(missing)
 		t.Fatalf(
-			"unclassified parser Enter* rules: %d/%d\nAdd each rule to modelBuilder or analysis/grammar_coverage_classification.json\n%s",
+			"unclassified parser Enter* rules: %d/%d\nAdd each rule to modelBuilder or sysml/testdata/grammar_coverage_classification.json\n%s",
 			len(missing),
 			totalRules,
 			strings.Join(missing, "\n"),
@@ -163,8 +163,8 @@ func collectModelBuilderEnterRules() (map[string]struct{}, error) {
 
 func findCoverageClassificationPath() (string, error) {
 	candidates := []string{
-		filepath.Join("..", "analysis", "grammar_coverage_classification.json"),
-		filepath.Join("analysis", "grammar_coverage_classification.json"),
+		filepath.Join("testdata", "grammar_coverage_classification.json"),
+		filepath.Join("sysml", "testdata", "grammar_coverage_classification.json"),
 	}
 	for _, path := range candidates {
 		if _, err := os.Stat(path); err == nil {
