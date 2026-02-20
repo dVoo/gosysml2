@@ -1147,6 +1147,78 @@ func (b *modelBuilder) EnterImport_(ctx *parser.Import_Context) {
 	}
 }
 
+// EnterExpose captures `expose` clauses for view-driven selection.
+func (b *modelBuilder) EnterExpose(ctx *parser.ExposeContext) {
+	view := b.getCurrentView()
+	if view == nil {
+		return
+	}
+
+	switch {
+	case ctx.MembershipExpose() != nil && ctx.MembershipExpose().MembershipImport() != nil:
+		exposure := exposureFromMembershipImport(ctx.MembershipExpose().MembershipImport())
+		view.AddExposure(exposure)
+		if !exposure.IsAll && !exposure.IsRecursive && exposure.Namespace != "" {
+			view.AddUnresolvedExposedElement(exposure.Namespace)
+		}
+	case ctx.NamespaceExpose() != nil && ctx.NamespaceExpose().NamespaceImport() != nil:
+		exposure := exposureFromNamespaceImport(ctx.NamespaceExpose().NamespaceImport())
+		view.AddExposure(exposure)
+		if !exposure.IsAll && !exposure.IsRecursive && exposure.Namespace != "" {
+			view.AddUnresolvedExposedElement(exposure.Namespace)
+		}
+	}
+}
+
+func exposureFromMembershipImport(membership parser.IMembershipImportContext) ViewExposure {
+	exposure := ViewExposure{
+		IsMembership: true,
+	}
+	if membership == nil {
+		return exposure
+	}
+	exposure.Namespace = extractQualifiedName(membership.QualifiedName())
+	if membership.COLONCOLON() != nil && membership.STARSTAR() != nil {
+		exposure.IsAll = true
+		exposure.IsRecursive = true
+	}
+	return exposure
+}
+
+func exposureFromNamespaceImport(ns parser.INamespaceImportContext) ViewExposure {
+	exposure := ViewExposure{
+		IsNamespace: true,
+	}
+	if ns == nil {
+		return exposure
+	}
+
+	if ns.FilterPackage() != nil {
+		filter := ns.FilterPackage()
+		if filterImport := filter.FilterPackageImportPart(); filterImport != nil {
+			exposure.Namespace = extractQualifiedName(filterImport.QualifiedName())
+			exposure.IsAll = filterImport.STAR() != nil
+			exposure.IsRecursive = filterImport.STARSTAR() != nil
+		}
+		for _, member := range filter.AllFilterPackageMember() {
+			if expr := member.OwnedExpression(); expr != nil {
+				exposure.FilterExpressions = append(exposure.FilterExpressions, strings.TrimSpace(expr.GetText()))
+			}
+		}
+		return exposure
+	}
+
+	exposure.Namespace = extractQualifiedName(ns.QualifiedName())
+	if ns.STAR() != nil {
+		exposure.IsAll = true
+	}
+	if ns.STARSTAR() != nil {
+		exposure.IsAll = true
+		exposure.IsRecursive = true
+	}
+	return exposure
+}
+
 // EnterAliasMember maps alias members to first-class Alias model elements.
 func (b *modelBuilder) EnterAliasMember(ctx *parser.AliasMemberContext) {
 	// Grammar (SysML/KerML): 'alias' ( '<' memberShortName = NAME '>' )? ( memberName = NAME )? 'for' ...
@@ -1192,6 +1264,42 @@ func (b *modelBuilder) EnterNamespaceImport(ctx *parser.NamespaceImportContext) 
 
 // EnterFilterPackage is tracked by EnterImport_ for semantic extraction.
 func (b *modelBuilder) EnterFilterPackage(ctx *parser.FilterPackageContext) {}
+
+// EnterDefinitionMember handles fallback extraction for concern/viewpoint body
+// constructs that can be parsed as generic feature definitions.
+func (b *modelBuilder) EnterDefinitionMember(ctx *parser.DefinitionMemberContext) {
+	if len(b.elementStack) == 0 {
+		return
+	}
+	current := b.elementStack[len(b.elementStack)-1]
+	text := strings.TrimSpace(ctx.GetText())
+	lower := strings.ToLower(text)
+
+	switch elem := current.(type) {
+	case *Concern:
+		if strings.HasPrefix(lower, "stakeholder") {
+			if name := extractStakeholderNameFromText(text); name != "" {
+				elem.unresolvedStakeholders = append(elem.unresolvedStakeholders, name)
+			}
+		}
+	case *Viewpoint:
+		if strings.HasPrefix(lower, "stakeholder") {
+			if name := extractStakeholderNameFromText(text); name != "" {
+				elem.AddUnresolvedStakeholder(name)
+			}
+		}
+		if strings.HasPrefix(lower, "frame") {
+			name := strings.TrimSpace(strings.TrimPrefix(text, "frame"))
+			name = strings.TrimSpace(strings.TrimSuffix(name, ";"))
+			if idx := strings.IndexAny(name, "{["); idx >= 0 {
+				name = strings.TrimSpace(name[:idx])
+			}
+			if name != "" {
+				elem.AddUnresolvedConcern(name)
+			}
+		}
+	}
+}
 
 // parseImportPattern detects wildcard patterns in import statements.
 // Sets IsAll for "::*" and IsRecursive for "::**" patterns.
@@ -1378,28 +1486,54 @@ func (b *modelBuilder) ExitVerificationCaseUsage(ctx *parser.VerificationCaseUsa
 
 func (b *modelBuilder) EnterConcernDefinition(ctx *parser.ConcernDefinitionContext) {
 	name := ""
+	shortName := ""
 	if decl := ctx.DefinitionDeclaration(); decl != nil {
 		if ident := decl.Identification(); ident != nil {
-			name = extractName(ident)
+			name, shortName = extractIdentificationNames(ident)
 		}
 	}
 
 	concern := NewConcern(name, locationFromContext(ctx), true)
+	concern.setDeclaredShortName(shortName)
 	concern.parent = b.getCurrentParent()
 	b.addToParent(concern)
+	b.elementStack = append(b.elementStack, concern)
 }
 
 func (b *modelBuilder) EnterConcernUsage(ctx *parser.ConcernUsageContext) {
 	name := ""
+	shortName := ""
+	typeRef := ""
 	if ctx.ConstraintUsageDeclaration() != nil && ctx.ConstraintUsageDeclaration().UsageDeclaration() != nil {
-		if ident := ctx.ConstraintUsageDeclaration().UsageDeclaration().Identification(); ident != nil {
-			name = extractName(ident)
+		decl := ctx.ConstraintUsageDeclaration().UsageDeclaration()
+		if ident := decl.Identification(); ident != nil {
+			name, shortName = extractIdentificationNames(ident)
+		}
+		if featSpecPart := decl.FeatureSpecializationPart(); featSpecPart != nil {
+			typeRef = extractTypeReference(featSpecPart)
 		}
 	}
 
 	concern := NewConcern(name, locationFromContext(ctx), false)
+	concern.setDeclaredShortName(shortName)
+	if typeRef != "" {
+		concern.TypeRef = NewRef[*Concern](typeRef)
+	}
 	concern.parent = b.getCurrentParent()
 	b.addToParent(concern)
+	b.elementStack = append(b.elementStack, concern)
+}
+
+func (b *modelBuilder) ExitConcernDefinition(ctx *parser.ConcernDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+func (b *modelBuilder) ExitConcernUsage(ctx *parser.ConcernUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
 }
 
 func (b *modelBuilder) EnterUseCaseDefinition(ctx *parser.UseCaseDefinitionContext) {
@@ -1446,9 +1580,10 @@ func (b *modelBuilder) EnterUseCaseUsage(ctx *parser.UseCaseUsageContext) {
 
 func (b *modelBuilder) EnterViewDefinition(ctx *parser.ViewDefinitionContext) {
 	name := ""
+	shortName := ""
 	if ctx.DefinitionDeclaration() != nil {
 		if ident := ctx.DefinitionDeclaration().Identification(); ident != nil {
-			name = extractName(ident)
+			name, shortName = extractIdentificationNames(ident)
 		}
 	}
 
@@ -1462,18 +1597,24 @@ func (b *modelBuilder) EnterViewDefinition(ctx *parser.ViewDefinitionContext) {
 	}
 
 	view := NewView(name, loc, true)
+	view.setDeclaredShortName(shortName)
 
-	if b.currentPkg != nil {
-		view.parent = b.currentPkg
-		b.currentPkg.AddChild(view)
-	}
+	view.parent = b.getCurrentParent()
+	b.addToParent(view)
+	b.elementStack = append(b.elementStack, view)
 }
 
 func (b *modelBuilder) EnterViewUsage(ctx *parser.ViewUsageContext) {
 	name := ""
+	shortName := ""
+	typeRef := ""
 	if ctx.UsageDeclaration() != nil {
-		if ident := ctx.UsageDeclaration().Identification(); ident != nil {
-			name = extractName(ident)
+		decl := ctx.UsageDeclaration()
+		if ident := decl.Identification(); ident != nil {
+			name, shortName = extractIdentificationNames(ident)
+		}
+		if featSpecPart := decl.FeatureSpecializationPart(); featSpecPart != nil {
+			typeRef = extractTypeReference(featSpecPart)
 		}
 	}
 
@@ -1487,18 +1628,22 @@ func (b *modelBuilder) EnterViewUsage(ctx *parser.ViewUsageContext) {
 	}
 
 	view := NewView(name, loc, false)
-
-	if b.currentPkg != nil {
-		view.parent = b.currentPkg
-		b.currentPkg.AddChild(view)
+	view.setDeclaredShortName(shortName)
+	if typeRef != "" {
+		view.TypeRef = NewRef[*View](typeRef)
 	}
+
+	view.parent = b.getCurrentParent()
+	b.addToParent(view)
+	b.elementStack = append(b.elementStack, view)
 }
 
 func (b *modelBuilder) EnterViewpointDefinition(ctx *parser.ViewpointDefinitionContext) {
 	name := ""
+	shortName := ""
 	if ctx.DefinitionDeclaration() != nil {
 		if ident := ctx.DefinitionDeclaration().Identification(); ident != nil {
-			name = extractName(ident)
+			name, shortName = extractIdentificationNames(ident)
 		}
 	}
 
@@ -1512,18 +1657,23 @@ func (b *modelBuilder) EnterViewpointDefinition(ctx *parser.ViewpointDefinitionC
 	}
 
 	viewpoint := NewViewpoint(name, loc, true)
-
-	if b.currentPkg != nil {
-		viewpoint.parent = b.currentPkg
-		b.currentPkg.AddChild(viewpoint)
-	}
+	viewpoint.setDeclaredShortName(shortName)
+	viewpoint.parent = b.getCurrentParent()
+	b.addToParent(viewpoint)
+	b.elementStack = append(b.elementStack, viewpoint)
 }
 
 func (b *modelBuilder) EnterViewpointUsage(ctx *parser.ViewpointUsageContext) {
 	name := ""
+	shortName := ""
+	typeRef := ""
 	if ctx.ConstraintUsageDeclaration() != nil && ctx.ConstraintUsageDeclaration().UsageDeclaration() != nil {
-		if ident := ctx.ConstraintUsageDeclaration().UsageDeclaration().Identification(); ident != nil {
-			name = extractName(ident)
+		decl := ctx.ConstraintUsageDeclaration().UsageDeclaration()
+		if ident := decl.Identification(); ident != nil {
+			name, shortName = extractIdentificationNames(ident)
+		}
+		if featSpecPart := decl.FeatureSpecializationPart(); featSpecPart != nil {
+			typeRef = extractTypeReference(featSpecPart)
 		}
 	}
 
@@ -1537,10 +1687,37 @@ func (b *modelBuilder) EnterViewpointUsage(ctx *parser.ViewpointUsageContext) {
 	}
 
 	viewpoint := NewViewpoint(name, loc, false)
+	viewpoint.setDeclaredShortName(shortName)
+	if typeRef != "" {
+		viewpoint.TypeRef = NewRef[*Viewpoint](typeRef)
+	}
 
-	if b.currentPkg != nil {
-		viewpoint.parent = b.currentPkg
-		b.currentPkg.AddChild(viewpoint)
+	viewpoint.parent = b.getCurrentParent()
+	b.addToParent(viewpoint)
+	b.elementStack = append(b.elementStack, viewpoint)
+}
+
+func (b *modelBuilder) ExitViewDefinition(ctx *parser.ViewDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+func (b *modelBuilder) ExitViewUsage(ctx *parser.ViewUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+func (b *modelBuilder) ExitViewpointDefinition(ctx *parser.ViewpointDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+func (b *modelBuilder) ExitViewpointUsage(ctx *parser.ViewpointUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
@@ -2533,6 +2710,97 @@ func (b *modelBuilder) EnterActorMember(ctx *parser.ActorMemberContext) {
 	}
 }
 
+// EnterStakeholderMember captures stakeholders for concerns and viewpoints.
+func (b *modelBuilder) EnterStakeholderMember(ctx *parser.StakeholderMemberContext) {
+	if len(b.elementStack) == 0 {
+		return
+	}
+
+	stakeholderName := ""
+	if usage := ctx.StakeholderUsage(); usage != nil {
+		switch {
+		case usage.Usage() != nil && usage.Usage().UsageDeclaration() != nil:
+			decl := usage.Usage().UsageDeclaration()
+			if ident := decl.Identification(); ident != nil {
+				stakeholderName = extractName(ident)
+			}
+			if stakeholderName == "" && decl.FeatureSpecializationPart() != nil {
+				if ref := extractRedefinitionName(decl.FeatureSpecializationPart()); ref != "" {
+					stakeholderName = ref
+				}
+				if stakeholderName == "" {
+					names := extractSubsettedFeatureNames(decl.FeatureSpecializationPart())
+					if len(names) > 0 {
+						stakeholderName = names[0]
+					}
+				}
+				if stakeholderName == "" {
+					stakeholderName = extractTypeReference(decl.FeatureSpecializationPart())
+				}
+			}
+		default:
+			stakeholderName = strings.TrimSpace(strings.TrimPrefix(usage.GetText(), "stakeholder"))
+		}
+		if stakeholderName == "" {
+			stakeholderName = extractStakeholderNameFromText(usage.GetText())
+		}
+	}
+	stakeholderName = strings.TrimSpace(strings.TrimSuffix(stakeholderName, ";"))
+	if stakeholderName == "" {
+		return
+	}
+
+	current := b.elementStack[len(b.elementStack)-1]
+	switch elem := current.(type) {
+	case *Concern:
+		elem.unresolvedStakeholders = append(elem.unresolvedStakeholders, stakeholderName)
+	case *Viewpoint:
+		elem.AddUnresolvedStakeholder(stakeholderName)
+	}
+}
+
+func extractStakeholderNameFromText(text string) string {
+	s := strings.TrimSpace(strings.TrimPrefix(text, "stakeholder"))
+	for _, marker := range []string{":>>", "::>", ":>"} {
+		if idx := strings.Index(s, marker); idx >= 0 {
+			s = s[idx+len(marker):]
+			break
+		}
+	}
+	s = strings.TrimSpace(strings.TrimSuffix(s, ";"))
+	if idx := strings.IndexAny(s, "[{"); idx >= 0 {
+		s = strings.TrimSpace(s[:idx])
+	}
+	return s
+}
+
+// EnterFramedConcernMember captures framed concern references for viewpoints.
+func (b *modelBuilder) EnterFramedConcernMember(ctx *parser.FramedConcernMemberContext) {
+	if len(b.elementStack) == 0 {
+		return
+	}
+	viewpoint, ok := b.elementStack[len(b.elementStack)-1].(*Viewpoint)
+	if !ok {
+		return
+	}
+
+	refName := ""
+	if usage := ctx.FramedConcernUsage(); usage != nil {
+		switch {
+		case usage.OwnedReferenceSubsetting() != nil:
+			refName = extractOwnedReferenceSubsetting(usage.OwnedReferenceSubsetting())
+		case usage.CalculationUsageDeclaration() != nil &&
+			usage.CalculationUsageDeclaration().UsageDeclaration() != nil &&
+			usage.CalculationUsageDeclaration().UsageDeclaration().Identification() != nil:
+			refName = extractName(usage.CalculationUsageDeclaration().UsageDeclaration().Identification())
+		}
+	}
+	refName = strings.TrimSpace(strings.TrimSuffix(refName, ";"))
+	if refName != "" {
+		viewpoint.AddUnresolvedConcern(refName)
+	}
+}
+
 // EnterObjectiveMember captures objectives for cases.
 func (b *modelBuilder) EnterObjectiveMember(ctx *parser.ObjectiveMemberContext) {
 	if len(b.elementStack) == 0 {
@@ -3426,6 +3694,11 @@ func (b *modelBuilder) EnterSatisfyRequirementUsage(ctx *parser.SatisfyRequireme
 	rel.parent = b.getCurrentParent()
 	b.addToParent(rel)
 	b.model.AddSatisfy(rel)
+
+	// In views, satisfy is commonly used for viewpoint conformance.
+	if view := b.getCurrentView(); view != nil && rel.unresolvedRequired != "" {
+		view.SetUnresolvedViewpoint(rel.unresolvedRequired)
+	}
 }
 
 // EnterRequirementVerificationUsage captures verify relationships as typed edges.
@@ -3458,6 +3731,15 @@ func (b *modelBuilder) getCurrentVerification() *Verification {
 	for i := len(b.elementStack) - 1; i >= 0; i-- {
 		if ver, ok := b.elementStack[i].(*Verification); ok {
 			return ver
+		}
+	}
+	return nil
+}
+
+func (b *modelBuilder) getCurrentView() *View {
+	for i := len(b.elementStack) - 1; i >= 0; i-- {
+		if view, ok := b.elementStack[i].(*View); ok {
+			return view
 		}
 	}
 	return nil

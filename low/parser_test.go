@@ -227,3 +227,29 @@ package VehicleReqs {
 		t.Fatal("parse tree is nil")
 	}
 }
+
+func TestParseViewAndViewpointWithExpose(t *testing.T) {
+	input := `
+package Model {
+    part def Vehicle;
+    part vehicle : Vehicle {
+        part wheel;
+    }
+
+    viewpoint structurePerspective;
+
+    view structureGeneration {
+        satisfy structurePerspective;
+        expose Model::vehicle::**[@SysML::PartUsage];
+    }
+}
+`
+
+	tree, errors := Parse(input)
+	if errors.HasErrors() {
+		t.Fatalf("parse failed: %s", errors)
+	}
+	if tree == nil {
+		t.Fatal("parse tree is nil")
+	}
+}

@@ -100,6 +100,21 @@ Reference resolution uses qualified names and short-name index paths.
 - generic walk: `sysml.Walk(model, fn)`
 - iterators and filters: `All`, `OfType[T]`, `OfKind`, `Filter`, `FindAll[T]`
 
+## View/Viewpoint Selection APIs
+
+The high-level API provides direct selectors for model-designer-defined views:
+
+- `FindView(model, nameOrQualifiedName)`
+- `FindViewpoint(model, nameOrQualifiedName)`
+- `ElementsForView(view)`
+- `ElementsByView(model, nameOrQualifiedName)`
+- `ViewsByViewpoint(model, nameOrQualifiedName)`
+- `ElementsByViewpoint(model, nameOrQualifiedName)`
+
+These APIs use parsed `view`/`viewpoint` elements and `expose` clauses, including
+namespace/member wildcard forms and common filter annotations such as
+`@SysML::PartUsage`.
+
 ## End-to-End Examples
 
 See [`EXAMPLES.md`](EXAMPLES.md) for runnable programs.

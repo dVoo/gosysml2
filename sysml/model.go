@@ -1964,9 +1964,20 @@ type View struct {
 	TypeRef         Ref[*View]
 	ExposedElements []Element       // Elements exposed by this view
 	Viewpoint       Ref[*Viewpoint] // Associated viewpoint
+	Exposures       []ViewExposure
 
 	unresolvedExposedElements []string
 	unresolvedViewpoint       string
+}
+
+// ViewExposure describes one textual `expose ...` clause in a view body.
+type ViewExposure struct {
+	Namespace         string
+	IsMembership      bool
+	IsNamespace       bool
+	IsAll             bool
+	IsRecursive       bool
+	FilterExpressions []string
 }
 
 func (v *View) isDefinition() {}
@@ -1988,6 +1999,7 @@ func NewView(name string, loc Location, isDefinition bool) *View {
 		},
 		IsDefinition:              isDefinition,
 		ExposedElements:           make([]Element, 0),
+		Exposures:                 make([]ViewExposure, 0),
 		unresolvedExposedElements: make([]string, 0),
 	}
 }
@@ -2000,6 +2012,11 @@ func (v *View) AddUnresolvedExposedElement(ref string) {
 // SetUnresolvedViewpoint sets the unresolved viewpoint reference.
 func (v *View) SetUnresolvedViewpoint(ref string) {
 	v.unresolvedViewpoint = ref
+}
+
+// AddExposure records a parsed textual `expose` clause.
+func (v *View) AddExposure(exposure ViewExposure) {
+	v.Exposures = append(v.Exposures, exposure)
 }
 
 // Import represents a SysML import statement.
@@ -2681,6 +2698,15 @@ func (m *Model) resolveViewRefs(v *View) {
 		}
 	}
 
+	// Resolve textual `expose ...` clauses, including namespace/member wildcards.
+	for _, exposure := range v.Exposures {
+		candidates := m.resolveExposureCandidates(v, exposure)
+		for _, elem := range candidates {
+			v.ExposedElements = append(v.ExposedElements, elem)
+		}
+	}
+	v.ExposedElements = dedupeElements(v.ExposedElements)
+
 	// Resolve viewpoint
 	if v.unresolvedViewpoint != "" {
 		if elem := m.findElement(v.unresolvedViewpoint, v); elem != nil {
@@ -2698,6 +2724,124 @@ func (m *Model) resolveViewRefs(v *View) {
 			}
 		}
 	}
+}
+
+func (m *Model) resolveExposureCandidates(view *View, exposure ViewExposure) []Element {
+	if exposure.Namespace == "" {
+		return nil
+	}
+	scope := m.findElement(exposure.Namespace, view)
+	if scope == nil {
+		return nil
+	}
+
+	var candidates []Element
+	switch {
+	case exposure.IsRecursive:
+		candidates = collectDescendants(scope)
+	case exposure.IsAll:
+		candidates = append(candidates, scope.Children()...)
+	default:
+		candidates = append(candidates, scope)
+	}
+	if len(exposure.FilterExpressions) == 0 {
+		return candidates
+	}
+
+	filtered := make([]Element, 0, len(candidates))
+	for _, elem := range candidates {
+		if matchesAnyExposureFilter(elem, exposure.FilterExpressions) {
+			filtered = append(filtered, elem)
+		}
+	}
+	return filtered
+}
+
+func collectDescendants(root Element) []Element {
+	var out []Element
+	var walk func(Element)
+	walk = func(e Element) {
+		for _, child := range e.Children() {
+			if child == nil {
+				continue
+			}
+			out = append(out, child)
+			walk(child)
+		}
+	}
+	walk(root)
+	return out
+}
+
+func dedupeElements(in []Element) []Element {
+	if len(in) < 2 {
+		return in
+	}
+	seen := make(map[string]struct{}, len(in))
+	out := make([]Element, 0, len(in))
+	for _, elem := range in {
+		if elem == nil {
+			continue
+		}
+		key := elem.QualifiedName()
+		if key == "" {
+			loc := elem.Location()
+			key = fmt.Sprintf("%s@%d:%d", elem.Name(), loc.Line, loc.Column)
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, elem)
+	}
+	return out
+}
+
+func matchesAnyExposureFilter(elem Element, filters []string) bool {
+	for _, expr := range filters {
+		if matchesExposureFilter(elem, expr) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesExposureFilter(elem Element, expr string) bool {
+	expr = strings.TrimSpace(expr)
+	if strings.HasPrefix(expr, "@") {
+		expr = strings.TrimPrefix(expr, "@")
+	}
+	// Handle common standard-library annotations like @SysML::PartUsage.
+	switch expr {
+	case "SysML::PartUsage":
+		part, ok := elem.(*Part)
+		return ok && !part.IsDefinition
+	case "SysML::PartDefinition":
+		part, ok := elem.(*Part)
+		return ok && part.IsDefinition
+	case "SysML::Part":
+		_, ok := elem.(*Part)
+		return ok
+	case "SysML::RequirementUsage":
+		req, ok := elem.(*Requirement)
+		return ok && !req.IsDefinition
+	case "SysML::RequirementDefinition":
+		req, ok := elem.(*Requirement)
+		return ok && req.IsDefinition
+	case "SysML::Requirement":
+		_, ok := elem.(*Requirement)
+		return ok
+	case "SysML::VerificationUsage":
+		ver, ok := elem.(*Verification)
+		return ok && !ver.IsDefinition
+	case "SysML::VerificationDefinition":
+		ver, ok := elem.(*Verification)
+		return ok && ver.IsDefinition
+	case "SysML::Verification":
+		_, ok := elem.(*Verification)
+		return ok
+	}
+	return false
 }
 
 func (m *Model) resolveViewpointRefs(v *Viewpoint) {
