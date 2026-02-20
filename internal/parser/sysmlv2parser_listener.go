@@ -1162,6 +1162,9 @@ type SysMLv2ParserListener interface {
 	// EnterDisjoiningPart is called when entering the disjoiningPart production.
 	EnterDisjoiningPart(c *DisjoiningPartContext)
 
+	// EnterDisjoining is called when entering the disjoining production.
+	EnterDisjoining(c *DisjoiningContext)
+
 	// EnterOwnedDisjoining is called when entering the ownedDisjoining production.
 	EnterOwnedDisjoining(c *OwnedDisjoiningContext)
 
@@ -1191,6 +1194,9 @@ type SysMLv2ParserListener interface {
 
 	// EnterClassifier is called when entering the classifier production.
 	EnterClassifier(c *ClassifierContext)
+
+	// EnterSubclassifier is called when entering the subclassifier production.
+	EnterSubclassifier(c *SubclassifierContext)
 
 	// EnterClassifierDeclaration is called when entering the classifierDeclaration production.
 	EnterClassifierDeclaration(c *ClassifierDeclarationContext)
@@ -2512,6 +2518,9 @@ type SysMLv2ParserListener interface {
 	// ExitDisjoiningPart is called when exiting the disjoiningPart production.
 	ExitDisjoiningPart(c *DisjoiningPartContext)
 
+	// ExitDisjoining is called when exiting the disjoining production.
+	ExitDisjoining(c *DisjoiningContext)
+
 	// ExitOwnedDisjoining is called when exiting the ownedDisjoining production.
 	ExitOwnedDisjoining(c *OwnedDisjoiningContext)
 
@@ -2541,6 +2550,9 @@ type SysMLv2ParserListener interface {
 
 	// ExitClassifier is called when exiting the classifier production.
 	ExitClassifier(c *ClassifierContext)
+
+	// ExitSubclassifier is called when exiting the subclassifier production.
+	ExitSubclassifier(c *SubclassifierContext)
 
 	// ExitClassifierDeclaration is called when exiting the classifierDeclaration production.
 	ExitClassifierDeclaration(c *ClassifierDeclarationContext)

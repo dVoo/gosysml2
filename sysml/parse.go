@@ -731,6 +731,12 @@ func (b *modelBuilder) EnterClassifier(ctx *parser.ClassifierContext) {
 
 func (b *modelBuilder) ExitClassifier(ctx *parser.ClassifierContext) { b.exitKerMLType() }
 
+func (b *modelBuilder) EnterSubclassifier(ctx *parser.SubclassifierContext) {
+	b.enterKerMLClassifierFromDecl("subclassifier", locationFromContext(ctx), ctx.ClassifierDeclaration())
+}
+
+func (b *modelBuilder) ExitSubclassifier(ctx *parser.SubclassifierContext) { b.exitKerMLType() }
+
 func (b *modelBuilder) EnterDataType(ctx *parser.DataTypeContext) {
 	b.enterKerMLClassifierFromDecl("datatype", locationFromContext(ctx), ctx.ClassifierDeclaration())
 }
@@ -827,6 +833,11 @@ func (b *modelBuilder) EnterFeatureSubsetting(ctx *parser.FeatureSubsettingConte
 	}
 	parentType.AddChild(feature)
 }
+
+// EnterDisjoining currently acts as syntax support for KerML disjoint statements.
+// The parser now accepts `disjoint a from b;` forms; model-level relationship typing
+// can be extended later without affecting syntax compatibility.
+func (b *modelBuilder) EnterDisjoining(ctx *parser.DisjoiningContext) {}
 
 func (b *modelBuilder) EnterStep(ctx *parser.StepContext) {
 	b.enterKerMLFeatureFromDeclaration(ctx.FeatureDeclaration(), ctx.ValuePart(), locationFromContext(ctx))

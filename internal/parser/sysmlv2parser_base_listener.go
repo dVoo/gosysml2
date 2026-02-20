@@ -2442,6 +2442,12 @@ func (s *BaseSysMLv2ParserListener) EnterDisjoiningPart(ctx *DisjoiningPartConte
 // ExitDisjoiningPart is called when production disjoiningPart is exited.
 func (s *BaseSysMLv2ParserListener) ExitDisjoiningPart(ctx *DisjoiningPartContext) {}
 
+// EnterDisjoining is called when production disjoining is entered.
+func (s *BaseSysMLv2ParserListener) EnterDisjoining(ctx *DisjoiningContext) {}
+
+// ExitDisjoining is called when production disjoining is exited.
+func (s *BaseSysMLv2ParserListener) ExitDisjoining(ctx *DisjoiningContext) {}
+
 // EnterOwnedDisjoining is called when production ownedDisjoining is entered.
 func (s *BaseSysMLv2ParserListener) EnterOwnedDisjoining(ctx *OwnedDisjoiningContext) {}
 
@@ -2501,6 +2507,12 @@ func (s *BaseSysMLv2ParserListener) EnterClassifier(ctx *ClassifierContext) {}
 
 // ExitClassifier is called when production classifier is exited.
 func (s *BaseSysMLv2ParserListener) ExitClassifier(ctx *ClassifierContext) {}
+
+// EnterSubclassifier is called when production subclassifier is entered.
+func (s *BaseSysMLv2ParserListener) EnterSubclassifier(ctx *SubclassifierContext) {}
+
+// ExitSubclassifier is called when production subclassifier is exited.
+func (s *BaseSysMLv2ParserListener) ExitSubclassifier(ctx *SubclassifierContext) {}
 
 // EnterClassifierDeclaration is called when production classifierDeclaration is entered.
 func (s *BaseSysMLv2ParserListener) EnterClassifierDeclaration(ctx *ClassifierDeclarationContext) {}

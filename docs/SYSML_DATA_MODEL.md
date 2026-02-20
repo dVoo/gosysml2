@@ -83,12 +83,15 @@ This document describes the `sysml` package data model as currently implemented 
   - `DeclarationKeyword string` preserves the source declaration keyword
   - `Specializes []Ref[Element]` resolved supertype/specialization references
   - typed child accessor: `Features() []*KerMLFeature`
+  - includes `subclassifier` declarations (`DeclarationKeyword == "subclassifier"`)
 - `KerMLFeature`
   - feature declarations in KerML type bodies
   - `TypeRef Ref[Element]`
   - `DefaultValue string`
   - `SubsettedFeatures []Element`
   - `RedefinedFeatures []Element`
+
+KerML `disjoint ... from ...;` statements are accepted at syntax level in type bodies.
 
 ## Requirements, verification, and cases
 

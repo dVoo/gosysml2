@@ -252,6 +252,8 @@ definitionElement
     | succession
     | kermlFlow
     | kermlSuccessionFlow
+    | disjoining
+    | subclassifier
     ;
 
 usageElement
@@ -2108,6 +2110,7 @@ nonFeatureElement
     | namespace_
     | type_
     | classifier
+    | subclassifier
     | dataType
     | class
     | structure
@@ -2119,6 +2122,7 @@ nonFeatureElement
     | function_
     | predicate
     | multiplicity
+    | disjoining
     | package
     | libraryPackage
     ;
@@ -2261,6 +2265,11 @@ disjoiningPart
     : DISJOINT FROM ownedDisjoining (COMMA ownedDisjoining)*
     ;
 
+disjoining
+    : DISJOINT ownedDisjoining FROM ownedDisjoining (COMMA ownedDisjoining)*
+      relationshipBody
+    ;
+
 ownedDisjoining
     : qualifiedName
     | featureChain
@@ -2304,6 +2313,11 @@ featureChain
 
 classifier
     : typePrefix CLASSIFIER
+      classifierDeclaration typeBody
+    ;
+
+subclassifier
+    : typePrefix SUBCLASSIFIER
       classifierDeclaration typeBody
     ;
 

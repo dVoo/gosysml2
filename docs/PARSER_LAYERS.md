@@ -112,6 +112,12 @@ Feature relationships are also exposed on `Attribute`:
 - `attribute speedB ::> velocity;` -> `speedB.SubsettedFeatures` contains `velocity`
 - `attribute speedC :>> velocity;` -> `speedC.RedefinedFeatures` contains `velocity`
 
+KerML library parsing also supports:
+
+- standalone disjoint constraints in bodies:
+  - `disjoint a.b from c.d;`
+- `subclassifier` declarations as classifier-like KerML type declarations.
+
 ### Core types
 
 - `ParseResult`
