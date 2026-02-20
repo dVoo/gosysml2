@@ -226,6 +226,32 @@ definitionElement
     | renderingDefinition
     | metadataDefinition
     | extendedDefinition
+    // KerML declarations used by .kerml standard library files.
+    | namespace_
+    | type_
+    | classifier
+    | dataType
+    | class
+    | structure
+    | metaclass
+    | association
+    | associationStructure
+    | interaction
+    | behavior
+    | function_
+    | predicate
+    | multiplicity
+    | featureSubsetting
+    | step
+    | expression
+    | booleanExpression
+    | invariant
+    | feature
+    | connector
+    | bindingConnector
+    | succession
+    | kermlFlow
+    | kermlSuccessionFlow
     ;
 
 usageElement
@@ -521,8 +547,7 @@ subsettings
     ;
 
 ownedSubsetting
-    : qualifiedName
-    | ownedFeatureChain
+    : qualifiedName (DOT ownedFeatureChaining)*
     ;
 
 references
@@ -1970,6 +1995,7 @@ primaryExpressionSuffix
     | DOTQUESTION bodyExpression                             // select
     | MINUSGT qualifiedName argumentList                     // function operation
     | MINUSGT qualifiedName bodyExpression                   // function operation with body
+    | MINUSGT qualifiedName qualifiedName                    // function operation with shorthand argument
     | argumentList                                           // method call (e.g., x.y(args))
     ;
 
@@ -2011,7 +2037,7 @@ constructorExpression
     ;
 
 bodyExpression
-    : LBRACE functionBodyPart RBRACE
+    : LBRACE (functionBodyPart | ownedExpression) RBRACE
     ;
 
 sequenceExpression
@@ -2098,7 +2124,8 @@ nonFeatureElement
     ;
 
 featureElement
-    : feature
+    : featureSubsetting
+    | feature
     | step
     | expression
     | booleanExpression
@@ -2338,7 +2365,7 @@ function_
 
 functionBody
     : SEMI
-    | LBRACE functionBodyPart RBRACE
+    | LBRACE (functionBodyPart | ownedExpression) RBRACE
     ;
 
 predicate
@@ -2361,6 +2388,10 @@ multiplicityRangeDecl
       typeBody
     ;
 
+featureSubsetting
+    : SUBSET ownedSubsetting subsettings relationshipBody
+    ;
+
 multiplicityBounds
     : LBRACKET (multiplicityExpressionMember DOTDOT)?
       multiplicityExpressionMember RBRACKET
@@ -2377,7 +2408,7 @@ feature
     ;
 
 endFeaturePrefix
-    : CONST? END
+    : CONST? END FEATURE?
     ;
 
 basicFeaturePrefix
@@ -2459,7 +2490,7 @@ booleanExpression
 invariant
     : featurePrefix
       INV (TRUE | FALSE)?
-      featureDeclaration valuePart?
+      featureDeclaration? valuePart?
       functionBody
     ;
 
@@ -2709,7 +2740,6 @@ keywordName
     | STEP
     | STRUCT
     | SUBJECT
-    | SUBSET
     | SUBSETS
     | SUBTYPE
     | SUBCLASSIFIER

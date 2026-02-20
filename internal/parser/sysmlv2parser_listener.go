@@ -1240,6 +1240,9 @@ type SysMLv2ParserListener interface {
 	// EnterMultiplicityRangeDecl is called when entering the multiplicityRangeDecl production.
 	EnterMultiplicityRangeDecl(c *MultiplicityRangeDeclContext)
 
+	// EnterFeatureSubsetting is called when entering the featureSubsetting production.
+	EnterFeatureSubsetting(c *FeatureSubsettingContext)
+
 	// EnterMultiplicityBounds is called when entering the multiplicityBounds production.
 	EnterMultiplicityBounds(c *MultiplicityBoundsContext)
 
@@ -2586,6 +2589,9 @@ type SysMLv2ParserListener interface {
 
 	// ExitMultiplicityRangeDecl is called when exiting the multiplicityRangeDecl production.
 	ExitMultiplicityRangeDecl(c *MultiplicityRangeDeclContext)
+
+	// ExitFeatureSubsetting is called when exiting the featureSubsetting production.
+	ExitFeatureSubsetting(c *FeatureSubsettingContext)
 
 	// ExitMultiplicityBounds is called when exiting the multiplicityBounds production.
 	ExitMultiplicityBounds(c *MultiplicityBoundsContext)

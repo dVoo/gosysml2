@@ -21,9 +21,23 @@ type Parser struct {
 // ParseOption configures parser behavior.
 type ParseOption func(*parserConfig)
 
+// SyntaxMode controls which textual profile is being parsed.
+// The current parser uses a unified grammar for SysML and KerML.
+type SyntaxMode int
+
+const (
+	// SyntaxModeAuto lets the parser infer behavior from the grammar itself.
+	SyntaxModeAuto SyntaxMode = iota
+	// SyntaxModeSysML parses SysML textual notation.
+	SyntaxModeSysML
+	// SyntaxModeKerML parses KerML textual notation.
+	SyntaxModeKerML
+)
+
 type parserConfig struct {
 	buildParseTree bool
 	ctx            context.Context
+	mode           SyntaxMode
 }
 
 // WithParseTree enables parse tree construction.
@@ -42,6 +56,13 @@ func WithContext(ctx context.Context) ParseOption {
 	}
 }
 
+// WithSyntaxMode sets the textual syntax mode (SysML/KerML).
+func WithSyntaxMode(mode SyntaxMode) ParseOption {
+	return func(c *parserConfig) {
+		c.mode = mode
+	}
+}
+
 // NewParser creates a new parser from the given input string.
 func NewParser(input string, opts ...ParseOption) *Parser {
 	lexer := NewLexer(input)
@@ -57,7 +78,7 @@ func NewParserFromBytes(input []byte, opts ...ParseOption) *Parser {
 // NewParserFromLexer creates a parser from an existing lexer.
 // This allows reusing a lexer or inspecting tokens before parsing.
 func NewParserFromLexer(lexer *Lexer, opts ...ParseOption) *Parser {
-	cfg := &parserConfig{buildParseTree: true, ctx: context.Background()}
+	cfg := &parserConfig{buildParseTree: true, ctx: context.Background(), mode: SyntaxModeAuto}
 	for _, opt := range opts {
 		opt(cfg)
 	}

@@ -50,6 +50,8 @@ const (
 	KindIncludeUseCase
 	KindConjugatedPort
 	KindSuccessionFlow
+	KindKerMLType
+	KindKerMLFeature
 )
 
 // Exported string constants for element kind comparisons.
@@ -93,6 +95,8 @@ const (
 	KindIncludeUseCaseStr   = "include use case"
 	KindConjugatedPortStr   = "conjugated port"
 	KindSuccessionFlowStr   = "succession flow"
+	KindKerMLTypeStr        = "kerml type"
+	KindKerMLFeatureStr     = "kerml feature"
 )
 
 // String returns the string representation of the element kind.
@@ -174,6 +178,10 @@ func (k ElementKind) String() string {
 		return "conjugated port"
 	case KindSuccessionFlow:
 		return "succession flow"
+	case KindKerMLType:
+		return "kerml type"
+	case KindKerMLFeature:
+		return "kerml feature"
 	default:
 		return "unknown"
 	}
@@ -524,6 +532,98 @@ func (p *Package) Constraints() []*Constraint { return p.constraints }
 
 // Dependencies returns all direct child dependencies.
 func (p *Package) Dependencies() []*Dependency { return p.dependencies }
+
+// KerMLType represents a KerML classifier/type-style declaration.
+type KerMLType struct {
+	baseElement
+	DeclarationKeyword string
+	Specializes        []Ref[Element]
+	unresolvedSupers   []string
+	features           []*KerMLFeature
+}
+
+func (t *KerMLType) isDefinition() {}
+
+// NewKerMLType creates a new KerMLType element.
+func NewKerMLType(name, keyword string, loc Location) *KerMLType {
+	return &KerMLType{
+		baseElement: baseElement{
+			kind:     KindKerMLType,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		DeclarationKeyword: keyword,
+		Specializes:        make([]Ref[Element], 0),
+		unresolvedSupers:   make([]string, 0),
+		features:           make([]*KerMLFeature, 0),
+	}
+}
+
+// AddChild adds a child element with type tracking.
+func (t *KerMLType) AddChild(child Element) {
+	t.baseElement.addChild(child, t)
+	if feat, ok := child.(*KerMLFeature); ok && feat != nil {
+		t.features = append(t.features, feat)
+	}
+}
+
+// Features returns direct KerML feature children.
+func (t *KerMLType) Features() []*KerMLFeature { return t.features }
+
+// AddUnresolvedSuper adds an unresolved specialization reference.
+func (t *KerMLType) AddUnresolvedSuper(name string) {
+	if name == "" {
+		return
+	}
+	t.unresolvedSupers = append(t.unresolvedSupers, name)
+}
+
+// KerMLFeature represents a feature declaration in KerML type bodies.
+type KerMLFeature struct {
+	baseElement
+	TypeRef                 Ref[Element]
+	DefaultValue            string
+	SubsettedFeatures       []Element
+	RedefinedFeatures       []Element
+	unresolvedSubsetted     []string
+	unresolvedRedefined     []string
+	unresolvedTypeReference string
+}
+
+func (f *KerMLFeature) isDefinition() {}
+
+// NewKerMLFeature creates a new KerMLFeature element.
+func NewKerMLFeature(name string, loc Location) *KerMLFeature {
+	return &KerMLFeature{
+		baseElement: baseElement{
+			kind:     KindKerMLFeature,
+			name:     name,
+			location: loc,
+			children: make([]Element, 0),
+		},
+		SubsettedFeatures:   make([]Element, 0),
+		RedefinedFeatures:   make([]Element, 0),
+		unresolvedSubsetted: make([]string, 0),
+		unresolvedRedefined: make([]string, 0),
+	}
+}
+
+// AddUnresolvedSubsettedFeature adds unresolved subsetting target.
+func (f *KerMLFeature) AddUnresolvedSubsettedFeature(name string) {
+	if name == "" {
+		return
+	}
+	f.unresolvedSubsetted = append(f.unresolvedSubsetted, name)
+}
+
+// AddUnresolvedRedefinedFeature adds unresolved redefinition target.
+func (f *KerMLFeature) AddUnresolvedRedefinedFeature(name string) {
+	if name == "" {
+		return
+	}
+	f.unresolvedRedefined = append(f.unresolvedRedefined, name)
+}
 
 // Attribute represents a SysML attribute with name, type, and optional value.
 type Attribute struct {
@@ -2225,6 +2325,10 @@ func (m *Model) ResolveReferences() {
 			m.resolveRenderingRefs(e)
 		case *Message:
 			m.resolveMessageRefs(e)
+		case *KerMLType:
+			m.resolveKerMLTypeRefs(e)
+		case *KerMLFeature:
+			m.resolveKerMLFeatureRefs(e)
 		case *SatisfyRelationship:
 			m.resolveSatisfyRelationshipRefs(e)
 		case *VerifyRelationship:
@@ -2828,6 +2932,35 @@ func (m *Model) resolveMessageRefs(msg *Message) {
 	if msg.unresolvedReceiver != "" {
 		if elem := m.findElement(msg.unresolvedReceiver, msg); elem != nil {
 			msg.Receiver.Resolve(elem)
+		}
+	}
+}
+
+func (m *Model) resolveKerMLTypeRefs(t *KerMLType) {
+	for _, ref := range t.unresolvedSupers {
+		if elem := m.findElement(ref, t.Parent()); elem != nil {
+			resolved := NewRef[Element](ref)
+			resolved.Resolve(elem)
+			t.Specializes = append(t.Specializes, resolved)
+		}
+	}
+}
+
+func (m *Model) resolveKerMLFeatureRefs(f *KerMLFeature) {
+	if f.unresolvedTypeReference != "" {
+		if elem := m.findElement(f.unresolvedTypeReference, f.Parent()); elem != nil {
+			f.TypeRef = NewRef[Element](f.unresolvedTypeReference)
+			f.TypeRef.Resolve(elem)
+		}
+	}
+	for _, ref := range f.unresolvedSubsetted {
+		if elem := m.findElement(ref, f.Parent()); elem != nil {
+			f.SubsettedFeatures = append(f.SubsettedFeatures, elem)
+		}
+	}
+	for _, ref := range f.unresolvedRedefined {
+		if elem := m.findElement(ref, f.Parent()); elem != nil {
+			f.RedefinedFeatures = append(f.RedefinedFeatures, elem)
 		}
 	}
 }

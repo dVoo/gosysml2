@@ -76,6 +76,20 @@ This document describes the `sysml` package data model as currently implemented 
 - `Dependency`
   - `Client []Element`, `Supplier []Element`
 
+## KerML-specific elements
+
+- `KerMLType`
+  - generic representation for KerML declarations (`type`, `datatype`, `classifier`, `metaclass`, `function`, etc.)
+  - `DeclarationKeyword string` preserves the source declaration keyword
+  - `Specializes []Ref[Element]` resolved supertype/specialization references
+  - typed child accessor: `Features() []*KerMLFeature`
+- `KerMLFeature`
+  - feature declarations in KerML type bodies
+  - `TypeRef Ref[Element]`
+  - `DefaultValue string`
+  - `SubsettedFeatures []Element`
+  - `RedefinedFeatures []Element`
+
 ## Requirements, verification, and cases
 
 - `Constraint`

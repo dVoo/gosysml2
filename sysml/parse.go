@@ -292,10 +292,23 @@ func parseWithSource(input, source string, opts ...ParseOption) (result *ParseRe
 
 	// Get or create library registry
 	registry := getOrCreateRegistry(cfg)
-	normalizedInput, rewriteHints := normalizeUnsupportedRequirementSyntax(input)
+	normalizedInput := input
+	var rewriteHints *parseRewriteHints
+	if strings.EqualFold(filepath.Ext(source), ".kerml") {
+		// KerML files are parsed directly without SysML compatibility rewrites.
+		rewriteHints = newParseRewriteHints()
+	} else {
+		normalizedInput, rewriteHints = normalizeUnsupportedRequirementSyntax(input)
+	}
 
 	// Use low-level parser
-	tree, lowErrors := low.Parse(normalizedInput)
+	parseOpts := make([]low.ParseOption, 0, 1)
+	if strings.EqualFold(filepath.Ext(source), ".kerml") {
+		parseOpts = append(parseOpts, low.WithSyntaxMode(low.SyntaxModeKerML))
+	} else {
+		parseOpts = append(parseOpts, low.WithSyntaxMode(low.SyntaxModeSysML))
+	}
+	tree, lowErrors := low.Parse(normalizedInput, parseOpts...)
 
 	if !cfg.discardTree {
 		result.Tree = tree
@@ -389,7 +402,7 @@ func ParseFileModel(filename string, opts ...ParseOption) (*Model, error) {
 	return modelOrParseError(result, filename)
 }
 
-// ParseDirectory parses all .sysml files in a directory.
+// ParseDirectory parses all .sysml and .kerml files in a directory.
 // Use WithDiscardTree() option for large repositories to reduce memory.
 func ParseDirectory(dir string, opts ...ParseOption) ([]*ParseResult, error) {
 	var results []*ParseResult
@@ -398,7 +411,8 @@ func ParseDirectory(dir string, opts ...ParseOption) ([]*ParseResult, error) {
 		if err != nil {
 			return fmt.Errorf("walking %s: %w", path, err)
 		}
-		if d.IsDir() || !strings.HasSuffix(strings.ToLower(path), ".sysml") {
+		ext := strings.ToLower(filepath.Ext(path))
+		if d.IsDir() || (ext != ".sysml" && ext != ".kerml") {
 			return nil
 		}
 
@@ -413,7 +427,7 @@ func ParseDirectory(dir string, opts ...ParseOption) ([]*ParseResult, error) {
 	return results, nil
 }
 
-// ParseDirectoryParallel parses all .sysml files in a directory using multiple workers.
+// ParseDirectoryParallel parses all .sysml and .kerml files in a directory using multiple workers.
 // This can significantly speed up parsing of large repositories on multi-core machines.
 // Set workers to 0 to use runtime.NumCPU().
 func ParseDirectoryParallel(dir string, workers int, opts ...ParseOption) ([]*ParseResult, error) {
@@ -427,7 +441,8 @@ func ParseDirectoryParallel(dir string, workers int, opts ...ParseOption) ([]*Pa
 		if err != nil {
 			return fmt.Errorf("walking %s: %w", path, err)
 		}
-		if d.IsDir() || !strings.HasSuffix(strings.ToLower(path), ".sysml") {
+		ext := strings.ToLower(filepath.Ext(path))
+		if d.IsDir() || (ext != ".sysml" && ext != ".kerml") {
 			return nil
 		}
 		files = append(files, path)
@@ -468,7 +483,8 @@ func ParseDirectoryStream(dir string, handler func(*ParseResult) error, opts ...
 		if err != nil {
 			return fmt.Errorf("walking %s: %w", path, err)
 		}
-		if d.IsDir() || !strings.HasSuffix(strings.ToLower(path), ".sysml") {
+		ext := strings.ToLower(filepath.Ext(path))
+		if d.IsDir() || (ext != ".sysml" && ext != ".kerml") {
 			return nil
 		}
 
@@ -635,6 +651,237 @@ func (b *modelBuilder) ExitLibraryPackage(ctx *parser.LibraryPackageContext) {
 	} else {
 		b.currentPkg = nil
 	}
+}
+
+// EnterNamespace_ handles KerML namespace declarations.
+func (b *modelBuilder) EnterNamespace_(ctx *parser.Namespace_Context) {
+	name := ""
+	if decl := ctx.NamespaceDeclaration(); decl != nil {
+		if ident := decl.Identification(); ident != nil {
+			name = extractName(ident)
+		}
+	}
+
+	ns := NewPackage(name, locationFromContext(ctx))
+	parentPkg := b.currentPkg
+	if parentPkg != nil {
+		ns.parent = parentPkg
+		parentPkg.AddChild(ns)
+	} else {
+		b.model.AddPackage(ns)
+	}
+
+	b.packageStack = append(b.packageStack, b.currentPkg)
+	b.elementStack = append(b.elementStack, ns)
+	b.currentPkg = ns
+}
+
+// ExitNamespace_ restores package scope when leaving a KerML namespace.
+func (b *modelBuilder) ExitNamespace_(ctx *parser.Namespace_Context) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+	if len(b.packageStack) > 0 {
+		b.currentPkg = b.packageStack[len(b.packageStack)-1]
+		b.packageStack = b.packageStack[:len(b.packageStack)-1]
+	} else {
+		b.currentPkg = nil
+	}
+}
+
+func (b *modelBuilder) enterKerMLType(name, shortName, keyword string, loc Location, superRefs []string) {
+	elem := NewKerMLType(name, keyword, loc)
+	elem.setDeclaredShortName(shortName)
+	elem.parent = b.getCurrentParent()
+	for _, ref := range superRefs {
+		elem.AddUnresolvedSuper(ref)
+	}
+
+	if parent := b.getCurrentParent(); parent != nil {
+		b.addToParent(elem)
+	} else {
+		b.model.Elements = append(b.model.Elements, elem)
+	}
+	b.elementStack = append(b.elementStack, elem)
+}
+
+func (b *modelBuilder) exitKerMLType() {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+func (b *modelBuilder) EnterType_(ctx *parser.Type_Context) {
+	name, shortName := "", ""
+	superRefs := make([]string, 0)
+	if decl := ctx.TypeDeclaration(); decl != nil {
+		if ident := decl.Identification(); ident != nil {
+			name, shortName = extractIdentificationNames(ident)
+		}
+		superRefs = extractTypeDeclarationSpecializations(decl)
+	}
+	b.enterKerMLType(name, shortName, "type", locationFromContext(ctx), superRefs)
+}
+
+func (b *modelBuilder) ExitType_(ctx *parser.Type_Context) { b.exitKerMLType() }
+
+func (b *modelBuilder) EnterClassifier(ctx *parser.ClassifierContext) {
+	b.enterKerMLClassifierFromDecl("classifier", locationFromContext(ctx), ctx.ClassifierDeclaration())
+}
+
+func (b *modelBuilder) ExitClassifier(ctx *parser.ClassifierContext) { b.exitKerMLType() }
+
+func (b *modelBuilder) EnterDataType(ctx *parser.DataTypeContext) {
+	b.enterKerMLClassifierFromDecl("datatype", locationFromContext(ctx), ctx.ClassifierDeclaration())
+}
+
+func (b *modelBuilder) ExitDataType(ctx *parser.DataTypeContext) { b.exitKerMLType() }
+
+func (b *modelBuilder) EnterClass(ctx *parser.ClassContext) {
+	b.enterKerMLClassifierFromDecl("class", locationFromContext(ctx), ctx.ClassifierDeclaration())
+}
+
+func (b *modelBuilder) ExitClass(ctx *parser.ClassContext) { b.exitKerMLType() }
+
+func (b *modelBuilder) EnterStructure(ctx *parser.StructureContext) {
+	b.enterKerMLClassifierFromDecl("struct", locationFromContext(ctx), ctx.ClassifierDeclaration())
+}
+
+func (b *modelBuilder) ExitStructure(ctx *parser.StructureContext) { b.exitKerMLType() }
+
+func (b *modelBuilder) EnterMetaclass(ctx *parser.MetaclassContext) {
+	b.enterKerMLClassifierFromDecl("metaclass", locationFromContext(ctx), ctx.ClassifierDeclaration())
+}
+
+func (b *modelBuilder) ExitMetaclass(ctx *parser.MetaclassContext) { b.exitKerMLType() }
+
+func (b *modelBuilder) EnterAssociation(ctx *parser.AssociationContext) {
+	b.enterKerMLClassifierFromDecl("assoc", locationFromContext(ctx), ctx.ClassifierDeclaration())
+}
+
+func (b *modelBuilder) ExitAssociation(ctx *parser.AssociationContext) { b.exitKerMLType() }
+
+func (b *modelBuilder) EnterAssociationStructure(ctx *parser.AssociationStructureContext) {
+	b.enterKerMLClassifierFromDecl("assoc struct", locationFromContext(ctx), ctx.ClassifierDeclaration())
+}
+
+func (b *modelBuilder) ExitAssociationStructure(ctx *parser.AssociationStructureContext) {
+	b.exitKerMLType()
+}
+
+func (b *modelBuilder) EnterInteraction(ctx *parser.InteractionContext) {
+	b.enterKerMLClassifierFromDecl("interaction", locationFromContext(ctx), ctx.ClassifierDeclaration())
+}
+
+func (b *modelBuilder) ExitInteraction(ctx *parser.InteractionContext) { b.exitKerMLType() }
+
+func (b *modelBuilder) EnterBehavior(ctx *parser.BehaviorContext) {
+	b.enterKerMLClassifierFromDecl("behavior", locationFromContext(ctx), ctx.ClassifierDeclaration())
+}
+
+func (b *modelBuilder) ExitBehavior(ctx *parser.BehaviorContext) { b.exitKerMLType() }
+
+func (b *modelBuilder) EnterFunction_(ctx *parser.Function_Context) {
+	b.enterKerMLClassifierFromDecl("function", locationFromContext(ctx), ctx.ClassifierDeclaration())
+}
+
+func (b *modelBuilder) ExitFunction_(ctx *parser.Function_Context) { b.exitKerMLType() }
+
+func (b *modelBuilder) EnterPredicate(ctx *parser.PredicateContext) {
+	b.enterKerMLClassifierFromDecl("predicate", locationFromContext(ctx), ctx.ClassifierDeclaration())
+}
+
+func (b *modelBuilder) ExitPredicate(ctx *parser.PredicateContext) { b.exitKerMLType() }
+
+func (b *modelBuilder) enterKerMLClassifierFromDecl(keyword string, loc Location, decl parser.IClassifierDeclarationContext) {
+	name, shortName := "", ""
+	superRefs := make([]string, 0)
+	if decl != nil {
+		if ident := decl.Identification(); ident != nil {
+			name, shortName = extractIdentificationNames(ident)
+		}
+		superRefs = extractClassifierSpecializations(decl)
+	}
+	b.enterKerMLType(name, shortName, keyword, loc, superRefs)
+}
+
+func (b *modelBuilder) EnterFeature(ctx *parser.FeatureContext) {
+	b.enterKerMLFeatureFromDeclaration(ctx.FeatureDeclaration(), ctx.ValuePart(), locationFromContext(ctx))
+}
+
+func (b *modelBuilder) EnterFeatureSubsetting(ctx *parser.FeatureSubsettingContext) {
+	if len(b.elementStack) == 0 {
+		return
+	}
+	parentType, ok := b.elementStack[len(b.elementStack)-1].(*KerMLType)
+	if !ok || parentType == nil {
+		return
+	}
+
+	feature := NewKerMLFeature(extractOwnedSubsettingText(ctx.OwnedSubsetting()), locationFromContext(ctx))
+	feature.parent = parentType
+	if subsettings := ctx.Subsettings(); subsettings != nil {
+		for _, owned := range subsettings.AllOwnedSubsetting() {
+			feature.AddUnresolvedSubsettedFeature(extractOwnedSubsettingText(owned))
+		}
+	}
+	parentType.AddChild(feature)
+}
+
+func (b *modelBuilder) EnterStep(ctx *parser.StepContext) {
+	b.enterKerMLFeatureFromDeclaration(ctx.FeatureDeclaration(), ctx.ValuePart(), locationFromContext(ctx))
+}
+
+func (b *modelBuilder) EnterExpression(ctx *parser.ExpressionContext) {
+	b.enterKerMLFeatureFromDeclaration(ctx.FeatureDeclaration(), ctx.ValuePart(), locationFromContext(ctx))
+}
+
+func (b *modelBuilder) EnterBooleanExpression(ctx *parser.BooleanExpressionContext) {
+	b.enterKerMLFeatureFromDeclaration(ctx.FeatureDeclaration(), ctx.ValuePart(), locationFromContext(ctx))
+}
+
+func (b *modelBuilder) EnterInvariant(ctx *parser.InvariantContext) {
+	b.enterKerMLFeatureFromDeclaration(ctx.FeatureDeclaration(), ctx.ValuePart(), locationFromContext(ctx))
+}
+
+func (b *modelBuilder) enterKerMLFeatureFromDeclaration(
+	decl parser.IFeatureDeclarationContext,
+	valuePart parser.IValuePartContext,
+	loc Location,
+) {
+	if len(b.elementStack) == 0 {
+		return
+	}
+	parentType, ok := b.elementStack[len(b.elementStack)-1].(*KerMLType)
+	if !ok || parentType == nil {
+		return
+	}
+
+	name, shortName := extractFeatureDeclarationNames(decl)
+	feature := NewKerMLFeature(name, loc)
+	feature.setDeclaredShortName(shortName)
+	feature.parent = parentType
+
+	if decl != nil {
+		if featSpec := decl.FeatureSpecializationPart(); featSpec != nil {
+			typeRef := extractTypeReference(featSpec)
+			if typeRef != "" {
+				feature.TypeRef = NewRef[Element](typeRef)
+				feature.unresolvedTypeReference = typeRef
+			}
+			for _, ref := range extractSubsettedFeatureNames(featSpec) {
+				feature.AddUnresolvedSubsettedFeature(ref)
+			}
+			for _, ref := range extractRedefinitionNames(featSpec) {
+				feature.AddUnresolvedRedefinedFeature(ref)
+			}
+		}
+	}
+	if valuePart != nil && valuePart.FeatureValue() != nil && valuePart.FeatureValue().OwnedExpression() != nil {
+		feature.DefaultValue = strings.TrimSpace(valuePart.FeatureValue().OwnedExpression().GetText())
+	}
+
+	parentType.AddChild(feature)
 }
 
 func (b *modelBuilder) EnterPartDefinition(ctx *parser.PartDefinitionContext) {
@@ -2472,8 +2719,8 @@ func extractSubsettedFeatureNames(featSpecPart parser.IFeatureSpecializationPart
 			for _, ownedSubsetting := range subsettings.AllOwnedSubsetting() {
 				if qname := ownedSubsetting.QualifiedName(); qname != nil {
 					names = append(names, strings.TrimSpace(qname.GetText()))
-				} else if chain := ownedSubsetting.OwnedFeatureChain(); chain != nil {
-					names = append(names, strings.TrimSpace(chain.GetText()))
+				} else {
+					names = append(names, strings.TrimSpace(ownedSubsetting.GetText()))
 				}
 			}
 		}
@@ -2571,6 +2818,77 @@ func extractMultiplicity(featSpecPart parser.IFeatureSpecializationPartContext) 
 	text = strings.TrimPrefix(text, "[")
 	text = strings.TrimSuffix(text, "]")
 	return strings.TrimSpace(text)
+}
+
+func extractClassifierSpecializations(decl parser.IClassifierDeclarationContext) []string {
+	if decl == nil || decl.SuperclassingPart() == nil {
+		return nil
+	}
+	refs := make([]string, 0)
+	for _, owned := range decl.SuperclassingPart().AllOwnedSubclassification() {
+		if owned == nil {
+			continue
+		}
+		if q := owned.QualifiedName(); q != nil {
+			refs = append(refs, strings.TrimSpace(q.GetText()))
+		}
+	}
+	return refs
+}
+
+func extractTypeDeclarationSpecializations(decl parser.ITypeDeclarationContext) []string {
+	if decl == nil {
+		return nil
+	}
+	refs := make([]string, 0)
+	for _, part := range decl.AllSpecializationPart() {
+		if part == nil {
+			continue
+		}
+		for _, owned := range part.AllOwnedSpecialization() {
+			if owned == nil || owned.GeneralType() == nil {
+				continue
+			}
+			gt := owned.GeneralType()
+			if q := gt.QualifiedName(); q != nil {
+				refs = append(refs, strings.TrimSpace(q.GetText()))
+				continue
+			}
+			if chain := gt.OwnedFeatureChain(); chain != nil {
+				refs = append(refs, strings.TrimSpace(chain.GetText()))
+			}
+		}
+	}
+	return refs
+}
+
+func extractFeatureDeclarationNames(decl parser.IFeatureDeclarationContext) (declaredName, declaredShortName string) {
+	if decl == nil || decl.FeatureIdentification() == nil {
+		return "", ""
+	}
+	ident := decl.FeatureIdentification()
+	names := ident.AllName()
+	switch len(names) {
+	case 0:
+		return "", ""
+	case 1:
+		if ident.LT() != nil {
+			return "", names[0].GetText()
+		}
+		return names[0].GetText(), ""
+	default:
+		return names[1].GetText(), names[0].GetText()
+	}
+}
+
+func extractOwnedSubsettingText(owned parser.IOwnedSubsettingContext) string {
+	if owned == nil {
+		return ""
+	}
+	if q := owned.QualifiedName(); q != nil {
+		return strings.TrimSpace(q.GetText())
+	}
+	return strings.TrimSpace(owned.GetText())
 }
 
 // extractSpecializationReference extracts the specialization/supertype reference

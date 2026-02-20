@@ -16,6 +16,7 @@ A Go library for parsing SysML v2 models. Provides both a low-level performance-
 ## Features
 
 - Full SysML v2 grammar support via ANTLR4-generated parser
+- KerML textual parsing support for default SysML library `.kerml` files (usable extent)
 - Two-tier API design:
   - **Low-level API** (`low` package): Direct access to lexer, parser, and parse trees
   - **High-level API** (`sysml` package): Idiomatic Go model with visitor pattern

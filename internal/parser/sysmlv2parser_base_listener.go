@@ -2598,6 +2598,12 @@ func (s *BaseSysMLv2ParserListener) EnterMultiplicityRangeDecl(ctx *Multiplicity
 // ExitMultiplicityRangeDecl is called when production multiplicityRangeDecl is exited.
 func (s *BaseSysMLv2ParserListener) ExitMultiplicityRangeDecl(ctx *MultiplicityRangeDeclContext) {}
 
+// EnterFeatureSubsetting is called when production featureSubsetting is entered.
+func (s *BaseSysMLv2ParserListener) EnterFeatureSubsetting(ctx *FeatureSubsettingContext) {}
+
+// ExitFeatureSubsetting is called when production featureSubsetting is exited.
+func (s *BaseSysMLv2ParserListener) ExitFeatureSubsetting(ctx *FeatureSubsettingContext) {}
+
 // EnterMultiplicityBounds is called when production multiplicityBounds is entered.
 func (s *BaseSysMLv2ParserListener) EnterMultiplicityBounds(ctx *MultiplicityBoundsContext) {}
 

@@ -14,7 +14,7 @@ The `low` package gives direct access to lexing/parsing with minimal abstraction
 ### Core types
 
 - `Lexer`: wraps `SysMLv2Lexer`, collects lexer errors
-- `Parser`: wraps `SysMLv2Parser`, collects parser errors
+- `Parser`: wraps the unified `SysMLv2Parser` grammar (SysML + KerML), collects parser errors
 - `SyntaxError`: single lexer/parser error with line/column/source
 - `ParseErrors`: combined lexer+parser error set
 
@@ -142,6 +142,8 @@ Feature relationships are also exposed on `Attribute`:
 - `sysml.WithLibraryRegistry(reg)`: use preloaded library resolver
 - `sysml.WithStandardLibrary()`: auto-load standard library
 - `sysml.WithLibraryPath(path)`: custom standard library path
+
+Directory parsers include both `.sysml` and `.kerml` files.
 
 ### Typical use cases
 

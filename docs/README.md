@@ -21,6 +21,7 @@ Current library version: `0.1` (see root `VERSION` file).
 ## Features
 
 - Full SysML v2 grammar support via ANTLR4-generated parser
+- KerML textual parsing support for default SysML library `.kerml` files (usable extent)
 - Two-tier API design:
   - **Low-level API** (`low` package): Direct access to lexer, parser, and parse trees
   - **High-level API** (`sysml` package): Idiomatic Go model with visitor pattern
@@ -122,7 +123,7 @@ err := sysml.ParseDirectoryStream("./models", func(r *sysml.ParseResult) error {
 | `ParseFileModel(path, opts...)` | Parse a file and return `(*Model, error)` |
 | `ParseBytes(data, source, opts...)` | Parse from byte slice (avoids copy) |
 | `ParseReader(r, source, opts...)` | Parse from io.Reader |
-| `ParseDirectory(dir, opts...)` | Parse all .sysml files in directory |
+| `ParseDirectory(dir, opts...)` | Parse all `.sysml` and `.kerml` files in directory |
 | `ParseDirectoryParallel(dir, workers, opts...)` | Parse in parallel |
 | `ParseDirectoryStream(dir, handler, opts...)` | Parse with streaming handler |
 | `Validate(input)` | Validate syntax without building model |
