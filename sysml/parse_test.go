@@ -219,6 +219,75 @@ package VehicleReqs {
 	}
 }
 
+func TestParseBareImportAndAliasAsForm(t *testing.T) {
+	input := `
+package VehicleModel {
+    import ISQ::*;
+    alias ISQ::TorqueValue as Torque;
+}
+`
+
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Errors)
+	}
+
+	pkgs := FindAll[*Package](result.Model)
+	if len(pkgs) == 0 || len(pkgs[0].Imports()) == 0 {
+		t.Fatal("expected at least one package import")
+	}
+	imp := pkgs[0].Imports()[0]
+	if imp.Visibility != "" {
+		t.Fatalf("expected empty visibility for bare import, got %q", imp.Visibility)
+	}
+	if imp.ImportedNamespace != "ISQ" {
+		t.Fatalf("expected imported namespace ISQ, got %q", imp.ImportedNamespace)
+	}
+	if !imp.IsAll {
+		t.Fatal("expected wildcard import")
+	}
+
+	aliases := FindAll[*Alias](result.Model)
+	if len(aliases) == 0 {
+		t.Fatal("expected at least one alias")
+	}
+	if aliases[0].Name() != "Torque" {
+		t.Fatalf("expected alias name Torque, got %q", aliases[0].Name())
+	}
+	if aliases[0].unresolvedTarget != "ISQ::TorqueValue" {
+		t.Fatalf("expected alias target ISQ::TorqueValue, got %q", aliases[0].unresolvedTarget)
+	}
+}
+
+func TestParseLogicalAndAndUnitAtBracketForm(t *testing.T) {
+	input := `
+package HVAC {
+    attribute mass = 75 @[kg];
+    attribute ok = true && false;
+}
+`
+
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Errors)
+	}
+}
+
+func TestParseCompliantStateDoPerformActionBody(t *testing.T) {
+	input := `
+package VehicleModel {
+    state vehicleStates {
+        do vehicle::senseTemperature { out temp; };
+    }
+}
+`
+
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Errors)
+	}
+}
+
 func TestRequirementDefinitionRequireBlockExpressionCompatibility(t *testing.T) {
 	input := `
 package P {

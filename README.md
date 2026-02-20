@@ -7,7 +7,7 @@ Go library for parsing SysML v2 and KerML textual models with two layers:
 - `low`: ANTLR-oriented low-level parser access
 - `sysml`: high-level typed model with reference resolution
 
-Current version: `v0.2.1` (from `VERSION`).
+Current version: `v0.3.1` (from `VERSION`).
 
 ## Quick Start
 

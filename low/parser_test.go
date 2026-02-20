@@ -253,3 +253,135 @@ package Model {
 		t.Fatal("parse tree is nil")
 	}
 }
+
+func TestParseBareImport(t *testing.T) {
+	input := `
+package P {
+    import ISQ::*;
+}
+`
+
+	tree, errors := Parse(input)
+	if errors.HasErrors() {
+		t.Fatalf("parse failed: %s", errors)
+	}
+	if tree == nil {
+		t.Fatal("parse tree is nil")
+	}
+}
+
+func TestParseAliasAsForm(t *testing.T) {
+	input := `
+package P {
+    alias ISQ::TorqueValue as Torque;
+}
+`
+
+	tree, errors := Parse(input)
+	if errors.HasErrors() {
+		t.Fatalf("parse failed: %s", errors)
+	}
+	if tree == nil {
+		t.Fatal("parse tree is nil")
+	}
+}
+
+func TestParseAndAndOperator(t *testing.T) {
+	input := `
+package P {
+    attribute ok = true && false;
+}
+`
+
+	tree, errors := Parse(input)
+	if errors.HasErrors() {
+		t.Fatalf("parse failed: %s", errors)
+	}
+	if tree == nil {
+		t.Fatal("parse tree is nil")
+	}
+}
+
+func TestParseUnitAtBracketNotation(t *testing.T) {
+	input := `
+package P {
+    attribute mass = 75 @[kg];
+}
+`
+
+	tree, errors := Parse(input)
+	if errors.HasErrors() {
+		t.Fatalf("parse failed: %s", errors)
+	}
+	if tree == nil {
+		t.Fatal("parse tree is nil")
+	}
+}
+
+func TestParsePackageLevelActor(t *testing.T) {
+	input := `
+package UseCases {
+    actor User;
+}
+`
+
+	tree, errors := Parse(input)
+	if errors.HasErrors() {
+		t.Fatalf("parse failed: %s", errors)
+	}
+	if tree == nil {
+		t.Fatal("parse tree is nil")
+	}
+}
+
+func TestParseLegacyUsecaseKeyword(t *testing.T) {
+	input := `
+package UC {
+    usecase ApplyElectrodeBelt;
+}
+`
+
+	tree, errors := Parse(input)
+	if errors.HasErrors() {
+		t.Fatalf("parse failed: %s", errors)
+	}
+	if tree == nil {
+		t.Fatal("parse tree is nil")
+	}
+}
+
+func TestParseLegacyStreamKeyword(t *testing.T) {
+	input := `
+package P {
+    part a;
+    part b;
+    stream transfer from a to b;
+}
+`
+
+	tree, errors := Parse(input)
+	if errors.HasErrors() {
+		t.Fatalf("parse failed: %s", errors)
+	}
+	if tree == nil {
+		t.Fatal("parse tree is nil")
+	}
+}
+
+func TestParseStateDoPerformActionWithBody(t *testing.T) {
+	input := `
+package VehicleModel {
+    state vehicleStates {
+        do vehicle::senseTemperature { out temp; };
+    }
+}
+`
+
+	tree, errors := Parse(input)
+	if errors.HasErrors() {
+		t.Fatalf("parse failed: %s", errors)
+	}
+	if tree == nil {
+		t.Fatal("parse tree is nil")
+	}
+}

@@ -144,6 +144,10 @@ aliasMember
       name?
       FOR qualifiedName
       relationshipBody
+    | memberPrefix
+      ALIAS qualifiedName
+      AS name
+      relationshipBody
     ;
 
 qualifiedName
@@ -158,7 +162,7 @@ name
 // Clause 8.2.3.4.2 Imports
 
 import_
-    : visibilityIndicator
+    : visibilityIndicator?
       IMPORT ALL?
       importDeclaration relationshipBody
     ;
@@ -906,6 +910,8 @@ conditionalBinaryOperator
     : QUESTIONQUESTION
     | OR
     | AND
+    | OROR
+    | ANDAND
     | IMPLIES
     ;
 
@@ -1034,7 +1040,12 @@ nonFeatureChainPrimaryExpression
     | selectExpression
     | collectExpression
     | functionOperationExpression
+    | quantityAnnotationExpression
     | baseExpression
+    ;
+
+quantityAnnotationExpression
+    : primaryArgumentMember ATSIGN LBRACKET qualifiedName RBRACKET
     ;
 
 bracketExpression

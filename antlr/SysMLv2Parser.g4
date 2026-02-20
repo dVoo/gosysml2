@@ -125,6 +125,7 @@ packageBodyElement
     | elementFilterMember
     | aliasMember
     | import_
+    | actorMember
     ;
 
 memberPrefix
@@ -147,10 +148,14 @@ aliasMember
       name?
       FOR qualifiedName
       relationshipBody
+    | memberPrefix
+      ALIAS qualifiedName
+      AS name
+      relationshipBody
     ;
 
 import_
-    : visibilityIndicator
+    : visibilityIndicator?
       IMPORT ALL?
       importDeclaration
       relationshipBody
@@ -947,7 +952,7 @@ allocationUsageDeclaration
 // =============================================================================
 
 flowDefinition
-    : occurrenceDefinitionPrefix FLOW DEF definition
+    : occurrenceDefinitionPrefix (FLOW | STREAM) DEF definition
     ;
 
 message
@@ -971,7 +976,7 @@ messageEvent
     ;
 
 flowUsage
-    : occurrenceUsagePrefix FLOW
+    : occurrenceUsagePrefix (FLOW | STREAM)
       flowDeclaration definitionBody
     ;
 
@@ -1757,19 +1762,19 @@ requirementVerificationUsage
 // =============================================================================
 
 useCaseDefinition
-    : occurrenceDefinitionPrefix USE CASE DEF
+    : occurrenceDefinitionPrefix ((USE CASE) | USECASE) DEF
       definitionDeclaration caseBody
     ;
 
 useCaseUsage
-    : occurrenceUsagePrefix USE CASE
+    : occurrenceUsagePrefix ((USE CASE) | USECASE)
       constraintUsageDeclaration caseBody
     ;
 
 includeUseCaseUsage
     : occurrenceUsagePrefix INCLUDE
       (ownedReferenceSubsetting featureSpecializationPart?
-      | USE CASE usageDeclaration
+      | ((USE CASE) | USECASE) usageDeclaration
       )
       valuePart?
       caseBody
@@ -1948,6 +1953,8 @@ conditionalBinaryOperator
     : QUESTIONQUESTION
     | OR
     | AND
+    | OROR
+    | ANDAND
     | IMPLIES
     ;
 
@@ -1999,6 +2006,7 @@ primaryExpressionSuffix
     | MINUSGT qualifiedName bodyExpression                   // function operation with body
     | MINUSGT qualifiedName qualifiedName                    // function operation with shorthand argument
     | argumentList                                           // method call (e.g., x.y(args))
+    | ATSIGN LBRACKET qualifiedName RBRACKET                 // quantity annotation (community form: @[kg])
     ;
 
 // Base Expressions (non-recursive)
@@ -2039,7 +2047,8 @@ constructorExpression
     ;
 
 bodyExpression
-    : LBRACE (functionBodyPart | ownedExpression) RBRACE
+    : LBRACE functionBodyPart RBRACE
+    | LBRACE sequenceExpressionList RBRACE
     ;
 
 sequenceExpression

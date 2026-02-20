@@ -139,6 +139,7 @@ SPECIALIZES     : 'specializes';
 STAKEHOLDER     : 'stakeholder';
 STANDARD        : 'standard';
 STATE           : 'state';
+STREAM          : 'stream';
 STEP            : 'step';
 STRUCT          : 'struct';
 SUBJECT         : 'subject';
@@ -159,6 +160,7 @@ TYPING          : 'typing';
 UNIONS          : 'unions';
 UNTIL           : 'until';
 USE             : 'use';
+USECASE         : 'usecase';
 VAR             : 'var';
 VARIANT         : 'variant';
 VARIATION       : 'variation';
@@ -212,6 +214,8 @@ DOTQUESTION     : '.?';
 STARSTAR        : '**';
 QUESTIONQUESTION: '??';
 ATAT            : '@@';
+ANDAND          : '&&';
+OROR            : '||';
 
 // @ prefix for metadata annotations (allows optional space after @)
 AT_ANNOTATION   : '@' [ \t]* [a-zA-Z_] [a-zA-Z0-9_]*;
@@ -243,6 +247,7 @@ QUESTION        : '?';
 HASH            : '#';
 DOLLAR          : '$';
 BANG            : '!';
+ATSIGN          : '@';
 
 // =============================================================================
 // Literals and Names
