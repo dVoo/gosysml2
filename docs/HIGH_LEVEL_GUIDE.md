@@ -14,23 +14,27 @@ The parse helpers already perform index build and reference resolution.
 ## Core Entry Points
 
 - `sysml.ParseString(input, opts...)`
+- `sysml.ParseStringContext(ctx, input, opts...)`
 - `sysml.ParseFile(path, opts...)`
+- `sysml.ParseFileContext(ctx, path, opts...)`
 - `sysml.ParseBytes(data, source, opts...)`
+- `sysml.ParseBytesContext(ctx, data, source, opts...)`
 - `sysml.ParseReader(r, source, opts...)`
+- `sysml.ParseReaderContext(ctx, r, source, opts...)`
 - `sysml.ParseStringModel(input, opts...) (*Model, error)`
 - `sysml.ParseFileModel(path, opts...) (*Model, error)`
-- `sysml.ParseDirectory(dir, opts...)`
-- `sysml.ParseDirectoryParallel(dir, workers, opts...)`
-- `sysml.ParseDirectoryStream(dir, handler, opts...)`
+- `sysml.ParseDir(ctx, dir, opts) iter.Seq[*ParseResult]`
 
 ## Data Model Snapshot (Currently Implemented)
 
-Main root collections:
+Main root model access:
 
-- `Model.Packages`
-- `Model.Imports`
-- `Model.Elements`
-- relationship slices like `Model.Satisfies` and `Model.Verifies`
+- `Model.Elements` (canonical top-level storage)
+- typed accessors derived from `Elements`:
+  - `Packages()`, `Imports()`, `Comments()`, `Dependencies()`, `Docs()`
+  - `Flows()`, `ControlNodes()`, `Occurrences()`
+  - `Aliases()`, `Metadata()`, `Renderings()`, `Messages()`
+  - `Filters()`, `Satisfies()`, `Verifies()`
 
 Common element types:
 
@@ -46,8 +50,8 @@ For full field-level details, see [`SYSML_DATA_MODEL.md`](SYSML_DATA_MODEL.md).
 
 ```go
 result := sysml.ParseString(input)
-if !result.Success() {
-    panic(result.Errors)
+if err := result.Err(); err != nil {
+    panic(err)
 }
 
 parts := sysml.FindAll[*sysml.Part](result.Model)
@@ -90,9 +94,45 @@ Reference resolution uses qualified names and short-name index paths.
 ## Options
 
 - `sysml.WithDiscardTree()` for lower memory usage
+- `sysml.WithSource(source)` to set source id for in-memory parses
+- `sysml.WithoutCompatibilityRewrites()` to disable pre-parse compatibility rewrites
 - `sysml.WithStandardLibrary()` to load/resolve against standard libraries
 - `sysml.WithLibraryPath(path)` for custom library location
 - `sysml.WithLibraryRegistry(reg)` for preloaded registry usage
+
+## ParseResult Contract
+
+`ParseResult` now exposes one canonical parse status API:
+
+- `Err() error` (nil means success)
+- `Errors() []*Error` (flat list)
+- `ParseError *ParseError` (detailed aggregate when present)
+
+And parse metadata:
+
+- `Source string`
+- `Hash string` (SHA-256 of original input)
+- `Rewrites []string` (compatibility rewrites applied)
+- `Tree antlr.Tree` (optional; omitted with `WithDiscardTree`)
+
+## Directory Parsing
+
+Use one API for sequential, parallel, and streaming patterns:
+
+```go
+opts := sysml.DirOptions{
+    Workers:      0, // 0 => runtime.NumCPU()
+    ParseOptions: []sysml.ParseOption{sysml.WithDiscardTree()},
+}
+
+for r := range sysml.ParseDir(ctx, "./models", opts) {
+    if err := r.Err(); err != nil {
+        fmt.Printf("failed %s: %v\n", r.Source, err)
+        continue
+    }
+    fmt.Printf("ok: %s\n", r.Source)
+}
+```
 
 ## Traversal APIs
 

@@ -40,13 +40,13 @@
 //	    `
 //
 //	    result := sysml.ParseString(input)
-//	    if !result.Success() {
-//	        fmt.Printf("Parse error: %s\n", result.Errors)
+//	    if err := result.Err(); err != nil {
+//	        fmt.Printf("Parse error: %s\n", err)
 //	        return
 //	    }
 //
 //	    // Access the model
-//	    for _, pkg := range result.Model.Packages {
+//	    for _, pkg := range result.Model.Packages() {
 //	        fmt.Printf("Package: %s\n", pkg.Name())
 //	    }
 //	}
@@ -100,11 +100,17 @@
 //	// Parse from bytes (avoids copy)
 //	result := sysml.ParseBytes(data, "source.sysml")
 //
-//	// Parse directory
-//	results, err := sysml.ParseDirectory("./models")
-//
-//	// Parse directory in parallel
-//	results, err := sysml.ParseDirectoryParallel("./models", 4)
+//	// Parse directory with configurable workers and parse options
+//	opts := sysml.DirOptions{
+//	    Workers:      0, // 0 = runtime.NumCPU()
+//	    ParseOptions: []sysml.ParseOption{sysml.WithDiscardTree()},
+//	}
+//	for r := range sysml.ParseDir(context.Background(), "./models", opts) {
+//	    if err := r.Err(); err != nil {
+//	        fmt.Printf("failed: %s: %v\n", r.Source, err)
+//	        continue
+//	    }
+//	}
 //
 // # Parse Options
 //
@@ -151,25 +157,25 @@
 //
 // # Performance
 //
-// For large repositories, use streaming or parallel parsing:
+// For large repositories, use ParseDir with appropriate worker count:
 //
-//	// Streaming (lowest memory)
-//	err := sysml.ParseDirectoryStream("./models", func(r *sysml.ParseResult) error {
-//	    if r.Success() {
+//	// Sequential streaming style (lowest memory)
+//	opts := sysml.DirOptions{Workers: 1, ParseOptions: []sysml.ParseOption{sysml.WithDiscardTree()}}
+//	for r := range sysml.ParseDir(context.Background(), "./models", opts) {
+//	    if r.Err() == nil {
 //	        // Process each model as it's parsed
 //	        parts := sysml.FindAll[*sysml.Part](r.Model)
 //	        fmt.Printf("%s: %d parts\n", r.Source, len(parts))
 //	    }
-//	    return nil
-//	}, sysml.WithDiscardTree())
+//	}
 //
 // # Error Handling
 //
 // Parse results include detailed error information:
 //
-//	if !result.Success() {
+//	if err := result.Err(); err != nil {
 //	    // Get first error
-//	    first := result.Errors.First()
+//	    first := result.ParseError.First()
 //	    fmt.Printf("Error at line %d, column %d: %s\n",
 //	        first.Line, first.Column, first.Message)
 //	}

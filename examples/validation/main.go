@@ -78,11 +78,11 @@ package InvalidModel {
 
 	// Parse with errors
 	result := sysml.ParseString(invalidInput)
-	if !result.Success() {
-		fmt.Printf("   Parse failed with %d error(s)\n", len(result.Errors.Errors))
+	if result.Err() != nil {
+		fmt.Printf("   Parse failed with %d error(s)\n", len(result.Errors()))
 
 		// Get first error
-		if first := result.Errors.First(); first != nil {
+		if first := result.ParseError.First(); first != nil {
 			fmt.Printf("   First error at line %d, column %d:\n",
 				first.Line, first.Column)
 			fmt.Printf("      %s\n", first.Message)
@@ -90,7 +90,7 @@ package InvalidModel {
 
 		// Show all errors
 		fmt.Println("   All errors:")
-		for _, err := range result.Errors.Errors {
+		for _, err := range result.Errors() {
 			fmt.Printf("      Line %d:%d - %s\n",
 				err.Line, err.Column, err.Message)
 		}
@@ -99,10 +99,10 @@ package InvalidModel {
 	// Example 4: Valid input with full parsing
 	fmt.Println("\n4. Parsing valid input...")
 	result = sysml.ParseString(validInput)
-	if result.Success() {
+	if result.Err() == nil {
 		fmt.Println("   Parse successful!")
-		fmt.Printf("   Model has %d package(s)\n", len(result.Model.Packages))
-		for _, pkg := range result.Model.Packages {
+		fmt.Printf("   Model has %d package(s)\n", len(result.Model.Packages()))
+		for _, pkg := range result.Model.Packages() {
 			fmt.Printf("      - %s\n", pkg.Name())
 		}
 	}
@@ -126,9 +126,9 @@ package Test {
 
 		// Validate the file
 		result := sysml.ParseFile(tmpFile)
-		if !result.Success() {
-			fmt.Printf("   File validation found %d error(s)\n", len(result.Errors.Errors))
-			for _, err := range result.Errors.Errors {
+		if result.Err() != nil {
+			fmt.Printf("   File validation found %d error(s)\n", len(result.Errors()))
+			for _, err := range result.Errors() {
 				fmt.Printf("      Line %d:%d - %s\n",
 					err.Line, err.Column, err.Message)
 			}
@@ -138,21 +138,21 @@ package Test {
 	// Example 6: Error formatting
 	fmt.Println("\n6. Error formatting options...")
 	result = sysml.ParseString(invalidInput)
-	if !result.Success() {
+	if result.Err() != nil {
 		fmt.Println("   Formatted error string:")
-		fmt.Printf("   %s\n", result.Errors.Error())
+		fmt.Printf("   %s\n", result.ParseError.Error())
 	}
 
 	// Example 7: Checking specific error types
 	fmt.Println("\n7. Error analysis...")
 	result = sysml.ParseString(invalidInput)
-	if !result.Success() {
+	if result.Err() != nil {
 		syntaxErrors := 0
 		otherErrors := 0
 
-		for _, err := range result.Errors.Errors {
+		for _, err := range result.Errors() {
 			// Check if it's a syntax error
-			if err.Line > 0 {
+			if err.Line >= 0 {
 				syntaxErrors++
 			} else {
 				otherErrors++

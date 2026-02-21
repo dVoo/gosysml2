@@ -42,13 +42,13 @@ func highLevelExample(input string) {
 	// Parse using high-level API
 	result := sysml.ParseString(input)
 
-	if !result.Success() {
-		fmt.Printf("Parse errors:\n%s\n", result.Errors)
+	if result.Err() != nil {
+		fmt.Printf("Parse errors:\n%s\n", result.ParseError)
 		return
 	}
 
 	fmt.Println("Parsing successful!")
-	fmt.Printf("Found %d top-level packages\n", len(result.Model.Packages))
+	fmt.Printf("Found %d top-level packages\n", len(result.Model.Packages()))
 
 	// Walk the model
 	fmt.Println("\nElements in model:")

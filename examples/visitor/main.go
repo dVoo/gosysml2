@@ -231,8 +231,8 @@ package SystemModel {
 	// Parse the model
 	fmt.Println("1. Parsing model...")
 	result := sysml.ParseString(input)
-	if !result.Success() {
-		fmt.Printf("   Parse errors:\n%s\n", result.Errors)
+	if result.Err() != nil {
+		fmt.Printf("   Parse errors:\n%s\n", result.ParseError)
 		os.Exit(1)
 	}
 	fmt.Println("   Parsing successful!")

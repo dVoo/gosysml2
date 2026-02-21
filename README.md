@@ -7,7 +7,7 @@ Go library for parsing SysML v2 and KerML textual models with two layers:
 - `low`: ANTLR-oriented low-level parser access
 - `sysml`: high-level typed model with reference resolution
 
-Current version: `v0.3.1` (from `VERSION`).
+Current version: `v0.4.0` (from `VERSION`).
 
 ## Quick Start
 
@@ -36,14 +36,31 @@ package Vehicle {
 }
 `
 
-    result := sysml.ParseString(input)
-    if !result.Success() {
-        fmt.Println(result.Errors)
+    result := sysml.ParseString(input, sysml.WithSource("memory://Vehicle.sysml"))
+    if err := result.Err(); err != nil {
+        fmt.Println(err)
         return
     }
 
     parts := sysml.FindAll[*sysml.Part](result.Model)
     fmt.Printf("parts: %d\n", len(parts))
+}
+```
+
+Parse a directory with one unified API:
+
+```go
+ctx := context.Background()
+opts := sysml.DirOptions{
+    Workers:      0, // 0 = NumCPU
+    ParseOptions: []sysml.ParseOption{sysml.WithDiscardTree()},
+}
+for r := range sysml.ParseDir(ctx, "./models", opts) {
+    if err := r.Err(); err != nil {
+        fmt.Printf("failed %s: %v\n", r.Source, err)
+        continue
+    }
+    fmt.Printf("ok: %s (%d top-level packages)\n", r.Source, len(r.Model.Packages()))
 }
 ```
 

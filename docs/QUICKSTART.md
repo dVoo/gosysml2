@@ -31,9 +31,9 @@ package VehicleModel {
 }
 `
 
-    result := sysml.ParseString(input)
-    if !result.Success() {
-        fmt.Printf("parse errors: %s\n", result.Errors)
+    result := sysml.ParseString(input, sysml.WithSource("memory://VehicleModel.sysml"))
+    if err := result.Err(); err != nil {
+        fmt.Printf("parse errors: %s\n", err)
         return
     }
 
@@ -46,21 +46,33 @@ package VehicleModel {
 
 ```go
 result := sysml.ParseFile("model.sysml")
-if !result.Success() {
-    panic(result.Errors)
+if err := result.Err(); err != nil {
+    panic(err)
 }
 ```
 
 ## 4. Parse a Directory
 
 ```go
-results, err := sysml.ParseDirectory("./models")
-if err != nil {
-    panic(err)
+import (
+    "context"
+    "fmt"
+    "slices"
+
+    "github.com/dVoo/gosysml2/sysml"
+)
+
+opts := sysml.DirOptions{
+    Workers:      0, // 0 = NumCPU
+    ParseOptions: []sysml.ParseOption{sysml.WithDiscardTree()},
 }
+
+results := slices.Collect(sysml.ParseDir(context.Background(), "./models", opts))
 for _, r := range results {
-    if r.Success() {
+    if r.Err() == nil {
         fmt.Printf("ok: %s\n", r.Source)
+    } else {
+        fmt.Printf("failed: %s: %v\n", r.Source, r.Err())
     }
 }
 ```

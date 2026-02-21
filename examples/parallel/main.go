@@ -12,7 +12,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"iter"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -20,6 +22,14 @@ import (
 
 	"github.com/dVoo/gosysml2/sysml"
 )
+
+func collectParseResults(seq iter.Seq[*sysml.ParseResult]) []*sysml.ParseResult {
+	results := make([]*sysml.ParseResult, 0)
+	for r := range seq {
+		results = append(results, r)
+	}
+	return results
+}
 
 func main() {
 	fmt.Println("=== Parallel Parsing Example ===")
@@ -114,11 +124,7 @@ func main() {
 	// Sequential parsing
 	fmt.Println("\n3. Sequential parsing (baseline)...")
 	start := time.Now()
-	seqResults, err := sysml.ParseDirectory(tmpDir)
-	if err != nil {
-		fmt.Printf("   Sequential parsing failed: %v\n", err)
-		os.Exit(1)
-	}
+	seqResults := collectParseResults(sysml.ParseDir(context.Background(), tmpDir, sysml.DirOptions{Workers: 1}))
 	seqDuration := time.Since(start)
 	fmt.Printf("   Parsed %d files in %v\n", len(seqResults), seqDuration)
 
@@ -127,7 +133,7 @@ func main() {
 	var seqErrors int
 	var seqTotalElements int
 	for _, r := range seqResults {
-		if r.Success() {
+		if r.Err() == nil {
 			seqSuccess++
 			if r.Model != nil {
 				counter := sysml.NewCounter()
@@ -144,11 +150,7 @@ func main() {
 	fmt.Println("\n4. Parallel parsing (using all CPU cores)...")
 	fmt.Printf("   CPU cores available: %d\n", runtime.NumCPU())
 	start = time.Now()
-	parResults, err := sysml.ParseDirectoryParallel(tmpDir, 0) // 0 means use NumCPU
-	if err != nil {
-		fmt.Printf("   Parallel parsing failed: %v\n", err)
-		os.Exit(1)
-	}
+	parResults := collectParseResults(sysml.ParseDir(context.Background(), tmpDir, sysml.DirOptions{Workers: 0})) // 0 means use NumCPU
 	parDuration := time.Since(start)
 	fmt.Printf("   Parsed %d files in %v\n", len(parResults), parDuration)
 
@@ -157,7 +159,7 @@ func main() {
 	var parErrors int
 	var parTotalElements int
 	for _, r := range parResults {
-		if r.Success() {
+		if r.Err() == nil {
 			parSuccess++
 			if r.Model != nil {
 				counter := sysml.NewCounter()
@@ -182,13 +184,9 @@ func main() {
 	// Parallel parsing with specific worker count
 	fmt.Println("\n6. Parallel parsing with 2 workers...")
 	start = time.Now()
-	results2, err := sysml.ParseDirectoryParallel(tmpDir, 2)
-	if err != nil {
-		fmt.Printf("   Parsing failed: %v\n", err)
-	} else {
-		duration2 := time.Since(start)
-		fmt.Printf("   Parsed %d files in %v\n", len(results2), duration2)
-	}
+	results2 := collectParseResults(sysml.ParseDir(context.Background(), tmpDir, sysml.DirOptions{Workers: 2}))
+	duration2 := time.Since(start)
+	fmt.Printf("   Parsed %d files in %v\n", len(results2), duration2)
 
 	// Show aggregated statistics
 	fmt.Println("\n7. Aggregated statistics from parallel parsing:")
@@ -198,7 +196,7 @@ func main() {
 	partCount := 0
 
 	for _, r := range parResults {
-		if !r.Success() || r.Model == nil {
+		if r.Err() != nil || r.Model == nil {
 			continue
 		}
 
@@ -210,7 +208,7 @@ func main() {
 		}
 
 		// Collect package names
-		for _, pkg := range r.Model.Packages {
+		for _, pkg := range r.Model.Packages() {
 			packageNames = append(packageNames, pkg.Name())
 		}
 
@@ -234,7 +232,7 @@ func main() {
 	fmt.Println("\n8. Per-file results:")
 	for _, r := range parResults {
 		status := "✓"
-		if !r.Success() {
+		if r.Err() != nil {
 			status = "✗"
 		}
 		elemCount := 0
@@ -244,8 +242,8 @@ func main() {
 			elemCount = counter.Total()
 		}
 		fmt.Printf("   %s %s: %d elements", status, filepath.Base(r.Source), elemCount)
-		if !r.Success() {
-			fmt.Printf(" (%d errors)", len(r.Errors.Errors))
+		if r.Err() != nil {
+			fmt.Printf(" (%d errors)", len(r.Errors()))
 		}
 		fmt.Println()
 	}
@@ -254,27 +252,22 @@ func main() {
 	fmt.Println("\n9. Streaming parse (memory efficient)...")
 	elemCount := 0
 	start = time.Now()
-	err = sysml.ParseDirectoryStream(tmpDir, func(r *sysml.ParseResult) error {
-		if r.Success() && r.Model != nil {
+	for r := range sysml.ParseDir(context.Background(), tmpDir, sysml.DirOptions{Workers: 1, ParseOptions: []sysml.ParseOption{sysml.WithDiscardTree()}}) {
+		if r.Err() == nil && r.Model != nil {
 			counter := sysml.NewCounter()
 			sysml.Visit(r.Model, counter)
 			elemCount += counter.Total()
 		}
-		return nil
-	})
-	streamDuration := time.Since(start)
-	if err != nil {
-		fmt.Printf("   Streaming parse failed: %v\n", err)
-	} else {
-		fmt.Printf("   Streamed %d files in %v\n", len(files), streamDuration)
-		fmt.Printf("   Total elements processed: %d\n", elemCount)
 	}
+	streamDuration := time.Since(start)
+	fmt.Printf("   Streamed %d files in %v\n", len(files), streamDuration)
+	fmt.Printf("   Total elements processed: %d\n", elemCount)
 
 	// Memory optimization note
 	fmt.Println("\n10. Memory optimization options:")
-	fmt.Println("    - Use ParseDirectory() for small repositories (< 100 MB)")
-	fmt.Println("    - Use ParseDirectoryParallel() for multi-core machines")
-	fmt.Println("    - Use ParseDirectoryStream() for very large repositories")
+	fmt.Println("    - Use ParseDir(..., Workers:1) for small repositories (< 100 MB)")
+	fmt.Println("    - Use ParseDir(..., Workers:0) for multi-core machines")
+	fmt.Println("    - Use ParseDir + range for streaming processing")
 	fmt.Println("    - Use WithDiscardTree() option to reduce memory by ~30%")
 
 	fmt.Println("\n=== Example Complete ===")

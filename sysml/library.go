@@ -126,8 +126,8 @@ func (r *LibraryRegistry) DiscoverLibraries(rootPath string) ([]string, error) {
 func (r *LibraryRegistry) LoadLibrary(path string) (*Model, error) {
 	result := ParseFile(path)
 
-	if result.Errors != nil && result.Errors.HasErrors() {
-		return nil, fmt.Errorf("parsing library file %q: %w", path, result.Errors)
+	if err := result.Err(); err != nil {
+		return nil, fmt.Errorf("parsing library file %q: %w", path, err)
 	}
 
 	if result.Model == nil {
@@ -135,7 +135,7 @@ func (r *LibraryRegistry) LoadLibrary(path string) (*Model, error) {
 	}
 
 	// Mark all packages as library packages
-	for _, pkg := range result.Model.Packages {
+	for _, pkg := range result.Model.Packages() {
 		markPackageAsLibrary(pkg)
 	}
 
@@ -165,7 +165,7 @@ func (r *LibraryRegistry) RegisterLibrary(path string) error {
 	}
 
 	// Register each package in the model
-	for _, pkg := range model.Packages {
+	for _, pkg := range model.Packages() {
 		pkgName := pkg.Name()
 		if pkgName == "" {
 			continue // Skip unnamed packages
@@ -215,7 +215,7 @@ func (r *LibraryRegistry) RegisterStandardLibrary() error {
 			}
 
 			// Register each package
-			for _, pkg := range model.Packages {
+			for _, pkg := range model.Packages() {
 				pkgName := pkg.Name()
 				if pkgName == "" {
 					continue
@@ -283,15 +283,15 @@ func (r *LibraryRegistry) discoverLibrariesUnlocked(rootPath string) ([]string, 
 func (r *LibraryRegistry) loadLibraryUnlocked(path string) (*Model, error) {
 	result := ParseFile(path)
 
-	if result.Errors != nil && result.Errors.HasErrors() {
-		return nil, result.Errors
+	if err := result.Err(); err != nil {
+		return nil, err
 	}
 
 	if result.Model == nil {
 		return nil, fmt.Errorf("no model produced")
 	}
 
-	for _, pkg := range result.Model.Packages {
+	for _, pkg := range result.Model.Packages() {
 		markPackageAsLibrary(pkg)
 	}
 
@@ -370,7 +370,7 @@ func (r *LibraryRegistry) ResolveImport(namespace string) (*Package, error) {
 
 	// Find the specific package
 	var pkg *Package
-	for _, p := range model.Packages {
+	for _, p := range model.Packages() {
 		if p.Name() == rootName {
 			pkg = p
 			break

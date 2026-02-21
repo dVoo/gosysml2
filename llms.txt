@@ -7,12 +7,13 @@ It exposes:
 - high-level typed semantic model in `sysml`
 
 ## Current Version
-`v0.2.1` (source of truth: `VERSION`).
+`v0.4.0` (source of truth: `VERSION`).
 
 ## Canonical Entry Points
 - High-level parsing:
   - `sysml.ParseString`, `sysml.ParseFile`, `sysml.ParseBytes`, `sysml.ParseReader`
-  - `sysml.ParseDirectory`, `sysml.ParseDirectoryParallel`, `sysml.ParseDirectoryStream`
+  - `sysml.ParseStringContext`, `sysml.ParseFileContext`, `sysml.ParseBytesContext`, `sysml.ParseReaderContext`
+  - `sysml.ParseDir`
   - `sysml.ParseStringModel`, `sysml.ParseFileModel`
 - Low-level parsing:
   - `low.Parse`, `low.ParseBytes`, `low.ParseWithContext`
@@ -36,13 +37,18 @@ It exposes:
 ## Parse Result Contract
 High-level parse returns `*sysml.ParseResult`:
 - `Model *Model`
-- `Errors *ParseError`
+- `ParseError *ParseError`
 - `Tree antlr.Tree` (optional; can be dropped)
 - `Source string`
-- `Success() bool`
+- `Hash string`
+- `Rewrites []string`
+- `Err() error`
+- `Errors() []*Error`
 
 ## Options
 - `sysml.WithDiscardTree()`
+- `sysml.WithSource(source)`
+- `sysml.WithoutCompatibilityRewrites()`
 - `sysml.WithStandardLibrary()`
 - `sysml.WithLibraryPath(path)`
 - `sysml.WithLibraryRegistry(reg)`

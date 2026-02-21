@@ -195,11 +195,41 @@ type Location struct {
 	EndColumn int
 }
 
+// IsValid reports whether location points to a concrete source position.
+// Locations are zero-based; invalid/unknown locations use -1 values.
+func (l Location) IsValid() bool {
+	return l.Line >= 0 && l.Column >= 0
+}
+
+// Contains reports whether the given zero-based position lies within this location span.
+func (l Location) Contains(line, column int) bool {
+	if !l.IsValid() {
+		return false
+	}
+	endLine := l.EndLine
+	endColumn := l.EndColumn
+	if endLine < 0 || endColumn < 0 {
+		endLine = l.Line
+		endColumn = l.Column
+	}
+	if line < l.Line || line > endLine {
+		return false
+	}
+	if line == l.Line && column < l.Column {
+		return false
+	}
+	if line == endLine && column > endColumn {
+		return false
+	}
+	return true
+}
+
 // Ref represents a reference to another element.
 // It can be either resolved (pointing to an actual element) or unresolved (just a name).
 type Ref[T Element] struct {
 	name     string // The reference name (qualified or simple)
 	resolved T      // The resolved element (nil if unresolved)
+	ok       bool
 }
 
 // NewRef creates a new unresolved reference.
@@ -230,14 +260,13 @@ func (r Ref[T]) Resolved() T {
 
 // IsResolved returns true if the reference has been resolved.
 func (r Ref[T]) IsResolved() bool {
-	// Check if resolved is non-nil (for interface types)
-	var zero T
-	return any(r.resolved) != any(zero)
+	return r.ok
 }
 
 // Resolve sets the resolved element.
 func (r *Ref[T]) Resolve(elem T) {
 	r.resolved = elem
+	r.ok = true
 }
 
 // Element is the base interface for all SysML elements.
@@ -260,11 +289,12 @@ type Element interface {
 	// Children returns the child elements.
 	Children() []Element
 
-	// SetParent sets the parent element.
-	SetParent(parent Element)
-
 	// Documentation returns the documentation string for this element.
 	Documentation() string
+}
+
+type mutableElement interface {
+	SetParent(parent Element)
 }
 
 // Definition is the interface for definition elements (e.g., part def, requirement def).
@@ -338,7 +368,9 @@ func (e *baseElement) addChild(child Element, parent Element) {
 		return
 	}
 	e.children = append(e.children, child)
-	child.SetParent(parent)
+	if m, ok := child.(mutableElement); ok {
+		m.SetParent(parent)
+	}
 }
 
 // Package represents a SysML package.
@@ -2049,23 +2081,6 @@ func NewImport(namespace string, loc Location) *Import {
 
 // Model represents a complete SysML model (root namespace).
 type Model struct {
-	// Typed top-level element collections
-	Packages     []*Package
-	Imports      []*Import
-	Comments     []*Comment
-	Dependencies []*Dependency
-	Docs         []*Doc
-	Flows        []*Flow
-	ControlNodes []*ControlNode
-	Occurrences  []*Occurrence
-	Aliases      []*Alias
-	Metadata     []*Metadata
-	Renderings   []*Rendering
-	Messages     []*Message
-	Filters      []*ElementFilter
-	Satisfies    []*SatisfyRelationship
-	Verifies     []*VerifyRelationship
-
 	// All top-level elements (for generic traversal)
 	Elements []Element
 
@@ -2081,33 +2096,46 @@ type Model struct {
 // NewModel creates a new empty model.
 func NewModel() *Model {
 	return &Model{
-		Packages:       make([]*Package, 0),
-		Imports:        make([]*Import, 0),
-		Comments:       make([]*Comment, 0),
-		Dependencies:   make([]*Dependency, 0),
-		Docs:           make([]*Doc, 0),
-		Flows:          make([]*Flow, 0),
-		ControlNodes:   make([]*ControlNode, 0),
-		Occurrences:    make([]*Occurrence, 0),
-		Aliases:        make([]*Alias, 0),
-		Metadata:       make([]*Metadata, 0),
-		Renderings:     make([]*Rendering, 0),
-		Messages:       make([]*Message, 0),
-		Filters:        make([]*ElementFilter, 0),
-		Satisfies:      make([]*SatisfyRelationship, 0),
-		Verifies:       make([]*VerifyRelationship, 0),
 		Elements:       make([]Element, 0),
 		elementIndex:   make(map[string]Element),
 		shortNameIndex: make(map[string][]Element),
 	}
 }
 
+func topLevelOfType[T Element](m *Model) []T {
+	if m == nil {
+		return nil
+	}
+	out := make([]T, 0)
+	for _, elem := range m.Elements {
+		if t, ok := elem.(T); ok {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+func (m *Model) Packages() []*Package              { return topLevelOfType[*Package](m) }
+func (m *Model) Imports() []*Import                { return topLevelOfType[*Import](m) }
+func (m *Model) Comments() []*Comment              { return topLevelOfType[*Comment](m) }
+func (m *Model) Dependencies() []*Dependency       { return topLevelOfType[*Dependency](m) }
+func (m *Model) Docs() []*Doc                      { return topLevelOfType[*Doc](m) }
+func (m *Model) Flows() []*Flow                    { return topLevelOfType[*Flow](m) }
+func (m *Model) ControlNodes() []*ControlNode      { return topLevelOfType[*ControlNode](m) }
+func (m *Model) Occurrences() []*Occurrence        { return topLevelOfType[*Occurrence](m) }
+func (m *Model) Aliases() []*Alias                 { return topLevelOfType[*Alias](m) }
+func (m *Model) Metadata() []*Metadata             { return topLevelOfType[*Metadata](m) }
+func (m *Model) Renderings() []*Rendering          { return topLevelOfType[*Rendering](m) }
+func (m *Model) Messages() []*Message              { return topLevelOfType[*Message](m) }
+func (m *Model) Filters() []*ElementFilter         { return topLevelOfType[*ElementFilter](m) }
+func (m *Model) Satisfies() []*SatisfyRelationship { return topLevelOfType[*SatisfyRelationship](m) }
+func (m *Model) Verifies() []*VerifyRelationship   { return topLevelOfType[*VerifyRelationship](m) }
+
 // AddDoc adds a documentation element to the model.
 func (m *Model) AddDoc(doc *Doc) {
 	if doc == nil {
 		return
 	}
-	m.Docs = append(m.Docs, doc)
 	m.Elements = append(m.Elements, doc)
 }
 
@@ -2116,7 +2144,6 @@ func (m *Model) AddDependency(dep *Dependency) {
 	if dep == nil {
 		return
 	}
-	m.Dependencies = append(m.Dependencies, dep)
 	m.Elements = append(m.Elements, dep)
 }
 
@@ -2125,7 +2152,6 @@ func (m *Model) AddPackage(pkg *Package) {
 	if pkg == nil {
 		return
 	}
-	m.Packages = append(m.Packages, pkg)
 	m.Elements = append(m.Elements, pkg)
 }
 
@@ -2134,7 +2160,6 @@ func (m *Model) AddImport(imp *Import) {
 	if imp == nil {
 		return
 	}
-	m.Imports = append(m.Imports, imp)
 	m.Elements = append(m.Elements, imp)
 }
 
@@ -2143,7 +2168,6 @@ func (m *Model) AddComment(comment *Comment) {
 	if comment == nil {
 		return
 	}
-	m.Comments = append(m.Comments, comment)
 	m.Elements = append(m.Elements, comment)
 }
 
@@ -2152,7 +2176,6 @@ func (m *Model) AddControlNode(node *ControlNode) {
 	if node == nil {
 		return
 	}
-	m.ControlNodes = append(m.ControlNodes, node)
 	m.Elements = append(m.Elements, node)
 }
 
@@ -2161,7 +2184,6 @@ func (m *Model) AddOccurrence(occ *Occurrence) {
 	if occ == nil {
 		return
 	}
-	m.Occurrences = append(m.Occurrences, occ)
 	m.Elements = append(m.Elements, occ)
 }
 
@@ -2170,7 +2192,6 @@ func (m *Model) AddAlias(alias *Alias) {
 	if alias == nil {
 		return
 	}
-	m.Aliases = append(m.Aliases, alias)
 	m.Elements = append(m.Elements, alias)
 }
 
@@ -2179,7 +2200,6 @@ func (m *Model) AddMetadata(metadata *Metadata) {
 	if metadata == nil {
 		return
 	}
-	m.Metadata = append(m.Metadata, metadata)
 	m.Elements = append(m.Elements, metadata)
 }
 
@@ -2188,7 +2208,6 @@ func (m *Model) AddRendering(rendering *Rendering) {
 	if rendering == nil {
 		return
 	}
-	m.Renderings = append(m.Renderings, rendering)
 	m.Elements = append(m.Elements, rendering)
 }
 
@@ -2197,7 +2216,6 @@ func (m *Model) AddMessage(message *Message) {
 	if message == nil {
 		return
 	}
-	m.Messages = append(m.Messages, message)
 	m.Elements = append(m.Elements, message)
 }
 
@@ -2206,7 +2224,6 @@ func (m *Model) AddFilter(filter *ElementFilter) {
 	if filter == nil {
 		return
 	}
-	m.Filters = append(m.Filters, filter)
 	m.Elements = append(m.Elements, filter)
 }
 
@@ -2215,7 +2232,6 @@ func (m *Model) AddSatisfy(rel *SatisfyRelationship) {
 	if rel == nil {
 		return
 	}
-	m.Satisfies = append(m.Satisfies, rel)
 	// Avoid duplicate traversal: nested relationships are already reachable
 	// via parent.Children() and should not be added as extra model roots.
 	if rel.Parent() == nil {
@@ -2228,7 +2244,6 @@ func (m *Model) AddVerify(rel *VerifyRelationship) {
 	if rel == nil {
 		return
 	}
-	m.Verifies = append(m.Verifies, rel)
 	// Avoid duplicate traversal: nested relationships are already reachable
 	// via parent.Children() and should not be added as extra model roots.
 	if rel.Parent() == nil {
@@ -2238,7 +2253,7 @@ func (m *Model) AddVerify(rel *VerifyRelationship) {
 
 // FindPackage finds a package by name.
 func (m *Model) FindPackage(name string) *Package {
-	for _, pkg := range m.Packages {
+	for _, pkg := range m.Packages() {
 		if pkg.Name() == name {
 			return pkg
 		}
@@ -3179,7 +3194,7 @@ func (m *Model) findElement(name string, context Element) Element {
 		}
 
 		// Try as simple name in any package
-		for _, pkg := range m.Packages {
+		for _, pkg := range m.Packages() {
 			fullQN := pkg.Name() + "::" + candidate
 			if elem := m.elementIndex[fullQN]; elem != nil {
 				return elem

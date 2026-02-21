@@ -236,8 +236,8 @@ KerML `disjoint ... from ...;` statements are accepted at syntax level in type b
 - Most relationship fields are parsed as unresolved names first.
 - `Model.ResolveReferences()` resolves references to typed pointers/`Ref[T]`.
 - `Model.BuildIndex()` creates qualified-name and short-name indices used by lookup.
-- nested `SatisfyRelationship` / `VerifyRelationship` nodes are tracked in
-  `Model.Satisfies` / `Model.Verifies` without duplicate traversal entries in `Model.Elements`.
+- nested `SatisfyRelationship` / `VerifyRelationship` nodes are available via
+  `Model.Satisfies()` / `Model.Verifies()` without duplicate traversal entries in `Model.Elements`.
 - If a `LibraryRegistry` is attached, qualified names can resolve into standard library elements as well.
-- Public model slices are guaranteed to contain no `nil` elements (top-level collections,
-  relationship slices, and typed child-accessor returns).
+- Public model accessor slices are guaranteed to contain no `nil` elements
+  (top-level typed accessors, relationship slices, and typed child-accessor returns).

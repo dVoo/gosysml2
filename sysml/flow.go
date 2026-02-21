@@ -117,13 +117,10 @@ func (p *Package) Flows() []*Flow {
 
 // AddFlow adds a flow to the model.
 func (m *Model) AddFlow(flow *Flow) {
-	m.Flows = append(m.Flows, flow)
+	if flow == nil {
+		return
+	}
 	m.Elements = append(m.Elements, flow)
-}
-
-// GetFlows returns all flows in the model.
-func (m *Model) GetFlows() []*Flow {
-	return m.Flows
 }
 
 // SuccessionFlow represents a succession flow usage in SysML.

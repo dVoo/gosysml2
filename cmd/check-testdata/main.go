@@ -42,7 +42,7 @@ func main() {
 		}
 
 		result := sysml.ParseString(string(content))
-		if result.Success() {
+		if result.Err() == nil {
 			if result.Model != nil {
 				elementCount := countElements(result.Model)
 				fmt.Printf("✓ %s - Parsed successfully (%d elements)\n", filename, elementCount)
@@ -51,7 +51,7 @@ func main() {
 			}
 			successCount++
 		} else {
-			fmt.Printf("✗ %s - Parse failed: %v\n", filename, result.Errors)
+			fmt.Printf("✗ %s - Parse failed: %v\n", filename, result.ParseError)
 			failCount++
 			failures = append(failures, filename)
 		}

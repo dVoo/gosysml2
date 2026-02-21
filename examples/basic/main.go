@@ -48,15 +48,15 @@ package VehicleModel {
 	result := sysml.ParseString(input)
 
 	// Step 2: Check for errors
-	if !result.Success() {
-		fmt.Printf("   Parse errors:\n%s\n", result.Errors)
+	if result.Err() != nil {
+		fmt.Printf("   Parse errors:\n%s\n", result.ParseError)
 		os.Exit(1)
 	}
 	fmt.Println("   Parsing successful!")
 
 	// Step 3: Access top-level packages
-	fmt.Printf("\n2. Found %d top-level package(s):\n", len(result.Model.Packages))
-	for _, pkg := range result.Model.Packages {
+	fmt.Printf("\n2. Found %d top-level package(s):\n", len(result.Model.Packages()))
+	for _, pkg := range result.Model.Packages() {
 		fmt.Printf("   - Package: %s\n", pkg.Name())
 	}
 

@@ -122,34 +122,42 @@ KerML library parsing also supports:
 
 - `ParseResult`
   - `Model *Model`
-  - `Errors *ParseError`
+  - `ParseError *ParseError`
+  - `Err() error`
+  - `Errors() []*Error`
   - `Tree antlr.Tree` (optional; can be discarded)
   - `Source string`
+  - `Hash string`
+  - `Rewrites []string`
 - `ParseError` / `Error`: high-level parse error model
-- `Model`: root aggregate with typed top-level collections
+- `Model`: root aggregate with canonical `Elements` + typed accessors
 
 ### Main entry points
 
 - `sysml.ParseString(input, opts...)`
+- `sysml.ParseStringContext(ctx, input, opts...)`
 - `sysml.ParseFile(path, opts...)`
+- `sysml.ParseFileContext(ctx, path, opts...)`
 - `sysml.ParseStringModel(input, opts...) (*Model, error)` (idiomatic helper)
 - `sysml.ParseFileModel(path, opts...) (*Model, error)` (idiomatic helper)
 - `sysml.ParseBytes(data, source, opts...)`
+- `sysml.ParseBytesContext(ctx, data, source, opts...)`
 - `sysml.ParseReader(r, source, opts...)`
-- `sysml.ParseDirectory(dir, opts...)`
-- `sysml.ParseDirectoryParallel(dir, workers, opts...)`
-- `sysml.ParseDirectoryStream(dir, handler, opts...)`
+- `sysml.ParseReaderContext(ctx, r, source, opts...)`
+- `sysml.ParseDir(ctx, dir, opts) iter.Seq[*ParseResult]`
 - `sysml.Validate(input)`
 - `sysml.ValidateFile(path)`
 
 ### High-level options
 
 - `sysml.WithDiscardTree()`: keep model, drop parse tree
+- `sysml.WithSource(source)`: source id for in-memory parse
+- `sysml.WithoutCompatibilityRewrites()`: strict parsing without compatibility rewrites
 - `sysml.WithLibraryRegistry(reg)`: use preloaded library resolver
 - `sysml.WithStandardLibrary()`: auto-load standard library
 - `sysml.WithLibraryPath(path)`: custom standard library path
 
-Directory parsers include both `.sysml` and `.kerml` files.
+`ParseDir` includes both `.sysml` and `.kerml` files.
 
 ### Typical use cases
 

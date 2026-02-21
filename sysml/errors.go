@@ -32,30 +32,30 @@ func (e *Error) Unwrap() error {
 
 // ParseError represents the result of a failed parse operation.
 type ParseError struct {
-	Errors []*Error
+	Items  []*Error
 	Source string // Source identifier (filename or description)
 	Input  string // The input that was being parsed (truncated if large)
 }
 
 // Error implements the error interface.
 func (e *ParseError) Error() string {
-	if len(e.Errors) == 0 {
+	if len(e.Items) == 0 {
 		return "no errors"
 	}
 
 	var sb strings.Builder
 	// Preallocate with estimated capacity for performance
-	sb.Grow(len(e.Errors)*80 + len(e.Source) + 50)
+	sb.Grow(len(e.Items)*80 + len(e.Source) + 50)
 	if e.Source != "" {
 		sb.WriteString(fmt.Sprintf("failed to parse %s: ", e.Source))
 	} else {
 		sb.WriteString("parse failed: ")
 	}
-	sb.WriteString(fmt.Sprintf("%d error(s)\n", len(e.Errors)))
+	sb.WriteString(fmt.Sprintf("%d error(s)\n", len(e.Items)))
 
-	for i, err := range e.Errors {
+	for i, err := range e.Items {
 		if i >= 10 {
-			sb.WriteString(fmt.Sprintf("  ... and %d more errors\n", len(e.Errors)-10))
+			sb.WriteString(fmt.Sprintf("  ... and %d more errors\n", len(e.Items)-10))
 			break
 		}
 		sb.WriteString("  - ")
@@ -69,8 +69,8 @@ func (e *ParseError) Error() string {
 // Unwrap implements Go 1.20+ multi-error unwrapping.
 // This enables errors.Is(parseErr, targetErr) to check any of the contained errors.
 func (e *ParseError) Unwrap() []error {
-	result := make([]error, len(e.Errors))
-	for i, err := range e.Errors {
+	result := make([]error, len(e.Items))
+	for i, err := range e.Items {
 		result[i] = err
 	}
 	return result
@@ -79,7 +79,7 @@ func (e *ParseError) Unwrap() []error {
 // Err returns nil if there are no errors, or the ParseError itself if there are errors.
 // This enables idiomatic error handling:
 //
-//	if err := result.Errors.Err(); err != nil { ... }
+//	if err := result.ParseError.Err(); err != nil { ... }
 func (e *ParseError) Err() error {
 	if e == nil || !e.HasErrors() {
 		return nil
@@ -89,15 +89,15 @@ func (e *ParseError) Err() error {
 
 // First returns the first error, or nil if there are no errors.
 func (e *ParseError) First() *Error {
-	if len(e.Errors) == 0 {
+	if len(e.Items) == 0 {
 		return nil
 	}
-	return e.Errors[0]
+	return e.Items[0]
 }
 
 // HasErrors returns true if there are any errors.
 func (e *ParseError) HasErrors() bool {
-	return len(e.Errors) > 0
+	return len(e.Items) > 0
 }
 
 // convertFromLowLevel converts low-level errors to high-level errors.
@@ -110,8 +110,12 @@ func convertFromLowLevel(lowErrors *low.ParseErrors, source string) *ParseError 
 	errors := make([]*Error, len(allLowErrors))
 
 	for i, e := range allLowErrors {
+		line := e.Line - 1
+		if line < 0 {
+			line = -1
+		}
 		errors[i] = &Error{
-			Line:    e.Line,
+			Line:    line,
 			Column:  e.Column,
 			Message: e.Message,
 			Context: e.Source,
@@ -119,7 +123,7 @@ func convertFromLowLevel(lowErrors *low.ParseErrors, source string) *ParseError 
 	}
 
 	return &ParseError{
-		Errors: errors,
+		Items:  errors,
 		Source: source,
 	}
 }
@@ -159,7 +163,7 @@ func (l *ErrorList) ToParseError(source string) *ParseError {
 		return nil
 	}
 	return &ParseError{
-		Errors: l.errors,
+		Items:  l.errors,
 		Source: source,
 	}
 }

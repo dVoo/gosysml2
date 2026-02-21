@@ -1,8 +1,11 @@
 package sysml
 
 import (
+	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
+	"iter"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -27,11 +30,13 @@ func locationFromContext(ctx interface {
 	GetStop() antlr.Token
 }) Location {
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
-		Column: ctx.GetStart().GetColumn(),
+		Line:      ctx.GetStart().GetLine() - 1,
+		Column:    ctx.GetStart().GetColumn(),
+		EndLine:   ctx.GetStart().GetLine() - 1,
+		EndColumn: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 	return loc
@@ -39,15 +44,28 @@ func locationFromContext(ctx interface {
 
 // ParseResult contains the result of parsing SysML input.
 type ParseResult struct {
-	Model  *Model      // The parsed model (nil if parsing failed completely)
-	Errors *ParseError // Any errors that occurred (nil if successful)
-	Tree   antlr.Tree  // The raw parse tree (for advanced use)
-	Source string      // Source file path or identifier
+	Model      *Model      // The parsed model (nil if parsing failed completely)
+	ParseError *ParseError // Any errors that occurred (nil if successful)
+	Tree       antlr.Tree  // The raw parse tree (for advanced use)
+	Source     string      // Source file path or identifier
+	Hash       string      // SHA-256 hash of original input content
+	Rewrites   []string    // Compatibility rewrites applied before parsing
 }
 
-// Success returns true if parsing was successful (no errors).
-func (r *ParseResult) Success() bool {
-	return r.Errors == nil || !r.Errors.HasErrors()
+// Err returns nil on successful parse, otherwise the parse error.
+func (r *ParseResult) Err() error {
+	if r == nil || r.ParseError == nil || !r.ParseError.HasErrors() {
+		return nil
+	}
+	return r.ParseError
+}
+
+// Errors returns parse errors as a flat list.
+func (r *ParseResult) Errors() []*Error {
+	if r == nil || r.ParseError == nil {
+		return nil
+	}
+	return r.ParseError.Items
 }
 
 // ParseOption configures parsing behavior.
@@ -58,6 +76,8 @@ type parseConfig struct {
 	libraryRegistry   *LibraryRegistry
 	autoLoadLibraries bool
 	libraryPath       string
+	source            string
+	disableRewrites   bool
 }
 
 type parseRewriteHints struct {
@@ -89,12 +109,12 @@ var (
 
 func lineNumberAtOffset(input string, offset int) int {
 	if offset <= 0 {
-		return 1
+		return 0
 	}
 	if offset > len(input) {
 		offset = len(input)
 	}
-	return 1 + strings.Count(input[:offset], "\n")
+	return strings.Count(input[:offset], "\n")
 }
 
 func parseBindings(bindingsText string) map[string]string {
@@ -135,25 +155,51 @@ func extractRequirementUsageName(requirementPrefix string) string {
 	return tokens[len(tokens)-1]
 }
 
-func normalizeUnsupportedRequirementSyntax(input string) (string, *parseRewriteHints) {
+func normalizeUnsupportedRequirementSyntax(input string) (string, *parseRewriteHints, []string) {
 	hints := newParseRewriteHints()
 	normalized := input
+	applied := make([]string, 0, 6)
 
 	// Gap 16 compatibility: lambda parameters written as "{in ref a { ... }}"
 	// are normalized to "{in a { ... }}" for current grammar support.
-	normalized = inRefLambdaPattern.ReplaceAllString(normalized, `{in $1 {`)
+	after := inRefLambdaPattern.ReplaceAllString(normalized, `{in $1 {`)
+	if after != normalized {
+		applied = append(applied, "gap16_in_ref_lambda")
+		normalized = after
+	}
 
 	// Gap 19/20 compatibility: allow reserved keywords as declared names
 	// in forms seen in standard library models.
-	normalized = attributeKeywordNamePattern.ReplaceAllString(normalized, `attribute '$1' :`)
-	normalized = aliasKeywordNamePattern.ReplaceAllString(normalized, `alias '$1' for`)
-	normalized = attributeShortNameKeywordPattern.ReplaceAllString(normalized, `attribute <'$1'>`)
-	normalized = refVarNamePattern.ReplaceAllString(normalized, `ref 'var'$1`)
-	normalized = assignVarTargetPattern.ReplaceAllString(normalized, `assign 'var'$1`)
+	after = attributeKeywordNamePattern.ReplaceAllString(normalized, `attribute '$1' :`)
+	if after != normalized {
+		applied = append(applied, "gap19_keyword_attribute_name")
+		normalized = after
+	}
+	after = aliasKeywordNamePattern.ReplaceAllString(normalized, `alias '$1' for`)
+	if after != normalized {
+		applied = append(applied, "gap20_keyword_alias_name")
+		normalized = after
+	}
+	after = attributeShortNameKeywordPattern.ReplaceAllString(normalized, `attribute <'$1'>`)
+	if after != normalized {
+		applied = append(applied, "gap19_keyword_shortname")
+		normalized = after
+	}
+	after = refVarNamePattern.ReplaceAllString(normalized, `ref 'var'$1`)
+	if after != normalized {
+		applied = append(applied, "gap20_keyword_ref_var")
+		normalized = after
+	}
+	after = assignVarTargetPattern.ReplaceAllString(normalized, `assign 'var'$1`)
+	if after != normalized {
+		applied = append(applied, "gap20_keyword_assign_var")
+		normalized = after
+	}
 
 	// Gap 14 compatibility: "require { expr };" -> "require __gap14_constraint_N;"
 	matches := requireBlockPattern.FindAllStringSubmatchIndex(normalized, -1)
 	if len(matches) > 0 {
+		applied = append(applied, "gap14_require_block_expression")
 		var out strings.Builder
 		last := 0
 		for i, match := range matches {
@@ -172,6 +218,7 @@ func normalizeUnsupportedRequirementSyntax(input string) (string, *parseRewriteH
 	// Gap 15 compatibility: remove usage binding list syntax and capture values.
 	matches = reqBindingPattern.FindAllStringSubmatchIndex(normalized, -1)
 	if len(matches) > 0 {
+		applied = append(applied, "gap15_requirement_usage_bindings")
 		var out strings.Builder
 		last := 0
 		for _, match := range matches {
@@ -202,7 +249,7 @@ func normalizeUnsupportedRequirementSyntax(input string) (string, *parseRewriteH
 		normalized = out.String()
 	}
 
-	return normalized, hints
+	return normalized, hints, applied
 }
 
 // WithDiscardTree discards the parse tree after building the model.
@@ -237,6 +284,20 @@ func WithLibraryPath(path string) ParseOption {
 	}
 }
 
+// WithSource sets a source identifier for ParseString/ParseStringModel calls.
+func WithSource(source string) ParseOption {
+	return func(c *parseConfig) {
+		c.source = source
+	}
+}
+
+// WithoutCompatibilityRewrites disables pre-parse compatibility rewrites.
+func WithoutCompatibilityRewrites() ParseOption {
+	return func(c *parseConfig) {
+		c.disableRewrites = true
+	}
+}
+
 // getOrCreateRegistry returns a library registry based on configuration.
 // If a registry is provided in config, it returns that.
 // If autoLoadLibraries is set, it creates and populates a new registry.
@@ -262,14 +323,46 @@ func getOrCreateRegistry(cfg *parseConfig) *LibraryRegistry {
 	return nil
 }
 
-// parseWithSource parses SysML input with a specified source identifier.
-func parseWithSource(input, source string, opts ...ParseOption) (result *ParseResult) {
+func hashInput(input string) string {
+	sum := sha256.Sum256([]byte(input))
+	return fmt.Sprintf("%x", sum)
+}
+
+func canceledParseResult(source string, input string, err error) *ParseResult {
+	return &ParseResult{
+		Source: source,
+		Hash:   hashInput(input),
+		ParseError: &ParseError{
+			Items: []*Error{{
+				Line:    -1,
+				Column:  -1,
+				Message: err.Error(),
+				Context: "context",
+			}},
+			Source: source,
+			Input:  input,
+		},
+	}
+}
+
+// parseWithSourceContext parses SysML input with source and cancellation support.
+func parseWithSourceContext(ctx context.Context, input, source string, opts ...ParseOption) (result *ParseResult) {
 	cfg := &parseConfig{}
 	for _, opt := range opts {
 		opt(cfg)
 	}
+	if cfg.source != "" {
+		source = cfg.source
+	}
 	result = &ParseResult{
 		Source: source,
+		Hash:   hashInput(input),
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return canceledParseResult(source, input, err)
 	}
 
 	// API-2 ergonomics: parser panics are converted into regular parse errors.
@@ -277,10 +370,10 @@ func parseWithSource(input, source string, opts ...ParseOption) (result *ParseRe
 		if r := recover(); r != nil {
 			result.Model = nil
 			result.Tree = nil
-			result.Errors = &ParseError{
-				Errors: []*Error{{
-					Line:    0,
-					Column:  0,
+			result.ParseError = &ParseError{
+				Items: []*Error{{
+					Line:    -1,
+					Column:  -1,
 					Message: fmt.Sprintf("parser panic: %v", r),
 					Context: "panic",
 				}},
@@ -294,11 +387,14 @@ func parseWithSource(input, source string, opts ...ParseOption) (result *ParseRe
 	registry := getOrCreateRegistry(cfg)
 	normalizedInput := input
 	var rewriteHints *parseRewriteHints
+	result.Rewrites = make([]string, 0)
 	if strings.EqualFold(filepath.Ext(source), ".kerml") {
 		// KerML files are parsed directly without SysML compatibility rewrites.
 		rewriteHints = newParseRewriteHints()
+	} else if cfg.disableRewrites {
+		rewriteHints = newParseRewriteHints()
 	} else {
-		normalizedInput, rewriteHints = normalizeUnsupportedRequirementSyntax(input)
+		normalizedInput, rewriteHints, result.Rewrites = normalizeUnsupportedRequirementSyntax(input)
 	}
 
 	// Use low-level parser
@@ -309,6 +405,9 @@ func parseWithSource(input, source string, opts ...ParseOption) (result *ParseRe
 		parseOpts = append(parseOpts, low.WithSyntaxMode(low.SyntaxModeSysML))
 	}
 	tree, lowErrors := low.Parse(normalizedInput, parseOpts...)
+	if err := ctx.Err(); err != nil {
+		return canceledParseResult(source, input, err)
+	}
 
 	if !cfg.discardTree {
 		result.Tree = tree
@@ -316,7 +415,7 @@ func parseWithSource(input, source string, opts ...ParseOption) (result *ParseRe
 
 	// Convert errors
 	if lowErrors.HasErrors() {
-		result.Errors = convertFromLowLevel(lowErrors, source)
+		result.ParseError = convertFromLowLevel(lowErrors, source)
 	}
 
 	// Build model from parse tree
@@ -327,20 +426,41 @@ func parseWithSource(input, source string, opts ...ParseOption) (result *ParseRe
 	return result
 }
 
+// parseWithSource parses SysML input with a specified source identifier.
+func parseWithSource(input, source string, opts ...ParseOption) *ParseResult {
+	return parseWithSourceContext(context.Background(), input, source, opts...)
+}
+
 // ParseString parses a SysML string and returns a high-level model.
 func ParseString(input string, opts ...ParseOption) *ParseResult {
 	return parseWithSource(input, "<string>", opts...)
 }
 
+// ParseStringContext parses a SysML string with cancellation support.
+func ParseStringContext(ctx context.Context, input string, opts ...ParseOption) *ParseResult {
+	return parseWithSourceContext(ctx, input, "<string>", opts...)
+}
+
 // ParseFile parses a SysML file and returns a high-level model.
 func ParseFile(filename string, opts ...ParseOption) *ParseResult {
+	return ParseFileContext(context.Background(), filename, opts...)
+}
+
+// ParseFileContext parses a SysML file with cancellation support.
+func ParseFileContext(ctx context.Context, filename string, opts ...ParseOption) *ParseResult {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return canceledParseResult(filename, "", err)
+	}
 	content, err := os.ReadFile(filename)
 	if err != nil {
 		return &ParseResult{
-			Errors: &ParseError{
-				Errors: []*Error{{
-					Line:    0,
-					Column:  0,
+			ParseError: &ParseError{
+				Items: []*Error{{
+					Line:    -1,
+					Column:  -1,
 					Message: fmt.Errorf("reading %s: %w", filename, err).Error(),
 				}},
 				Source: filename,
@@ -348,7 +468,7 @@ func ParseFile(filename string, opts ...ParseOption) *ParseResult {
 			Source: filename,
 		}
 	}
-	return parseWithSource(string(content), filename, opts...)
+	return parseWithSourceContext(ctx, string(content), filename, opts...)
 }
 
 // ParseBytes parses SysML from a byte slice.
@@ -357,16 +477,32 @@ func ParseBytes(input []byte, source string, opts ...ParseOption) *ParseResult {
 	return parseWithSource(string(input), source, opts...)
 }
 
+// ParseBytesContext parses SysML bytes with cancellation support.
+func ParseBytesContext(ctx context.Context, input []byte, source string, opts ...ParseOption) *ParseResult {
+	return parseWithSourceContext(ctx, string(input), source, opts...)
+}
+
 // ParseReader parses SysML from an io.Reader.
 // Useful when reading from network streams or other io sources.
 func ParseReader(r io.Reader, source string, opts ...ParseOption) *ParseResult {
+	return ParseReaderContext(context.Background(), r, source, opts...)
+}
+
+// ParseReaderContext parses SysML from an io.Reader with cancellation support.
+func ParseReaderContext(ctx context.Context, r io.Reader, source string, opts ...ParseOption) *ParseResult {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return canceledParseResult(source, "", err)
+	}
 	content, err := io.ReadAll(r)
 	if err != nil {
 		return &ParseResult{
-			Errors: &ParseError{
-				Errors: []*Error{{
-					Line:    0,
-					Column:  0,
+			ParseError: &ParseError{
+				Items: []*Error{{
+					Line:    -1,
+					Column:  -1,
 					Message: fmt.Errorf("reading from %s: %w", source, err).Error(),
 				}},
 				Source: source,
@@ -374,16 +510,16 @@ func ParseReader(r io.Reader, source string, opts ...ParseOption) *ParseResult {
 			Source: source,
 		}
 	}
-	return parseWithSource(string(content), source, opts...)
+	return parseWithSourceContext(ctx, string(content), source, opts...)
 }
 
 func modelOrParseError(result *ParseResult, source string) (*Model, error) {
 	if result == nil {
 		return nil, fmt.Errorf("parse failed for %s: nil result", source)
 	}
-	if !result.Success() {
-		if result.Errors != nil {
-			return nil, result.Errors
+	if err := result.Err(); err != nil {
+		if result.ParseError != nil {
+			return nil, result.ParseError
 		}
 		return nil, fmt.Errorf("parse failed for %s", source)
 	}
@@ -393,7 +529,17 @@ func modelOrParseError(result *ParseResult, source string) (*Model, error) {
 // ParseStringModel parses SysML text and returns model/error in idiomatic Go style.
 func ParseStringModel(input string, opts ...ParseOption) (*Model, error) {
 	result := ParseString(input, opts...)
-	return modelOrParseError(result, "<string>")
+	source := "<string>"
+	if len(opts) > 0 {
+		cfg := &parseConfig{}
+		for _, opt := range opts {
+			opt(cfg)
+		}
+		if cfg.source != "" {
+			source = cfg.source
+		}
+	}
+	return modelOrParseError(result, source)
 }
 
 // ParseFileModel parses a SysML file and returns model/error in idiomatic Go style.
@@ -402,40 +548,13 @@ func ParseFileModel(filename string, opts ...ParseOption) (*Model, error) {
 	return modelOrParseError(result, filename)
 }
 
-// ParseDirectory parses all .sysml and .kerml files in a directory.
-// Use WithDiscardTree() option for large repositories to reduce memory.
-func ParseDirectory(dir string, opts ...ParseOption) ([]*ParseResult, error) {
-	var results []*ParseResult
-
-	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return fmt.Errorf("walking %s: %w", path, err)
-		}
-		ext := strings.ToLower(filepath.Ext(path))
-		if d.IsDir() || (ext != ".sysml" && ext != ".kerml") {
-			return nil
-		}
-
-		result := ParseFile(path, opts...)
-		results = append(results, result)
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("walking directory %s: %w", dir, err)
-	}
-
-	return results, nil
+// DirOptions configures ParseDir behavior.
+type DirOptions struct {
+	Workers      int
+	ParseOptions []ParseOption
 }
 
-// ParseDirectoryParallel parses all .sysml and .kerml files in a directory using multiple workers.
-// This can significantly speed up parsing of large repositories on multi-core machines.
-// Set workers to 0 to use runtime.NumCPU().
-func ParseDirectoryParallel(dir string, workers int, opts ...ParseOption) ([]*ParseResult, error) {
-	if workers <= 0 {
-		workers = runtime.NumCPU()
-	}
-
-	// Collect files first
+func collectModelFiles(dir string) ([]string, error) {
 	var files []string
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -451,54 +570,96 @@ func ParseDirectoryParallel(dir string, workers int, opts ...ParseOption) ([]*Pa
 	if err != nil {
 		return nil, fmt.Errorf("walking directory %s: %w", dir, err)
 	}
-
-	results := make([]*ParseResult, len(files))
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, workers)
-
-	for i, file := range files {
-		wg.Add(1)
-		sem <- struct{}{} // Acquire semaphore
-
-		go func(idx int, path string) {
-			defer wg.Done()
-			defer func() { <-sem }() // Release semaphore
-
-			results[idx] = ParseFile(path, opts...)
-		}(i, file)
-	}
-
-	wg.Wait()
-	return results, nil
+	return files, nil
 }
 
-// ParseDirectoryStream parses files one at a time and calls handler for each.
-// This is the most memory-efficient way to process large repositories.
-// The handler can process/store results and allow the GC to reclaim memory.
-func ParseDirectoryStream(dir string, handler func(*ParseResult) error, opts ...ParseOption) error {
-	// Always discard tree for streaming to minimize memory
-	opts = append(opts, WithDiscardTree())
-
-	return filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+// ParseDir parses all .sysml and .kerml files and streams ParseResult values.
+func ParseDir(ctx context.Context, dir string, opts DirOptions) iter.Seq[*ParseResult] {
+	return func(yield func(*ParseResult) bool) {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		if err := ctx.Err(); err != nil {
+			_ = yield(canceledParseResult(dir, "", err))
+			return
+		}
+		files, err := collectModelFiles(dir)
 		if err != nil {
-			return fmt.Errorf("walking %s: %w", path, err)
-		}
-		ext := strings.ToLower(filepath.Ext(path))
-		if d.IsDir() || (ext != ".sysml" && ext != ".kerml") {
-			return nil
+			_ = yield(&ParseResult{
+				Source: dir,
+				ParseError: &ParseError{
+					Items: []*Error{{
+						Line:    -1,
+						Column:  -1,
+						Message: err.Error(),
+						Context: "walk",
+					}},
+					Source: dir,
+				},
+			})
+			return
 		}
 
-		result := ParseFile(path, opts...)
-		if err := handler(result); err != nil {
-			return err
+		workers := opts.Workers
+		if workers <= 0 {
+			workers = runtime.NumCPU()
+		}
+		if workers <= 1 {
+			for _, file := range files {
+				if err := ctx.Err(); err != nil {
+					_ = yield(canceledParseResult(file, "", err))
+					return
+				}
+				if !yield(ParseFileContext(ctx, file, opts.ParseOptions...)) {
+					return
+				}
+			}
+			return
 		}
 
-		// Help GC by clearing references
-		result.Model = nil
-		result.Tree = nil
+		type indexedResult struct {
+			idx int
+			res *ParseResult
+		}
+		resultsCh := make(chan indexedResult, workers)
+		sem := make(chan struct{}, workers)
+		var wg sync.WaitGroup
 
-		return nil
-	})
+		for i, file := range files {
+			if ctx.Err() != nil {
+				break
+			}
+			wg.Add(1)
+			sem <- struct{}{}
+			go func(idx int, path string) {
+				defer wg.Done()
+				defer func() { <-sem }()
+				resultsCh <- indexedResult{idx: idx, res: ParseFileContext(ctx, path, opts.ParseOptions...)}
+			}(i, file)
+		}
+
+		go func() {
+			wg.Wait()
+			close(resultsCh)
+		}()
+
+		ordered := make(map[int]*ParseResult)
+		next := 0
+		for item := range resultsCh {
+			ordered[item.idx] = item.res
+			for {
+				res, ok := ordered[next]
+				if !ok {
+					break
+				}
+				delete(ordered, next)
+				if !yield(res) {
+					return
+				}
+				next++
+			}
+		}
+	}
 }
 
 // buildModel converts the parse tree to a high-level Model.
@@ -1055,11 +1216,11 @@ func (b *modelBuilder) EnterItemUsage(ctx *parser.ItemUsageContext) {
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -1404,7 +1565,7 @@ func (b *modelBuilder) EnterRequirementUsage(ctx *parser.RequirementUsageContext
 		req.TypeRef = NewRef[*Requirement](typeRef)
 	}
 	if b.rewriteHints != nil {
-		line := ctx.GetStart().GetLine()
+		line := ctx.GetStart().GetLine() - 1
 		if bindings, ok := b.rewriteHints.requirementBindingsByLine[line]; ok {
 			for k, v := range bindings {
 				req.Bindings[k] = v
@@ -1545,7 +1706,7 @@ func (b *modelBuilder) EnterUseCaseDefinition(ctx *parser.UseCaseDefinitionConte
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 
@@ -1566,7 +1727,7 @@ func (b *modelBuilder) EnterUseCaseUsage(ctx *parser.UseCaseUsageContext) {
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 
@@ -1588,11 +1749,11 @@ func (b *modelBuilder) EnterViewDefinition(ctx *parser.ViewDefinitionContext) {
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -1619,11 +1780,11 @@ func (b *modelBuilder) EnterViewUsage(ctx *parser.ViewUsageContext) {
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -1648,11 +1809,11 @@ func (b *modelBuilder) EnterViewpointDefinition(ctx *parser.ViewpointDefinitionC
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -1678,11 +1839,11 @@ func (b *modelBuilder) EnterViewpointUsage(ctx *parser.ViewpointUsageContext) {
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -1730,7 +1891,7 @@ func (b *modelBuilder) EnterAnalysisCaseDefinition(ctx *parser.AnalysisCaseDefin
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 
@@ -1751,7 +1912,7 @@ func (b *modelBuilder) EnterAnalysisCaseUsage(ctx *parser.AnalysisCaseUsageConte
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 
@@ -1772,7 +1933,7 @@ func (b *modelBuilder) EnterCaseDefinition(ctx *parser.CaseDefinitionContext) {
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 
@@ -1802,7 +1963,7 @@ func (b *modelBuilder) EnterCaseUsage(ctx *parser.CaseUsageContext) {
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 
@@ -1874,11 +2035,11 @@ func (b *modelBuilder) EnterAttributeDefinition(ctx *parser.AttributeDefinitionC
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -1944,11 +2105,11 @@ func (b *modelBuilder) EnterAttributeUsage(ctx *parser.AttributeUsageContext) {
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2033,11 +2194,11 @@ func (b *modelBuilder) EnterPortDefinition(ctx *parser.PortDefinitionContext) {
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2094,11 +2255,11 @@ func (b *modelBuilder) EnterPortUsage(ctx *parser.PortUsageContext) {
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2150,11 +2311,11 @@ func (b *modelBuilder) EnterConnectionDefinition(ctx *parser.ConnectionDefinitio
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2175,11 +2336,11 @@ func (b *modelBuilder) EnterConnectionUsage(ctx *parser.ConnectionUsageContext) 
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2200,11 +2361,11 @@ func (b *modelBuilder) EnterInterfaceDefinition(ctx *parser.InterfaceDefinitionC
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2225,11 +2386,11 @@ func (b *modelBuilder) EnterInterfaceUsage(ctx *parser.InterfaceUsageContext) {
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2250,11 +2411,11 @@ func (b *modelBuilder) EnterAllocationDefinition(ctx *parser.AllocationDefinitio
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2275,11 +2436,11 @@ func (b *modelBuilder) EnterAllocationUsage(ctx *parser.AllocationUsageContext) 
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2300,11 +2461,11 @@ func (b *modelBuilder) EnterStateDefinition(ctx *parser.StateDefinitionContext) 
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2325,11 +2486,11 @@ func (b *modelBuilder) EnterStateUsage(ctx *parser.StateUsageContext) {
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2350,11 +2511,11 @@ func (b *modelBuilder) EnterTransitionUsage(ctx *parser.TransitionUsageContext) 
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2398,11 +2559,11 @@ func (b *modelBuilder) EnterActionDefinition(ctx *parser.ActionDefinitionContext
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2423,11 +2584,11 @@ func (b *modelBuilder) EnterActionUsage(ctx *parser.ActionUsageContext) {
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2448,11 +2609,11 @@ func (b *modelBuilder) EnterCalculationDefinition(ctx *parser.CalculationDefinit
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2473,11 +2634,11 @@ func (b *modelBuilder) EnterCalculationUsage(ctx *parser.CalculationUsageContext
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2498,11 +2659,11 @@ func (b *modelBuilder) EnterConstraintDefinition(ctx *parser.ConstraintDefinitio
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2523,11 +2684,11 @@ func (b *modelBuilder) EnterConstraintUsage(ctx *parser.ConstraintUsageContext) 
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2548,11 +2709,11 @@ func (b *modelBuilder) EnterAssertConstraintUsage(ctx *parser.AssertConstraintUs
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2574,11 +2735,11 @@ func (b *modelBuilder) EnterEnumerationDefinition(ctx *parser.EnumerationDefinit
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2599,11 +2760,11 @@ func (b *modelBuilder) EnterEnumerationUsage(ctx *parser.EnumerationUsageContext
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2624,11 +2785,11 @@ func (b *modelBuilder) EnterEnumeratedValue(ctx *parser.EnumeratedValueContext) 
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -2869,11 +3030,11 @@ func (b *modelBuilder) EnterRequirementConstraintMember(ctx *parser.RequirementC
 	}
 
 	loc := Location{
-		Line:   ctx.GetStart().GetLine(),
+		Line:   ctx.GetStart().GetLine() - 1,
 		Column: ctx.GetStart().GetColumn(),
 	}
 	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine()
+		loc.EndLine = ctx.GetStop().GetLine() - 1
 		loc.EndColumn = ctx.GetStop().GetColumn()
 	}
 
@@ -3191,8 +3352,8 @@ func extractSpecializationReference(subclassPart parser.ISubclassificationPartCo
 // MustParseString parses a SysML string and panics if there are errors.
 func MustParseString(input string) *Model {
 	result := ParseString(input)
-	if !result.Success() {
-		panic(result.Errors)
+	if result.Err() != nil {
+		panic(result.ParseError)
 	}
 	return result.Model
 }
@@ -3200,8 +3361,8 @@ func MustParseString(input string) *Model {
 // MustParseFile parses a SysML file and panics if there are errors.
 func MustParseFile(filename string) *Model {
 	result := ParseFile(filename)
-	if !result.Success() {
-		panic(result.Errors)
+	if result.Err() != nil {
+		panic(result.ParseError)
 	}
 	return result.Model
 }
@@ -3220,9 +3381,9 @@ func ValidateFile(filename string) *ParseError {
 	content, err := os.ReadFile(filename)
 	if err != nil {
 		return &ParseError{
-			Errors: []*Error{{
-				Line:    0,
-				Column:  0,
+			Items: []*Error{{
+				Line:    -1,
+				Column:  -1,
 				Message: err.Error(),
 			}},
 			Source: filename,

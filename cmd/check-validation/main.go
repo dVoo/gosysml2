@@ -177,7 +177,7 @@ func processCategory(name string, files []string, registry *sysml.LibraryRegistr
 			result = sysml.ParseFile(file)
 		}
 
-		if result.Success() {
+		if result.Err() == nil {
 			stats.Parsed++
 			if verbose {
 				fmt.Printf("  ✓ %s\n", filename)
@@ -193,7 +193,7 @@ func processCategory(name string, files []string, registry *sysml.LibraryRegistr
 				stats.Elements += count
 
 				// Count library imports
-				for _, imp := range result.Model.Imports {
+				for _, imp := range result.Model.Imports() {
 					if imp.ResolvedPackage != nil {
 						stats.LibraryImports++
 						stats.LibraryResolved++
@@ -206,8 +206,8 @@ func processCategory(name string, files []string, registry *sysml.LibraryRegistr
 			stats.Failed++
 			if verbose {
 				errMsg := "parse error"
-				if result.Errors != nil && len(result.Errors.Errors) > 0 {
-					errMsg = result.Errors.Errors[0].Message
+				if errs := result.Errors(); len(errs) > 0 {
+					errMsg = errs[0].Message
 				}
 				fmt.Printf("  ✗ %s - %s\n", filename, errMsg)
 			}
