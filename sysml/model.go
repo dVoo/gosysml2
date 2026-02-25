@@ -269,6 +269,76 @@ func (r *Ref[T]) Resolve(elem T) {
 	r.ok = true
 }
 
+func resolvedElementFromRef[T Element](ref Ref[T]) Element {
+	if !ref.IsResolved() {
+		return nil
+	}
+	resolved := ref.Resolved()
+	if any(resolved) == nil {
+		return nil
+	}
+	return resolved
+}
+
+// ElementRole describes whether an element acts as a definition, a usage, both, or neither.
+type ElementRole uint8
+
+const (
+	RoleUnknown ElementRole = iota
+	RoleDefinition
+	RoleUsage
+	RoleDefinitionAndUsage
+)
+
+func (r ElementRole) IsDefinition() bool {
+	return r == RoleDefinition || r == RoleDefinitionAndUsage
+}
+
+func (r ElementRole) IsUsage() bool {
+	return r == RoleUsage || r == RoleDefinitionAndUsage
+}
+
+func (r ElementRole) String() string {
+	switch r {
+	case RoleDefinition:
+		return "definition"
+	case RoleUsage:
+		return "usage"
+	case RoleDefinitionAndUsage:
+		return "definition+usage"
+	default:
+		return "unknown"
+	}
+}
+
+// RoleOf reports the semantic role of an element in the current data model.
+// For dual-role concrete types, it inspects the concrete IsDefinition flag.
+func RoleOf(elem Element) ElementRole {
+	if elem == nil {
+		return RoleUnknown
+	}
+	return elem.Role()
+}
+
+// IsDefinitionElement reports whether elem is a definition in the current data model.
+func IsDefinitionElement(elem Element) bool {
+	return RoleOf(elem).IsDefinition()
+}
+
+// IsUsageElement reports whether elem is a usage in the current data model.
+func IsUsageElement(elem Element) bool {
+	return RoleOf(elem).IsUsage()
+}
+
+// UsageTypeName returns the declared or resolved type name for a typed usage.
+// It returns an empty string for usages that do not carry a type reference.
+func UsageTypeName(u Usage) string {
+	if u == nil {
+		return ""
+	}
+	return u.TypeName()
+}
+
 // Element is the base interface for all SysML elements.
 type Element interface {
 	// Kind returns the kind of this element.
@@ -291,6 +361,9 @@ type Element interface {
 
 	// Documentation returns the documentation string for this element.
 	Documentation() string
+
+	// Role reports whether this element is a definition, usage, both, or neither.
+	Role() ElementRole
 }
 
 type mutableElement interface {
@@ -308,6 +381,8 @@ type Usage interface {
 	Element
 	// Type returns a reference to the definition this usage is typed by.
 	Type() Element
+	// TypeName returns the resolved type name when available, otherwise the unresolved declared type name.
+	TypeName() string
 	isUsage()
 }
 
@@ -330,6 +405,8 @@ func (e *baseElement) Children() []Element       { return e.children }
 func (e *baseElement) SetParent(p Element)       { e.parent = p }
 func (e *baseElement) Documentation() string     { return e.documentation }
 func (e *baseElement) DeclaredShortName() string { return e.declaredShortName }
+func (e *baseElement) Role() ElementRole         { return RoleUnknown }
+func (e *baseElement) TypeName() string          { return "" }
 
 func (e *baseElement) setDeclaredShortName(name string) {
 	e.declaredShortName = name
@@ -574,7 +651,8 @@ type KerMLType struct {
 	features           []*KerMLFeature
 }
 
-func (t *KerMLType) isDefinition() {}
+func (t *KerMLType) isDefinition()     {}
+func (t *KerMLType) Role() ElementRole { return RoleDefinition }
 
 // NewKerMLType creates a new KerMLType element.
 func NewKerMLType(name, keyword string, loc Location) *KerMLType {
@@ -623,7 +701,8 @@ type KerMLFeature struct {
 	unresolvedTypeReference string
 }
 
-func (f *KerMLFeature) isDefinition() {}
+func (f *KerMLFeature) isDefinition()     {}
+func (f *KerMLFeature) Role() ElementRole { return RoleDefinition }
 
 // NewKerMLFeature creates a new KerMLFeature element.
 func NewKerMLFeature(name string, loc Location) *KerMLFeature {
@@ -693,10 +772,18 @@ func NewAttribute(name string, loc Location, isDefinition bool) *Attribute {
 
 func (a *Attribute) isDefinition() {}
 func (a *Attribute) isUsage()      {}
+func (a *Attribute) Role() ElementRole {
+	if a.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (a *Attribute) TypeName() string { return a.TypeRef.EffectiveName() }
+
 func (a *Attribute) Type() Element {
-	return a.TypeRef.Resolved()
+	return resolvedElementFromRef(a.TypeRef)
 }
 
 // AddUnresolvedSubsettedFeature adds an unresolved subsetting/reference-subsetting name.
@@ -734,10 +821,18 @@ type Part struct {
 
 func (p *Part) isDefinition() {}
 func (p *Part) isUsage()      {}
+func (p *Part) Role() ElementRole {
+	if p.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (p *Part) TypeName() string { return p.TypeRef.EffectiveName() }
+
 func (p *Part) Type() Element {
-	return p.TypeRef.Resolved()
+	return resolvedElementFromRef(p.TypeRef)
 }
 
 // SetUnresolvedSpecializes sets the unresolved specialization reference.
@@ -840,7 +935,8 @@ type ConjugatedPort struct {
 }
 
 // isDefinition marks ConjugatedPort as a definition element.
-func (c *ConjugatedPort) isDefinition() {}
+func (c *ConjugatedPort) isDefinition()     {}
+func (c *ConjugatedPort) Role() ElementRole { return RoleDefinition }
 
 // GetOriginalPort returns the original port this conjugated port references.
 func (c *ConjugatedPort) GetOriginalPort() *Port {
@@ -876,10 +972,18 @@ const (
 
 func (p *Port) isDefinition() {}
 func (p *Port) isUsage()      {}
+func (p *Port) Role() ElementRole {
+	if p.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (p *Port) TypeName() string { return p.TypeRef.EffectiveName() }
+
 func (p *Port) Type() Element {
-	return p.TypeRef.Resolved()
+	return resolvedElementFromRef(p.TypeRef)
 }
 
 // NewPort creates a new Port element.
@@ -964,10 +1068,18 @@ type Constraint struct {
 
 func (c *Constraint) isDefinition() {}
 func (c *Constraint) isUsage()      {}
+func (c *Constraint) Role() ElementRole {
+	if c.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (c *Constraint) TypeName() string { return c.TypeRef.EffectiveName() }
+
 func (c *Constraint) Type() Element {
-	return c.TypeRef.Resolved()
+	return resolvedElementFromRef(c.TypeRef)
 }
 
 // NewConstraint creates a new Constraint element.
@@ -1031,10 +1143,18 @@ type Requirement struct {
 
 func (r *Requirement) isDefinition() {}
 func (r *Requirement) isUsage()      {}
+func (r *Requirement) Role() ElementRole {
+	if r.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (r *Requirement) TypeName() string { return r.TypeRef.EffectiveName() }
+
 func (r *Requirement) Type() Element {
-	return r.TypeRef.Resolved()
+	return resolvedElementFromRef(r.TypeRef)
 }
 
 // NewRequirement creates a new Requirement element.
@@ -1124,10 +1244,18 @@ type Action struct {
 
 func (a *Action) isDefinition() {}
 func (a *Action) isUsage()      {}
+func (a *Action) Role() ElementRole {
+	if a.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (a *Action) TypeName() string { return a.TypeRef.EffectiveName() }
+
 func (a *Action) Type() Element {
-	return a.TypeRef.Resolved()
+	return resolvedElementFromRef(a.TypeRef)
 }
 
 // NewAction creates a new Action element.
@@ -1209,10 +1337,18 @@ func (v VerificationMethod) String() string {
 
 func (v *Verification) isDefinition() {}
 func (v *Verification) isUsage()      {}
+func (v *Verification) Role() ElementRole {
+	if v.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (v *Verification) TypeName() string { return v.TypeRef.EffectiveName() }
+
 func (v *Verification) Type() Element {
-	return v.TypeRef.Resolved()
+	return resolvedElementFromRef(v.TypeRef)
 }
 
 // NewVerification creates a new Verification element.
@@ -1268,10 +1404,18 @@ type Concern struct {
 
 func (c *Concern) isDefinition() {}
 func (c *Concern) isUsage()      {}
+func (c *Concern) Role() ElementRole {
+	if c.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (c *Concern) TypeName() string { return c.TypeRef.EffectiveName() }
+
 func (c *Concern) Type() Element {
-	return c.TypeRef.Resolved()
+	return resolvedElementFromRef(c.TypeRef)
 }
 
 // NewConcern creates a new Concern element.
@@ -1315,10 +1459,18 @@ type UseCase struct {
 
 func (u *UseCase) isDefinition() {}
 func (u *UseCase) isUsage()      {}
+func (u *UseCase) Role() ElementRole {
+	if u.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (u *UseCase) TypeName() string { return u.TypeRef.EffectiveName() }
+
 func (u *UseCase) Type() Element {
-	return u.TypeRef.Resolved()
+	return resolvedElementFromRef(u.TypeRef)
 }
 
 // NewUseCase creates a new UseCase element.
@@ -1359,7 +1511,8 @@ type IncludeUseCase struct {
 }
 
 // isUsage marks IncludeUseCase as a usage element.
-func (i *IncludeUseCase) isUsage() {}
+func (i *IncludeUseCase) isUsage()          {}
+func (i *IncludeUseCase) Role() ElementRole { return RoleUsage }
 
 // Type returns the type reference for usages (IncludeUseCase doesn't have a type).
 func (i *IncludeUseCase) Type() Element {
@@ -1402,10 +1555,18 @@ type AnalysisCase struct {
 
 func (a *AnalysisCase) isDefinition() {}
 func (a *AnalysisCase) isUsage()      {}
+func (a *AnalysisCase) Role() ElementRole {
+	if a.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (a *AnalysisCase) TypeName() string { return a.TypeRef.EffectiveName() }
+
 func (a *AnalysisCase) Type() Element {
-	return a.TypeRef.Resolved()
+	return resolvedElementFromRef(a.TypeRef)
 }
 
 // NewAnalysisCase creates a new AnalysisCase element.
@@ -1444,10 +1605,18 @@ type Case struct {
 
 func (c *Case) isDefinition() {}
 func (c *Case) isUsage()      {}
+func (c *Case) Role() ElementRole {
+	if c.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (c *Case) TypeName() string { return c.TypeRef.EffectiveName() }
+
 func (c *Case) Type() Element {
-	return c.TypeRef.Resolved()
+	return resolvedElementFromRef(c.TypeRef)
 }
 
 // NewCase creates a new Case element.
@@ -1516,10 +1685,18 @@ type Enumeration struct {
 
 func (e *Enumeration) isDefinition() {}
 func (e *Enumeration) isUsage()      {}
+func (e *Enumeration) Role() ElementRole {
+	if e.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (e *Enumeration) TypeName() string { return e.TypeRef.EffectiveName() }
+
 func (e *Enumeration) Type() Element {
-	return e.TypeRef.Resolved()
+	return resolvedElementFromRef(e.TypeRef)
 }
 
 // NewEnumeration creates a new Enumeration element.
@@ -1574,10 +1751,18 @@ type Item struct {
 
 func (i *Item) isDefinition() {}
 func (i *Item) isUsage()      {}
+func (i *Item) Role() ElementRole {
+	if i.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (i *Item) TypeName() string { return i.TypeRef.EffectiveName() }
+
 func (i *Item) Type() Element {
-	return i.TypeRef.Resolved()
+	return resolvedElementFromRef(i.TypeRef)
 }
 
 // SetUnresolvedSpecializes sets the unresolved specialization reference.
@@ -1676,10 +1861,18 @@ type Calculation struct {
 
 func (c *Calculation) isDefinition() {}
 func (c *Calculation) isUsage()      {}
+func (c *Calculation) Role() ElementRole {
+	if c.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (c *Calculation) TypeName() string { return c.TypeRef.EffectiveName() }
+
 func (c *Calculation) Type() Element {
-	return c.TypeRef.Resolved()
+	return resolvedElementFromRef(c.TypeRef)
 }
 
 // NewCalculation creates a new Calculation element.
@@ -1718,10 +1911,18 @@ type State struct {
 
 func (s *State) isDefinition() {}
 func (s *State) isUsage()      {}
+func (s *State) Role() ElementRole {
+	if s.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (s *State) TypeName() string { return s.TypeRef.EffectiveName() }
+
 func (s *State) Type() Element {
-	return s.TypeRef.Resolved()
+	return resolvedElementFromRef(s.TypeRef)
 }
 
 // NewState creates a new State element.
@@ -1827,10 +2028,18 @@ type Connection struct {
 
 func (c *Connection) isDefinition() {}
 func (c *Connection) isUsage()      {}
+func (c *Connection) Role() ElementRole {
+	if c.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (c *Connection) TypeName() string { return c.TypeRef.EffectiveName() }
+
 func (c *Connection) Type() Element {
-	return c.TypeRef.Resolved()
+	return resolvedElementFromRef(c.TypeRef)
 }
 
 // NewConnection creates a new Connection element.
@@ -1865,10 +2074,18 @@ type Interface struct {
 
 func (i *Interface) isDefinition() {}
 func (i *Interface) isUsage()      {}
+func (i *Interface) Role() ElementRole {
+	if i.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (i *Interface) TypeName() string { return i.TypeRef.EffectiveName() }
+
 func (i *Interface) Type() Element {
-	return i.TypeRef.Resolved()
+	return resolvedElementFromRef(i.TypeRef)
 }
 
 // NewInterface creates a new Interface element.
@@ -1913,10 +2130,18 @@ type Allocation struct {
 
 func (a *Allocation) isDefinition() {}
 func (a *Allocation) isUsage()      {}
+func (a *Allocation) Role() ElementRole {
+	if a.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (a *Allocation) TypeName() string { return a.TypeRef.EffectiveName() }
+
 func (a *Allocation) Type() Element {
-	return a.TypeRef.Resolved()
+	return resolvedElementFromRef(a.TypeRef)
 }
 
 // NewAllocation creates a new Allocation element.
@@ -1956,10 +2181,18 @@ type Viewpoint struct {
 
 func (v *Viewpoint) isDefinition() {}
 func (v *Viewpoint) isUsage()      {}
+func (v *Viewpoint) Role() ElementRole {
+	if v.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (v *Viewpoint) TypeName() string { return v.TypeRef.EffectiveName() }
+
 func (v *Viewpoint) Type() Element {
-	return v.TypeRef.Resolved()
+	return resolvedElementFromRef(v.TypeRef)
 }
 
 // NewViewpoint creates a new Viewpoint element.
@@ -2014,10 +2247,18 @@ type ViewExposure struct {
 
 func (v *View) isDefinition() {}
 func (v *View) isUsage()      {}
+func (v *View) Role() ElementRole {
+	if v.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the type reference for usages.
+func (v *View) TypeName() string { return v.TypeRef.EffectiveName() }
+
 func (v *View) Type() Element {
-	return v.TypeRef.Resolved()
+	return resolvedElementFromRef(v.TypeRef)
 }
 
 // NewView creates a new View element.
@@ -3171,16 +3412,16 @@ func (m *Model) resolveVerifyRelationshipRefs(rel *VerifyRelationship) {
 // and finally falls back to the library registry if available.
 // User definitions in the model always take precedence over library definitions.
 func (m *Model) findElement(name string, context Element) Element {
-	tryByQualifiedLookup := func(candidate string) Element {
+	baseQualifiedLookup := func(candidate string, lookupCtx Element) Element {
 		// First try direct qualified name lookup in model (user definitions take precedence)
 		if elem := m.elementIndex[candidate]; elem != nil {
 			return elem
 		}
 
 		// Try relative to context
-		if context != nil {
+		if lookupCtx != nil {
 			// Walk up the parent chain
-			current := context.Parent()
+			current := lookupCtx.Parent()
 			for current != nil {
 				qn := current.QualifiedName()
 				if qn != "" {
@@ -3201,6 +3442,55 @@ func (m *Model) findElement(name string, context Element) Element {
 			}
 		}
 		return nil
+	}
+
+	tryImportedScopes := func(candidate string, lookupCtx Element) Element {
+		if lookupCtx == nil {
+			return nil
+		}
+		trimmed := strings.TrimSpace(candidate)
+		if trimmed == "" {
+			return nil
+		}
+		for current := lookupCtx; current != nil; current = current.Parent() {
+			pkg, ok := current.(*Package)
+			if !ok {
+				continue
+			}
+			for _, imp := range pkg.Imports() {
+				if imp == nil || (!imp.IsAll && !imp.IsRecursive) {
+					continue
+				}
+				ns := strings.TrimSpace(imp.ImportedNamespace)
+				if ns == "" {
+					continue
+				}
+				ns = strings.TrimSuffix(ns, "::**")
+				ns = strings.TrimSuffix(ns, "::*")
+				if ns == "" {
+					continue
+				}
+				scope := baseQualifiedLookup(ns, pkg)
+				if scope == nil {
+					continue
+				}
+				scopeQN := scope.QualifiedName()
+				if scopeQN == "" {
+					continue
+				}
+				if elem := m.elementIndex[scopeQN+"::"+trimmed]; elem != nil {
+					return elem
+				}
+			}
+		}
+		return nil
+	}
+
+	tryByQualifiedLookup := func(candidate string) Element {
+		if elem := baseQualifiedLookup(candidate, context); elem != nil {
+			return elem
+		}
+		return tryImportedScopes(candidate, context)
 	}
 
 	if elem := tryByQualifiedLookup(name); elem != nil {

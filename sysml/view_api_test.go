@@ -117,3 +117,53 @@ package P {
 		t.Fatalf("expected viewpoint concern resolution, got %d", len(vps[0].Concerns))
 	}
 }
+
+func TestViewExposeResolvesImportedNamespaceReferences(t *testing.T) {
+	input := `
+package ASPICE_Toolchain_Model {
+	package Tool_Cluster {
+		package Tools {
+			part def Tool;
+			part Codebeamer : Tool;
+			part Jira : Tool;
+		}
+	}
+
+	package Views {
+		import Tool_Cluster::*;
+
+		view def ToolArchitectureView;
+
+		view toolArchitecture : ToolArchitectureView {
+			expose Tools::Codebeamer;
+			expose Tools::*;
+		}
+	}
+}
+`
+
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %v", result.Errors)
+	}
+
+	elements, err := ElementsByView(result.Model, "toolArchitecture")
+	if err != nil {
+		t.Fatalf("ElementsByView error: %v", err)
+	}
+	if len(elements) == 0 {
+		t.Fatalf("expected imported-scope expose references to resolve, got 0 elements")
+	}
+
+	foundCodebeamer := false
+	for _, elem := range elements {
+		part, ok := elem.(*Part)
+		if ok && part.Name() == "Codebeamer" && !part.IsDefinition {
+			foundCodebeamer = true
+			break
+		}
+	}
+	if !foundCodebeamer {
+		t.Fatalf("expected Codebeamer part usage to be exposed via imported scope")
+	}
+}

@@ -7,7 +7,7 @@ Go library for parsing SysML v2 and KerML textual models with two layers:
 - `low`: ANTLR-oriented low-level parser access
 - `sysml`: high-level typed model with reference resolution
 
-Current version: `v0.4.0` (from `VERSION`).
+Current version: `v0.4.1` (from `VERSION`).
 
 ## Quick Start
 
@@ -61,6 +61,18 @@ for r := range sysml.ParseDir(ctx, "./models", opts) {
         continue
     }
     fmt.Printf("ok: %s (%d top-level packages)\n", r.Source, len(r.Model.Packages()))
+}
+```
+
+Semantic role and type-name APIs (canonical for tooling):
+
+```go
+for elem := range sysml.All(result.Model) {
+    if elem.Role() == sysml.RoleUsage {
+        if usage, ok := elem.(sysml.Usage); ok {
+            fmt.Println(usage.TypeName())
+        }
+    }
 }
 ```
 
