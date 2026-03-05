@@ -147,6 +147,13 @@ _ = requirements
 - `All(model)`, `OfType[T](model)`, `OfKind(model, kind)` for iterator-style loops
 - `Filter`, `FindByName`, `FindByKind`, `FindByQualifiedName`
 
+Which one to use:
+
+- Prefer iterators (`All`, `OfType[T]`, `OfKind`) for most filtering/collection tasks.
+- Use `Walk` when you need depth and short-circuit traversal (`false` stops descent).
+- Use `Visit` for larger structured processors that benefit from per-type methods.
+- Use `WalkAll` when you want traversal callbacks without early-exit logic.
+
 Example:
 
 ```go
@@ -157,13 +164,17 @@ for elem := range sysml.OfType[*sysml.Requirement](model) {
 
 ## Position-Based Lookup
 
-Use `ElementAt` for editor/LSP style lookups.
+Use `ElementAt` for editor/LSP style lookups of named elements.
+Use `ElementAtIncludingUnnamed` when anonymous usages should still be discoverable.
 
 ```go
 elem := sysml.ElementAt(model, line, column) // zero-based line/column
 if elem != nil {
     fmt.Println(elem.QualifiedName())
 }
+
+elem = sysml.ElementAtIncludingUnnamed(model, line, column)
+_ = elem
 ```
 
 ## References
@@ -179,9 +190,29 @@ Example:
 
 ```go
 for _, p := range sysml.FindAll[*sysml.Part](model) {
-    if !p.IsDefinition && p.TypeRef.IsResolved() {
-        fmt.Printf("%s : %s\n", p.Name(), p.TypeRef.Resolved().Name())
+    if p.Role() == sysml.RoleUsage {
+        fmt.Printf("%s : %s\n", p.Name(), p.TypeName())
     }
+}
+```
+
+## Semantic Roles (Definition vs Usage)
+
+For tooling code that needs stable semantic classification, prefer `elem.Role()`
+and `usage.TypeName()` over reflecting on concrete `IsDefinition` fields:
+
+```go
+for elem := range sysml.All(model) {
+    switch elem.Role() {
+    case sysml.RoleDefinition:
+        // ...
+    case sysml.RoleUsage:
+        // ...
+    }
+}
+
+if usage, ok := elem.(sysml.Usage); ok {
+    fmt.Println(usage.TypeName()) // resolved name or unresolved declared name
 }
 ```
 

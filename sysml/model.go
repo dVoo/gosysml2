@@ -3,7 +3,6 @@ package sysml
 import (
 	"fmt"
 	"iter"
-	"reflect"
 	"strings"
 )
 
@@ -395,6 +394,8 @@ type baseElement struct {
 	parent            Element
 	children          []Element
 	documentation     string
+	cachedQN          string // cached qualified name
+	qnValid           bool   // whether cachedQN is up to date
 }
 
 func (e *baseElement) Kind() ElementKind         { return e.kind }
@@ -402,7 +403,7 @@ func (e *baseElement) Name() string              { return e.name }
 func (e *baseElement) Location() Location        { return e.location }
 func (e *baseElement) Parent() Element           { return e.parent }
 func (e *baseElement) Children() []Element       { return e.children }
-func (e *baseElement) SetParent(p Element)       { e.parent = p }
+func (e *baseElement) SetParent(p Element)       { e.parent = p; e.invalidateQN() }
 func (e *baseElement) Documentation() string     { return e.documentation }
 func (e *baseElement) DeclaredShortName() string { return e.declaredShortName }
 func (e *baseElement) Role() ElementRole         { return RoleUnknown }
@@ -417,31 +418,38 @@ func (e *baseElement) SetDocumentation(doc string) {
 }
 
 func (e *baseElement) QualifiedName() string {
+	if e.qnValid {
+		return e.cachedQN
+	}
 	if e.parent == nil {
-		return e.name
+		e.cachedQN = e.name
+	} else {
+		parentQN := e.parent.QualifiedName()
+		if parentQN == "" {
+			e.cachedQN = e.name
+		} else {
+			e.cachedQN = parentQN + "::" + e.name
+		}
 	}
-	parentQN := e.parent.QualifiedName()
-	if parentQN == "" {
-		return e.name
-	}
-	return parentQN + "::" + e.name
+	e.qnValid = true
+	return e.cachedQN
 }
 
-func isNilValue(v any) bool {
-	if v == nil {
-		return true
+// invalidateQN clears the cached qualified name for this element and all descendants.
+func (e *baseElement) invalidateQN() {
+	if !e.qnValid {
+		return
 	}
-	rv := reflect.ValueOf(v)
-	switch rv.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return rv.IsNil()
-	default:
-		return false
+	e.qnValid = false
+	for _, child := range e.children {
+		if be, ok := child.(interface{ invalidateQN() }); ok {
+			be.invalidateQN()
+		}
 	}
 }
 
 func (e *baseElement) addChild(child Element, parent Element) {
-	if isNilValue(child) {
+	if child == nil {
 		return
 	}
 	e.children = append(e.children, child)
@@ -2533,80 +2541,107 @@ func (m *Model) BuildIndex() {
 	})
 }
 
+// BuildIndexAndResolve builds the element index and resolves references in a single walk.
+func (m *Model) BuildIndexAndResolve() {
+	m.elementIndex = make(map[string]Element)
+	m.shortNameIndex = make(map[string][]Element)
+	// First pass: build index (needed before resolving references)
+	m.Walk(func(elem Element) bool {
+		qn := elem.QualifiedName()
+		if qn != "" {
+			m.elementIndex[qn] = elem
+		}
+		if snElem, ok := elem.(interface{ DeclaredShortName() string }); ok {
+			sn := snElem.DeclaredShortName()
+			if sn != "" {
+				m.shortNameIndex[sn] = append(m.shortNameIndex[sn], elem)
+			}
+		}
+		// Resolve references inline during the same walk
+		m.resolveElementRefs(elem)
+		return true
+	})
+}
+
+// resolveElementRefs resolves references for a single element.
+func (m *Model) resolveElementRefs(elem Element) {
+	switch e := elem.(type) {
+	case *Requirement:
+		m.resolveRequirementRefs(e)
+	case *Verification:
+		m.resolveVerificationRefs(e)
+	case *Part:
+		m.resolvePartRefs(e)
+	case *Item:
+		m.resolveItemRefs(e)
+	case *UseCase:
+		m.resolveUseCaseRefs(e)
+	case *Concern:
+		m.resolveConcernRefs(e)
+	case *AnalysisCase:
+		m.resolveAnalysisCaseRefs(e)
+	case *Case:
+		m.resolveCaseRefs(e)
+	case *IncludeUseCase:
+		m.resolveIncludeUseCaseRefs(e)
+	case *Transition:
+		m.resolveTransitionRefs(e)
+	case *Connection:
+		m.resolveConnectionRefs(e)
+	case *Allocation:
+		m.resolveAllocationRefs(e)
+	case *View:
+		m.resolveViewRefs(e)
+	case *Viewpoint:
+		m.resolveViewpointRefs(e)
+	case *Calculation:
+		m.resolveCalculationRefs(e)
+	case *State:
+		m.resolveStateRefs(e)
+	case *Action:
+		m.resolveActionRefs(e)
+	case *Constraint:
+		m.resolveConstraintRefs(e)
+	case *Enumeration:
+		m.resolveEnumerationRefs(e)
+	case *Port:
+		m.resolvePortRefs(e)
+	case *ConjugatedPort:
+		m.resolveConjugatedPortRefs(e)
+	case *Attribute:
+		m.resolveAttributeRefs(e)
+	case *Interface:
+		m.resolveInterfaceRefs(e)
+	case *SuccessionFlow:
+		m.resolveSuccessionFlowRefs(e)
+	case *Dependency:
+		m.resolveDependencyRefs(e)
+	case *Comment:
+		m.resolveCommentRefs(e)
+	case *Alias:
+		m.resolveAliasRefs(e)
+	case *Metadata:
+		m.resolveMetadataRefs(e)
+	case *Rendering:
+		m.resolveRenderingRefs(e)
+	case *Message:
+		m.resolveMessageRefs(e)
+	case *KerMLType:
+		m.resolveKerMLTypeRefs(e)
+	case *KerMLFeature:
+		m.resolveKerMLFeatureRefs(e)
+	case *SatisfyRelationship:
+		m.resolveSatisfyRelationshipRefs(e)
+	case *VerifyRelationship:
+		m.resolveVerifyRelationshipRefs(e)
+	}
+}
+
 // ResolveReferences resolves all element references in the model.
 // This should be called after parsing and BuildIndex.
 func (m *Model) ResolveReferences() {
 	m.Walk(func(elem Element) bool {
-		switch e := elem.(type) {
-		case *Requirement:
-			m.resolveRequirementRefs(e)
-		case *Verification:
-			m.resolveVerificationRefs(e)
-		case *Part:
-			m.resolvePartRefs(e)
-		case *Item:
-			m.resolveItemRefs(e)
-		case *UseCase:
-			m.resolveUseCaseRefs(e)
-		case *Concern:
-			m.resolveConcernRefs(e)
-		case *AnalysisCase:
-			m.resolveAnalysisCaseRefs(e)
-		case *Case:
-			m.resolveCaseRefs(e)
-		case *IncludeUseCase:
-			m.resolveIncludeUseCaseRefs(e)
-		case *Transition:
-			m.resolveTransitionRefs(e)
-		case *Connection:
-			m.resolveConnectionRefs(e)
-		case *Allocation:
-			m.resolveAllocationRefs(e)
-		case *View:
-			m.resolveViewRefs(e)
-		case *Viewpoint:
-			m.resolveViewpointRefs(e)
-		case *Calculation:
-			m.resolveCalculationRefs(e)
-		case *State:
-			m.resolveStateRefs(e)
-		case *Action:
-			m.resolveActionRefs(e)
-		case *Constraint:
-			m.resolveConstraintRefs(e)
-		case *Enumeration:
-			m.resolveEnumerationRefs(e)
-		case *Port:
-			m.resolvePortRefs(e)
-		case *ConjugatedPort:
-			m.resolveConjugatedPortRefs(e)
-		case *Attribute:
-			m.resolveAttributeRefs(e)
-		case *Interface:
-			m.resolveInterfaceRefs(e)
-		case *SuccessionFlow:
-			m.resolveSuccessionFlowRefs(e)
-		case *Dependency:
-			m.resolveDependencyRefs(e)
-		case *Comment:
-			m.resolveCommentRefs(e)
-		case *Alias:
-			m.resolveAliasRefs(e)
-		case *Metadata:
-			m.resolveMetadataRefs(e)
-		case *Rendering:
-			m.resolveRenderingRefs(e)
-		case *Message:
-			m.resolveMessageRefs(e)
-		case *KerMLType:
-			m.resolveKerMLTypeRefs(e)
-		case *KerMLFeature:
-			m.resolveKerMLFeatureRefs(e)
-		case *SatisfyRelationship:
-			m.resolveSatisfyRelationshipRefs(e)
-		case *VerifyRelationship:
-			m.resolveVerifyRelationshipRefs(e)
-		}
+		m.resolveElementRefs(elem)
 		return true
 	})
 }
@@ -3376,7 +3411,7 @@ func (m *Model) resolveSatisfyRelationshipRefs(rel *SatisfyRelationship) {
 			if req, ok := elem.(*Requirement); ok {
 				rel.Required.Resolve(req)
 				if rel.Satisfier.IsResolved() {
-					if satisfier := rel.Satisfier.Resolved(); !isNilValue(satisfier) && req != nil {
+					if satisfier := rel.Satisfier.Resolved(); satisfier != nil && req != nil {
 						req.SatisfiedBy = append(req.SatisfiedBy, satisfier)
 					}
 				}
@@ -3407,100 +3442,95 @@ func (m *Model) resolveVerifyRelationshipRefs(rel *VerifyRelationship) {
 	}
 }
 
+// baseQualifiedLookup tries direct and scope-relative qualified name lookup.
+func (m *Model) baseQualifiedLookup(candidate string, lookupCtx Element) Element {
+	if elem := m.elementIndex[candidate]; elem != nil {
+		return elem
+	}
+	if lookupCtx != nil {
+		current := lookupCtx.Parent()
+		for current != nil {
+			qn := current.QualifiedName()
+			if qn != "" {
+				if elem := m.elementIndex[qn+"::"+candidate]; elem != nil {
+					return elem
+				}
+			}
+			current = current.Parent()
+		}
+	}
+	for _, pkg := range m.Packages() {
+		if elem := m.elementIndex[pkg.Name()+"::"+candidate]; elem != nil {
+			return elem
+		}
+	}
+	return nil
+}
+
+// tryImportedScopes searches imported namespaces for the candidate.
+func (m *Model) tryImportedScopes(candidate string, lookupCtx Element) Element {
+	if lookupCtx == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(candidate)
+	if trimmed == "" {
+		return nil
+	}
+	for current := lookupCtx; current != nil; current = current.Parent() {
+		pkg, ok := current.(*Package)
+		if !ok {
+			continue
+		}
+		for _, imp := range pkg.Imports() {
+			if imp == nil || (!imp.IsAll && !imp.IsRecursive) {
+				continue
+			}
+			ns := strings.TrimSpace(imp.ImportedNamespace)
+			if ns == "" {
+				continue
+			}
+			ns = strings.TrimSuffix(ns, "::**")
+			ns = strings.TrimSuffix(ns, "::*")
+			if ns == "" {
+				continue
+			}
+			scope := m.baseQualifiedLookup(ns, pkg)
+			if scope == nil {
+				continue
+			}
+			scopeQN := scope.QualifiedName()
+			if scopeQN == "" {
+				continue
+			}
+			if elem := m.elementIndex[scopeQN+"::"+trimmed]; elem != nil {
+				return elem
+			}
+		}
+	}
+	return nil
+}
+
+// tryQualifiedLookup tries baseQualifiedLookup then imported scopes.
+func (m *Model) tryQualifiedLookup(candidate string, context Element) Element {
+	if elem := m.baseQualifiedLookup(candidate, context); elem != nil {
+		return elem
+	}
+	return m.tryImportedScopes(candidate, context)
+}
+
 // findElement finds an element by name, considering scope.
 // It first tries qualified name lookup in the model, then searches in parent scopes,
 // and finally falls back to the library registry if available.
 // User definitions in the model always take precedence over library definitions.
 func (m *Model) findElement(name string, context Element) Element {
-	baseQualifiedLookup := func(candidate string, lookupCtx Element) Element {
-		// First try direct qualified name lookup in model (user definitions take precedence)
-		if elem := m.elementIndex[candidate]; elem != nil {
-			return elem
-		}
-
-		// Try relative to context
-		if lookupCtx != nil {
-			// Walk up the parent chain
-			current := lookupCtx.Parent()
-			for current != nil {
-				qn := current.QualifiedName()
-				if qn != "" {
-					fullQN := qn + "::" + candidate
-					if elem := m.elementIndex[fullQN]; elem != nil {
-						return elem
-					}
-				}
-				current = current.Parent()
-			}
-		}
-
-		// Try as simple name in any package
-		for _, pkg := range m.Packages() {
-			fullQN := pkg.Name() + "::" + candidate
-			if elem := m.elementIndex[fullQN]; elem != nil {
-				return elem
-			}
-		}
-		return nil
-	}
-
-	tryImportedScopes := func(candidate string, lookupCtx Element) Element {
-		if lookupCtx == nil {
-			return nil
-		}
-		trimmed := strings.TrimSpace(candidate)
-		if trimmed == "" {
-			return nil
-		}
-		for current := lookupCtx; current != nil; current = current.Parent() {
-			pkg, ok := current.(*Package)
-			if !ok {
-				continue
-			}
-			for _, imp := range pkg.Imports() {
-				if imp == nil || (!imp.IsAll && !imp.IsRecursive) {
-					continue
-				}
-				ns := strings.TrimSpace(imp.ImportedNamespace)
-				if ns == "" {
-					continue
-				}
-				ns = strings.TrimSuffix(ns, "::**")
-				ns = strings.TrimSuffix(ns, "::*")
-				if ns == "" {
-					continue
-				}
-				scope := baseQualifiedLookup(ns, pkg)
-				if scope == nil {
-					continue
-				}
-				scopeQN := scope.QualifiedName()
-				if scopeQN == "" {
-					continue
-				}
-				if elem := m.elementIndex[scopeQN+"::"+trimmed]; elem != nil {
-					return elem
-				}
-			}
-		}
-		return nil
-	}
-
-	tryByQualifiedLookup := func(candidate string) Element {
-		if elem := baseQualifiedLookup(candidate, context); elem != nil {
-			return elem
-		}
-		return tryImportedScopes(candidate, context)
-	}
-
-	if elem := tryByQualifiedLookup(name); elem != nil {
+	if elem := m.tryQualifiedLookup(name, context); elem != nil {
 		return elem
 	}
 
 	// Support dotted feature-chain notation by mapping dots to namespace separators.
 	// Example: vehicle1.engine1 -> vehicle1::engine1
 	if strings.Contains(name, ".") {
-		if elem := tryByQualifiedLookup(strings.ReplaceAll(name, ".", "::")); elem != nil {
+		if elem := m.tryQualifiedLookup(strings.ReplaceAll(name, ".", "::"), context); elem != nil {
 			return elem
 		}
 	}

@@ -23,6 +23,10 @@ type childAdder interface {
 	AddChild(child Element)
 }
 
+type documentationSetter interface {
+	SetDocumentation(string)
+}
+
 // locationFromContext extracts a Location from an ANTLR context.
 // This helper eliminates repetitive location extraction code in Enter* methods.
 func locationFromContext(ctx interface {
@@ -48,8 +52,27 @@ type ParseResult struct {
 	ParseError *ParseError // Any errors that occurred (nil if successful)
 	Tree       antlr.Tree  // The raw parse tree (for advanced use)
 	Source     string      // Source file path or identifier
-	Hash       string      // SHA-256 hash of original input content
+	Hash       string      // SHA-256 hash of original input content (computed lazily via ContentHash)
 	Rewrites   []string    // Compatibility rewrites applied before parsing
+	rawInput   string      // stored for lazy hash computation
+}
+
+// ContentHash returns the SHA-256 hash of the original input content,
+// computing it on first access.
+func (r *ParseResult) ContentHash() string {
+	if r == nil {
+		return ""
+	}
+	if r.Hash == "" && r.rawInput != "" {
+		r.Hash = hashInput(r.rawInput)
+		r.rawInput = "" // release reference to allow GC
+	}
+	return r.Hash
+}
+
+// Success reports whether the parse completed without errors.
+func (r *ParseResult) Success() bool {
+	return r != nil && (r.ParseError == nil || !r.ParseError.HasErrors())
 }
 
 // Err returns nil on successful parse, otherwise the parse error.
@@ -117,6 +140,17 @@ func lineNumberAtOffset(input string, offset int) int {
 	return strings.Count(input[:offset], "\n")
 }
 
+func stripCommentDelimiters(raw string) string {
+	s := strings.TrimSpace(raw)
+	if strings.HasPrefix(s, "/*") && strings.HasSuffix(s, "*/") && len(s) >= 4 {
+		s = s[2 : len(s)-2]
+	}
+	if strings.HasPrefix(s, "//") {
+		s = s[2:]
+	}
+	return strings.TrimSpace(s)
+}
+
 func parseBindings(bindingsText string) map[string]string {
 	result := make(map[string]string)
 	for _, part := range strings.Split(bindingsText, ",") {
@@ -162,38 +196,48 @@ func normalizeUnsupportedRequirementSyntax(input string) (string, *parseRewriteH
 
 	// Gap 16 compatibility: lambda parameters written as "{in ref a { ... }}"
 	// are normalized to "{in a { ... }}" for current grammar support.
-	after := inRefLambdaPattern.ReplaceAllString(normalized, `{in $1 {`)
-	if after != normalized {
-		applied = append(applied, "gap16_in_ref_lambda")
-		normalized = after
+	if strings.Contains(normalized, "in ref") {
+		after := inRefLambdaPattern.ReplaceAllString(normalized, `{in $1 {`)
+		if after != normalized {
+			applied = append(applied, "gap16_in_ref_lambda")
+			normalized = after
+		}
 	}
 
 	// Gap 19/20 compatibility: allow reserved keywords as declared names
 	// in forms seen in standard library models.
-	after = attributeKeywordNamePattern.ReplaceAllString(normalized, `attribute '$1' :`)
-	if after != normalized {
-		applied = append(applied, "gap19_keyword_attribute_name")
-		normalized = after
+	if strings.Contains(normalized, "attribute") {
+		after := attributeKeywordNamePattern.ReplaceAllString(normalized, `attribute '$1' :`)
+		if after != normalized {
+			applied = append(applied, "gap19_keyword_attribute_name")
+			normalized = after
+		}
+		after = attributeShortNameKeywordPattern.ReplaceAllString(normalized, `attribute <'$1'>`)
+		if after != normalized {
+			applied = append(applied, "gap19_keyword_shortname")
+			normalized = after
+		}
 	}
-	after = aliasKeywordNamePattern.ReplaceAllString(normalized, `alias '$1' for`)
-	if after != normalized {
-		applied = append(applied, "gap20_keyword_alias_name")
-		normalized = after
+	if strings.Contains(normalized, "alias") {
+		after := aliasKeywordNamePattern.ReplaceAllString(normalized, `alias '$1' for`)
+		if after != normalized {
+			applied = append(applied, "gap20_keyword_alias_name")
+			normalized = after
+		}
 	}
-	after = attributeShortNameKeywordPattern.ReplaceAllString(normalized, `attribute <'$1'>`)
-	if after != normalized {
-		applied = append(applied, "gap19_keyword_shortname")
-		normalized = after
+	if strings.Contains(normalized, "ref var") {
+		after := refVarNamePattern.ReplaceAllString(normalized, `ref 'var'$1`)
+		if after != normalized {
+			applied = append(applied, "gap20_keyword_ref_var")
+			normalized = after
+		}
 	}
-	after = refVarNamePattern.ReplaceAllString(normalized, `ref 'var'$1`)
-	if after != normalized {
-		applied = append(applied, "gap20_keyword_ref_var")
-		normalized = after
-	}
-	after = assignVarTargetPattern.ReplaceAllString(normalized, `assign 'var'$1`)
-	if after != normalized {
-		applied = append(applied, "gap20_keyword_assign_var")
-		normalized = after
+	if strings.Contains(normalized, "assign var") {
+		after := assignVarTargetPattern.ReplaceAllString(normalized, `assign 'var'$1`)
+		if after != normalized {
+			applied = append(applied, "gap20_keyword_assign_var")
+			normalized = after
+		}
 	}
 
 	// Gap 14 compatibility: "require { expr };" -> "require __gap14_constraint_N;"
@@ -330,8 +374,8 @@ func hashInput(input string) string {
 
 func canceledParseResult(source string, input string, err error) *ParseResult {
 	return &ParseResult{
-		Source: source,
-		Hash:   hashInput(input),
+		Source:   source,
+		rawInput: input,
 		ParseError: &ParseError{
 			Items: []*Error{{
 				Line:    -1,
@@ -355,8 +399,8 @@ func parseWithSourceContext(ctx context.Context, input, source string, opts ...P
 		source = cfg.source
 	}
 	result = &ParseResult{
-		Source: source,
-		Hash:   hashInput(input),
+		Source:   source,
+		rawInput: input,
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -662,6 +706,30 @@ func ParseDir(ctx context.Context, dir string, opts DirOptions) iter.Seq[*ParseR
 	}
 }
 
+// ParseDirectory parses all .sysml/.kerml files in dir sequentially.
+func ParseDirectory(dir string, opts ...ParseOption) ([]*ParseResult, error) {
+	return ParseDirectoryParallel(dir, 1, opts...)
+}
+
+// ParseDirectoryParallel parses all .sysml/.kerml files in dir with the given worker count.
+func ParseDirectoryParallel(dir string, workers int, opts ...ParseOption) ([]*ParseResult, error) {
+	var results []*ParseResult
+	for r := range ParseDir(context.Background(), dir, DirOptions{Workers: workers, ParseOptions: opts}) {
+		results = append(results, r)
+	}
+	return results, nil
+}
+
+// ParseDirectoryStream parses all files in dir and calls fn for each result.
+func ParseDirectoryStream(dir string, fn func(*ParseResult) error, opts ...ParseOption) error {
+	for r := range ParseDir(context.Background(), dir, DirOptions{Workers: 1, ParseOptions: opts}) {
+		if err := fn(r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // buildModel converts the parse tree to a high-level Model.
 // If registry is provided, it will be used for resolving library imports and qualified names.
 func buildModel(tree parser.IEntryRuleRootNamespaceContext, registry *LibraryRegistry, rewriteHints *parseRewriteHints) *Model {
@@ -677,16 +745,15 @@ func buildModel(tree parser.IEntryRuleRootNamespaceContext, registry *LibraryReg
 		packageStack:    make([]*Package, 0, 8),
 		rewriteHints:    rewriteHints,
 	}
-	antlr.ParseTreeWalkerDefault.Walk(builder, tree)
+	antlr.NewIterativeParseTreeWalker().Walk(builder, tree)
 
 	// Set library registry on model for reference resolution
 	if registry != nil {
 		model.SetLibraryRegistry(registry)
 	}
 
-	// Build index and resolve references
-	model.BuildIndex()
-	model.ResolveReferences()
+	// Build index and resolve references in a single walk
+	model.BuildIndexAndResolve()
 
 	return model
 }
@@ -726,6 +793,37 @@ func (b *modelBuilder) addToParent(elem Element) {
 	}
 	if container, ok := parent.(childAdder); ok {
 		container.AddChild(elem)
+	}
+}
+
+func (b *modelBuilder) attachDocumentationToPreviousSibling(parent Element, raw string) {
+	if parent == nil {
+		return
+	}
+	text := stripCommentDelimiters(raw)
+	if text == "" {
+		return
+	}
+	children := parent.Children()
+	for i := len(children) - 1; i >= 0; i-- {
+		prev := children[i]
+		if prev == nil {
+			continue
+		}
+		switch prev.Kind() {
+		case KindDoc, KindComment:
+			continue
+		}
+		setter, ok := prev.(documentationSetter)
+		if !ok {
+			return
+		}
+		if existing := prev.Documentation(); existing != "" {
+			setter.SetDocumentation(existing + "\n\n" + text)
+		} else {
+			setter.SetDocumentation(text)
+		}
+		return
 	}
 }
 
@@ -3508,12 +3606,19 @@ func (b *modelBuilder) EnterDocumentation(ctx *parser.DocumentationContext) {
 	doc := NewDoc(body, loc)
 	doc.Locale = locale
 
-	// Add to current package
-	if b.currentPkg != nil {
-		doc.parent = b.currentPkg
-		b.currentPkg.AddChild(doc)
-		b.model.AddDoc(doc)
+	parent := b.getCurrentParent()
+	if parent != nil {
+		// `doc /* ... */` acts as structured documentation for the preceding member.
+		b.attachDocumentationToPreviousSibling(parent, body)
+		doc.parent = parent
+		b.addToParent(doc)
+		if _, ok := parent.(*Package); ok {
+			b.model.AddDoc(doc)
+		}
+		return
 	}
+
+	b.model.AddDoc(doc)
 }
 
 // EnterFlowDefinition handles flow definition declarations.

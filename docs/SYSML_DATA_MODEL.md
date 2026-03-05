@@ -10,9 +10,15 @@ This document describes the `sysml` package data model as currently implemented 
 - `Location`: source span (`Line`, `Column`, `EndLine`, `EndColumn`)
 - `Element` interface:
   - `Kind()`, `Name()`, `QualifiedName()`, `Location()`
-  - `Parent()`, `Children()`, `SetParent(...)`
+  - `Parent()`, `Children()`
   - `Documentation()`
 - `Definition` and `Usage` marker interfaces
+- semantic helpers:
+  - `Element.Role() ElementRole` (canonical)
+  - `RoleOf(elem) ElementRole` (convenience wrapper)
+  - `IsDefinitionElement(elem)`, `IsUsageElement(elem)`
+  - `Usage.TypeName() string` (canonical)
+  - `UsageTypeName(usage)` convenience wrapper
 - `Ref[T Element]`: typed reference that can be unresolved/resolved
   - `EffectiveName() string` returns resolved element name when available,
     otherwise the unresolved reference name

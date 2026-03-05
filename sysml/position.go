@@ -3,6 +3,16 @@ package sysml
 // ElementAt returns the most specific named element containing a zero-based position.
 // Returns nil when no element spans the given position.
 func ElementAt(model *Model, line, column int) Element {
+	return elementAt(model, line, column, false)
+}
+
+// ElementAtIncludingUnnamed returns the most specific element containing a zero-based position,
+// including unnamed elements such as anonymous usages.
+func ElementAtIncludingUnnamed(model *Model, line, column int) Element {
+	return elementAt(model, line, column, true)
+}
+
+func elementAt(model *Model, line, column int, includeUnnamed bool) Element {
 	if model == nil {
 		return nil
 	}
@@ -12,7 +22,10 @@ func ElementAt(model *Model, line, column int) Element {
 	bestSpan := int(^uint(0) >> 1)
 
 	for elem, depth := range AllWithDepth(model) {
-		if elem == nil || elem.Name() == "" {
+		if elem == nil {
+			continue
+		}
+		if !includeUnnamed && elem.Name() == "" {
 			continue
 		}
 		loc := elem.Location()

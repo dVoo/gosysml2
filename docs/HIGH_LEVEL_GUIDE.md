@@ -63,8 +63,8 @@ fmt.Println(len(parts), len(requirements))
 
 ```go
 for _, p := range sysml.FindAll[*sysml.Part](result.Model) {
-    if !p.IsDefinition && p.TypeRef.IsResolved() {
-        fmt.Printf("%s : %s\n", p.Name(), p.TypeRef.Resolved().Name())
+    if p.Role() == sysml.RoleUsage {
+        fmt.Printf("%s : %s\n", p.Name(), p.TypeName())
     }
 }
 ```
@@ -139,6 +139,17 @@ for r := range sysml.ParseDir(ctx, "./models", opts) {
 - visitor API: `sysml.Visit(model, visitor)`
 - generic walk: `sysml.Walk(model, fn)`
 - iterators and filters: `All`, `OfType[T]`, `OfKind`, `Filter`, `FindAll[T]`
+
+## Semantic Roles and Typed Usages
+
+Prefer the method-based semantic API when tooling needs stable
+definition-vs-usage classification and unresolved/resolved type names:
+
+- `elem.Role() ElementRole`
+- `usage.TypeName() string`
+
+Convenience wrappers (`RoleOf`, `UsageTypeName`, `IsDefinitionElement`,
+`IsUsageElement`) remain available but are not the canonical path.
 
 ## View/Viewpoint Selection APIs
 

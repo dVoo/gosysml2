@@ -144,6 +144,13 @@ func (o *Occurrence) Occurrences() []*Occurrence {
 	return o.occurrences
 }
 
+func (o *Occurrence) Role() ElementRole {
+	if o.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
+
 // IsFork returns false (occurrences are not control nodes).
 func (o *Occurrence) IsFork() bool {
 	return false

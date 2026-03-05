@@ -36,13 +36,18 @@ type Metadata struct {
 
 func (m *Metadata) isDefinition() {}
 func (m *Metadata) isUsage()      {}
+func (m *Metadata) Role() ElementRole {
+	if m.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the metadata type reference for usages.
+func (m *Metadata) TypeName() string { return m.TypeRef.EffectiveName() }
+
 func (m *Metadata) Type() Element {
-	if !m.TypeRef.IsResolved() {
-		return nil
-	}
-	return m.TypeRef.Resolved()
+	return resolvedElementFromRef(m.TypeRef)
 }
 
 // NewMetadata creates a new Metadata element.
@@ -83,13 +88,18 @@ type Rendering struct {
 
 func (r *Rendering) isDefinition() {}
 func (r *Rendering) isUsage()      {}
+func (r *Rendering) Role() ElementRole {
+	if r.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
 
 // Type returns the rendering type reference for usages.
+func (r *Rendering) TypeName() string { return r.TypeRef.EffectiveName() }
+
 func (r *Rendering) Type() Element {
-	if !r.TypeRef.IsResolved() {
-		return nil
-	}
-	return r.TypeRef.Resolved()
+	return resolvedElementFromRef(r.TypeRef)
 }
 
 // NewRendering creates a new Rendering element.
@@ -116,7 +126,8 @@ type Message struct {
 	unresolvedReceiver string
 }
 
-func (m *Message) isUsage() {}
+func (m *Message) isUsage()          {}
+func (m *Message) Role() ElementRole { return RoleUsage }
 
 // Type returns nil because messages are not typed usages.
 func (m *Message) Type() Element {

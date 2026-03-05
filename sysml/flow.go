@@ -74,6 +74,13 @@ func (f *Flow) Accept(v Visitor) bool {
 	return v.VisitFlow(f)
 }
 
+func (f *Flow) Role() ElementRole {
+	if f.IsDefinition {
+		return RoleDefinition
+	}
+	return RoleUsage
+}
+
 // GetName returns the flow end name (always empty).
 func (fe *FlowEnd) GetName() string {
 	return ""
@@ -141,7 +148,8 @@ type SuccessionFlow struct {
 }
 
 // isUsage marks SuccessionFlow as a usage element.
-func (s *SuccessionFlow) isUsage() {}
+func (s *SuccessionFlow) isUsage()          {}
+func (s *SuccessionFlow) Role() ElementRole { return RoleUsage }
 
 // NewSuccessionFlow creates a new SuccessionFlow element.
 func NewSuccessionFlow(name string, loc Location) *SuccessionFlow {

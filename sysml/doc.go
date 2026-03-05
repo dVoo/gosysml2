@@ -138,6 +138,14 @@
 //	// Find by qualified name
 //	elem := sysml.FindByQualifiedName(model, "Vehicle::Engine")
 //
+//	// Semantic classification without reflecting on concrete structs
+//	role := elem.Role()
+//	if role.IsUsage() {
+//	    if usage, ok := elem.(sysml.Usage); ok {
+//	        fmt.Println(usage.TypeName())
+//	    }
+//	}
+//
 // # Visitor Pattern
 //
 // Implement custom visitors for model traversal:
@@ -154,6 +162,21 @@
 //
 //	counter := &PartCounter{}
 //	sysml.Visit(model, counter)
+//
+// Traversal API guidance:
+//   - Prefer iterators (All/OfType/OfKind) for most filtering and collection tasks
+//   - Use Walk when you need depth and early exit
+//   - Use Visit for larger structured processors with per-type methods
+//   - Use WalkAll for callback traversal without early-exit handling
+//
+// # Position Lookup (Editor/LSP)
+//
+// Use ElementAt for named elements and ElementAtIncludingUnnamed when anonymous
+// usages should still be returned (for example, `interface :T` declarations).
+//
+//	elem := sysml.ElementAt(model, line, column)
+//	_ = elem
+//	elem = sysml.ElementAtIncludingUnnamed(model, line, column)
 //
 // # Performance
 //

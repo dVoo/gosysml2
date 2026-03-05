@@ -89,6 +89,8 @@ func (d *Dependency) isDefinition() {}
 // isUsage marks Dependency as a usage element.
 func (d *Dependency) isUsage() {}
 
+func (d *Dependency) Role() ElementRole { return RoleDefinitionAndUsage }
+
 // Type returns nil for dependencies (they don't have type references like usages).
 func (d *Dependency) Type() Element {
 	return nil
