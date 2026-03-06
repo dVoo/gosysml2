@@ -155,15 +155,15 @@ func TestModelAddFlow(t *testing.T) {
 
 	model.AddFlow(flow)
 
-	if len(model.Flows) != 1 {
-		t.Errorf("Expected 1 flow in model, got %d", len(model.Flows))
+	if len(model.Flows()) != 1 {
+		t.Errorf("Expected 1 flow in model, got %d", len(model.Flows()))
 	}
 
 	if len(model.Elements) != 1 {
 		t.Errorf("Expected 1 element in model, got %d", len(model.Elements))
 	}
 
-	if model.Flows[0] != flow {
+	if model.Flows()[0] != flow {
 		t.Error("Flow not added correctly to model")
 	}
 }

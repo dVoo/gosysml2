@@ -53,13 +53,23 @@ func WithLibraryPaths(paths ...string) LibraryOption {
 	}
 }
 
+func defaultLibraryPaths() []string {
+	paths := make([]string, 0, 2)
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		paths = append(paths, filepath.Join(home, "projects", "SysML-v2-Release", "libraries", "sysml.library"))
+	}
+	paths = append(paths, "./libraries/sysml.library")
+	return paths
+}
+
 // NewLibraryRegistry creates a new library registry with optional configuration.
-// Default library path is "./libraries/sysml.library" if not specified.
+// Default library search paths prefer the external SysML-v2-Release checkout and
+// fall back to the historical in-repo "./libraries/sysml.library" location.
 func NewLibraryRegistry(opts ...LibraryOption) *LibraryRegistry {
 	registry := &LibraryRegistry{
 		libraries:    make(map[string]*Model, 10),
 		elementIndex: make(map[string]Element, 100),
-		libraryPaths: []string{"./libraries/sysml.library"},
+		libraryPaths: defaultLibraryPaths(),
 		loaded:       false,
 	}
 

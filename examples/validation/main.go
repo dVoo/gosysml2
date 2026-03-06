@@ -43,8 +43,22 @@ package ValidModel {
 		fmt.Println("   Validation passed!")
 	}
 
-	// Example 2: Invalid SysML input
-	fmt.Println("\n2. Validating invalid SysML input...")
+	// Example 2: Syntax-only validation through the high-level API
+	fmt.Println("\n2. Syntax-only parsing without model build...")
+	fastResult := sysml.ParseString(validInput,
+		sysml.WithoutModelBuild(),
+		sysml.WithDiscardTree(),
+	)
+	if fastResult.Err() != nil {
+		fmt.Printf("   Unexpected syntax errors: %v\n", fastResult.Err())
+	} else {
+		fmt.Println("   Syntax-only parse passed!")
+		fmt.Printf("   Model built: %t\n", fastResult.Model != nil)
+		fmt.Printf("   Parse tree retained: %t\n", fastResult.Tree != nil)
+	}
+
+	// Example 3: Invalid SysML input
+	fmt.Println("\n3. Validating invalid SysML input...")
 	invalidInput := `
 package InvalidModel {
     part def Vehicle {
@@ -73,8 +87,8 @@ package InvalidModel {
 		fmt.Println("   Validation passed!")
 	}
 
-	// Example 3: High-level API with error handling
-	fmt.Println("\n3. High-level API error handling...")
+	// Example 4: High-level API with error handling
+	fmt.Println("\n4. High-level API error handling...")
 
 	// Parse with errors
 	result := sysml.ParseString(invalidInput)
@@ -96,8 +110,8 @@ package InvalidModel {
 		}
 	}
 
-	// Example 4: Valid input with full parsing
-	fmt.Println("\n4. Parsing valid input...")
+	// Example 5: Valid input with full parsing
+	fmt.Println("\n5. Parsing valid input...")
 	result = sysml.ParseString(validInput)
 	if result.Err() == nil {
 		fmt.Println("   Parse successful!")
@@ -107,8 +121,8 @@ package InvalidModel {
 		}
 	}
 
-	// Example 5: File validation
-	fmt.Println("\n5. File validation...")
+	// Example 6: File validation
+	fmt.Println("\n6. File validation...")
 
 	// Create a temporary file with invalid content
 	tmpFile := "/tmp/invalid_test.sysml"
@@ -135,16 +149,16 @@ package Test {
 		}
 	}
 
-	// Example 6: Error formatting
-	fmt.Println("\n6. Error formatting options...")
+	// Example 7: Error formatting
+	fmt.Println("\n7. Error formatting options...")
 	result = sysml.ParseString(invalidInput)
 	if result.Err() != nil {
 		fmt.Println("   Formatted error string:")
 		fmt.Printf("   %s\n", result.ParseError.Error())
 	}
 
-	// Example 7: Checking specific error types
-	fmt.Println("\n7. Error analysis...")
+	// Example 8: Checking specific error types
+	fmt.Println("\n8. Error analysis...")
 	result = sysml.ParseString(invalidInput)
 	if result.Err() != nil {
 		syntaxErrors := 0
@@ -163,8 +177,8 @@ package Test {
 		fmt.Printf("   Other errors: %d\n", otherErrors)
 	}
 
-	// Example 8: Building a validation report
-	fmt.Println("\n8. Validation report...")
+	// Example 9: Building a validation report
+	fmt.Println("\n9. Validation report...")
 	inputs := []struct {
 		name  string
 		input string

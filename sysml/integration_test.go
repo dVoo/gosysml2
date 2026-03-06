@@ -9,22 +9,6 @@ import (
 	"time"
 )
 
-// validationTestdataDir returns the path to validationdata relative to this package.
-func validationTestdataDir(t *testing.T) string {
-	t.Helper()
-	dir := filepath.Join("..", "..", "validationdata")
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		t.Skip("validationdata directory not found")
-	}
-	return dir
-}
-
-// standardLibraryExists checks if the standard library is available.
-func standardLibraryExists() bool {
-	_, err := os.Stat("./libraries/sysml.library")
-	return err == nil
-}
-
 // collectValidationFiles finds all .sysml files in the validationdata directory grouped by category.
 func collectValidationFiles(t *testing.T) map[string][]string {
 	t.Helper()
@@ -144,10 +128,10 @@ func TestIntegrationFullValidation(t *testing.T) {
 				}
 			} else {
 				stat.success = false
-				if result.Errors != nil {
-					stat.errors = len(result.Errors.Errors)
+				stat.errors = len(result.Errors())
+				if result.ParseError != nil && result.ParseError.First() != nil {
+					t.Logf("FAIL: %s - %s", name, result.ParseError.First().Message)
 				}
-				t.Logf("FAIL: %s - %s", name, result.Errors.First().Message)
 				// Don't fail the test - some files may have intentional errors
 			}
 
@@ -582,10 +566,10 @@ func TestIntegrationErrorHandling(t *testing.T) {
 		t.Error("Expected parse to fail for invalid syntax")
 	}
 
-	if result.Errors == nil {
+	if result.ParseError == nil {
 		t.Error("Expected errors to be present")
-	} else {
-		t.Logf("Got expected error: %s", result.Errors.First().Message)
+	} else if result.ParseError.First() != nil {
+		t.Logf("Got expected error: %s", result.ParseError.First().Message)
 	}
 
 	// Model should still be constructed (even with errors)
@@ -600,7 +584,7 @@ func TestIntegrationParseBytes(t *testing.T) {
 	result := ParseBytes(input, "test")
 
 	if !result.Success() {
-		t.Errorf("ParseBytes failed: %v", result.Errors)
+		t.Errorf("ParseBytes failed: %v", result.Err())
 	}
 
 	if result.Model == nil {
@@ -614,7 +598,7 @@ func TestIntegrationParseReader(t *testing.T) {
 	result := ParseReader(input, "test")
 
 	if !result.Success() {
-		t.Errorf("ParseReader failed: %v", result.Errors)
+		t.Errorf("ParseReader failed: %v", result.Err())
 	}
 
 	if result.Model == nil {
@@ -722,7 +706,7 @@ func TestIntegrationParseString(t *testing.T) {
 	result := ParseString(input)
 
 	if !result.Success() {
-		t.Errorf("ParseString failed: %v", result.Errors)
+		t.Errorf("ParseString failed: %v", result.Err())
 	}
 
 	if result.Model == nil {
@@ -765,7 +749,9 @@ func TestIntegrationParseFile(t *testing.T) {
 			t.Logf("  Model has %d top-level elements", len(result.Model.Elements))
 		}
 	} else {
-		t.Logf("ParseFile: %s has errors (may be intentional): %s", filepath.Base(files[0]), result.Errors.First().Message)
+		if result.ParseError != nil && result.ParseError.First() != nil {
+			t.Logf("ParseFile: %s has errors (may be intentional): %s", filepath.Base(files[0]), result.ParseError.First().Message)
+		}
 	}
 }
 
@@ -812,7 +798,7 @@ func TestIntegrationFullPipeline(t *testing.T) {
 	result := ParseString(input)
 
 	if !result.Success() {
-		t.Fatalf("Parse failed: %v", result.Errors)
+		t.Fatalf("Parse failed: %v", result.Err())
 	}
 
 	if result.Model == nil {
@@ -950,9 +936,9 @@ func TestValidationCategories(t *testing.T) {
 	}
 
 	// Check if standard library is available
-	hasLibrary := standardLibraryExists()
+	hasLibrary := standardLibraryExists(t)
 	if !hasLibrary {
-		t.Log("WARNING: Standard library not found at ./libraries/sysml.library - library resolution tests will be limited")
+		t.Log("WARNING: Standard library not found in SysML-v2-Release checkout - library resolution tests will be limited")
 	}
 
 	t.Logf("Found %d validation categories", len(categories))
@@ -1004,7 +990,7 @@ func TestValidationCategories(t *testing.T) {
 
 						// Count library imports if available
 						if hasLibrary {
-							for _, imp := range result.Model.Imports {
+							for _, imp := range result.Model.Imports() {
 								if imp.ResolvedPackage != nil {
 									stats.libraryImports++
 									stats.libraryResolved++
@@ -1017,8 +1003,8 @@ func TestValidationCategories(t *testing.T) {
 				} else {
 					stats.failed++
 					errMsg := "parse error"
-					if result.Errors != nil && len(result.Errors.Errors) > 0 {
-						errMsg = result.Errors.Errors[0].Message
+					if errs := result.Errors(); len(errs) > 0 {
+						errMsg = errs[0].Message
 					}
 					t.Logf("  ✗ %s - %s", filename, errMsg)
 				}
@@ -1070,7 +1056,7 @@ func TestValidationCategories(t *testing.T) {
 
 // TestLibraryImportResolution verifies that library imports are resolved correctly.
 func TestLibraryImportResolution(t *testing.T) {
-	if !standardLibraryExists() {
+	if !standardLibraryExists(t) {
 		t.Skip("Standard library not available - skipping library resolution test")
 	}
 
@@ -1084,7 +1070,7 @@ func TestLibraryImportResolution(t *testing.T) {
 
 	result := ParseString(input, WithStandardLibrary())
 	if !result.Success() {
-		t.Fatalf("Failed to parse test input: %v", result.Errors)
+		t.Fatalf("Failed to parse test input: %v", result.Err())
 	}
 
 	if result.Model == nil {
@@ -1092,7 +1078,7 @@ func TestLibraryImportResolution(t *testing.T) {
 	}
 
 	// Check that imports were resolved
-	for _, imp := range result.Model.Imports {
+	for _, imp := range result.Model.Imports() {
 		resolvedName := ""
 		if imp.ResolvedPackage != nil {
 			resolvedName = imp.ResolvedPackage.Name()
@@ -1106,7 +1092,7 @@ func TestLibraryImportResolution(t *testing.T) {
 
 // TestLibraryElementReferences verifies that qualified name references resolve to library elements.
 func TestLibraryElementReferences(t *testing.T) {
-	if !standardLibraryExists() {
+	if !standardLibraryExists(t) {
 		t.Skip("Standard library not available - skipping library element reference test")
 	}
 
@@ -1121,7 +1107,7 @@ func TestLibraryElementReferences(t *testing.T) {
 
 	result := ParseString(input, WithStandardLibrary())
 	if !result.Success() {
-		t.Fatalf("Failed to parse test input: %v", result.Errors)
+		t.Fatalf("Failed to parse test input: %v", result.Err())
 	}
 
 	if result.Model == nil {
@@ -1141,7 +1127,7 @@ func TestLibraryElementReferences(t *testing.T) {
 
 // TestValidationFileLibraryUsage tests library usage in actual validation files.
 func TestValidationFileLibraryUsage(t *testing.T) {
-	if !standardLibraryExists() {
+	if !standardLibraryExists(t) {
 		t.Skip("Standard library not available - skipping validation file library usage test")
 	}
 
@@ -1192,7 +1178,7 @@ func TestValidationFileLibraryUsage(t *testing.T) {
 
 			// Count library imports
 			libraryImportCount := 0
-			for _, imp := range result.Model.Imports {
+			for _, imp := range result.Model.Imports() {
 				if imp.ResolvedPackage != nil {
 					libraryImportCount++
 				}
@@ -1206,7 +1192,7 @@ func TestValidationFileLibraryUsage(t *testing.T) {
 
 // TestLibraryPerformance measures library loading performance.
 func TestLibraryPerformance(t *testing.T) {
-	if !standardLibraryExists() {
+	if !standardLibraryExists(t) {
 		t.Skip("Standard library not available - skipping performance test")
 	}
 
@@ -1250,7 +1236,7 @@ func TestLibraryPerformance(t *testing.T) {
 
 // TestLibraryErrorHandling tests graceful handling of invalid library imports.
 func TestLibraryErrorHandling(t *testing.T) {
-	if !standardLibraryExists() {
+	if !standardLibraryExists(t) {
 		t.Skip("Standard library not available - skipping error handling test")
 	}
 
@@ -1264,8 +1250,8 @@ func TestLibraryErrorHandling(t *testing.T) {
 
 	// Should complete without panic, even if there are errors
 	t.Logf("Parse completed with success=%v", result.Success())
-	if result.Errors != nil {
-		t.Logf("Errors: %v", result.Errors.Errors)
+	if result.ParseError != nil {
+		t.Logf("Errors: %v", result.ParseError)
 	}
 }
 
@@ -1288,7 +1274,7 @@ func TestElementRetention(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse test input: %v", result.Errors)
+		t.Fatalf("Failed to parse test input: %v", result.Err())
 	}
 
 	if result.Model == nil {
@@ -1296,31 +1282,31 @@ func TestElementRetention(t *testing.T) {
 	}
 
 	// Verify dependencies are captured
-	if len(result.Model.Dependencies) == 0 {
+	if len(result.Model.Dependencies()) == 0 {
 		t.Error("No dependencies captured - element discarding detected!")
 	} else {
-		t.Logf("✓ Captured %d dependencies", len(result.Model.Dependencies))
+		t.Logf("✓ Captured %d dependencies", len(result.Model.Dependencies()))
 	}
 
 	// Verify comments are captured
-	if len(result.Model.Comments) == 0 {
+	if len(result.Model.Comments()) == 0 {
 		t.Error("No comments captured - element discarding detected!")
 	} else {
-		t.Logf("✓ Captured %d comments", len(result.Model.Comments))
+		t.Logf("✓ Captured %d comments", len(result.Model.Comments()))
 	}
 
 	// Verify docs are captured
-	if len(result.Model.Docs) == 0 {
+	if len(result.Model.Docs()) == 0 {
 		t.Error("No documentation captured - element discarding detected!")
 	} else {
-		t.Logf("✓ Captured %d docs", len(result.Model.Docs))
+		t.Logf("✓ Captured %d docs", len(result.Model.Docs()))
 	}
 
 	// Verify flows are captured
-	if len(result.Model.Flows) == 0 {
+	if len(result.Model.Flows()) == 0 {
 		t.Error("No flows captured - element discarding detected!")
 	} else {
-		t.Logf("✓ Captured %d flows", len(result.Model.Flows))
+		t.Logf("✓ Captured %d flows", len(result.Model.Flows()))
 	}
 
 	// Verify elements are also in the general Elements list
@@ -1330,10 +1316,10 @@ func TestElementRetention(t *testing.T) {
 	}
 
 	// Verify packages still work
-	if len(result.Model.Packages) == 0 {
+	if len(result.Model.Packages()) == 0 {
 		t.Error("No packages captured")
 	} else {
-		t.Logf("✓ Captured %d packages", len(result.Model.Packages))
+		t.Logf("✓ Captured %d packages", len(result.Model.Packages()))
 	}
 }
 
@@ -1371,40 +1357,40 @@ func TestNoElementDiscarding(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse test input: %v", result.Errors)
+		t.Fatalf("Failed to parse test input: %v", result.Err())
 	}
 
 	// Check Test1 package
-	test1 := result.Model.Packages[0]
+	test1 := result.Model.Packages()[0]
 	if test1.Name() != "Test1" {
 		t.Error("First package should be Test1")
 	}
 
 	// Check Test2 package
-	test2 := result.Model.Packages[1]
+	test2 := result.Model.Packages()[1]
 	if test2.Name() != "Test2" {
 		t.Error("Second package should be Test2")
 	}
 
 	// Verify total counts
 	t.Logf("Total elements captured:")
-	t.Logf("  - Packages: %d", len(result.Model.Packages))
-	t.Logf("  - Dependencies: %d", len(result.Model.Dependencies))
-	t.Logf("  - Comments: %d", len(result.Model.Comments))
-	t.Logf("  - Docs: %d", len(result.Model.Docs))
-	t.Logf("  - Flows: %d", len(result.Model.Flows))
+	t.Logf("  - Packages: %d", len(result.Model.Packages()))
+	t.Logf("  - Dependencies: %d", len(result.Model.Dependencies()))
+	t.Logf("  - Comments: %d", len(result.Model.Comments()))
+	t.Logf("  - Docs: %d", len(result.Model.Docs()))
+	t.Logf("  - Flows: %d", len(result.Model.Flows()))
 
 	// All P0 elements should be present
-	if len(result.Model.Dependencies) < 2 {
-		t.Errorf("Expected at least 2 dependencies, got %d", len(result.Model.Dependencies))
+	if len(result.Model.Dependencies()) < 2 {
+		t.Errorf("Expected at least 2 dependencies, got %d", len(result.Model.Dependencies()))
 	}
-	if len(result.Model.Comments) < 3 {
-		t.Errorf("Expected at least 3 comments, got %d", len(result.Model.Comments))
+	if len(result.Model.Comments()) < 3 {
+		t.Errorf("Expected at least 3 comments, got %d", len(result.Model.Comments()))
 	}
-	if len(result.Model.Docs) < 3 {
-		t.Errorf("Expected at least 3 docs, got %d", len(result.Model.Docs))
+	if len(result.Model.Docs()) < 3 {
+		t.Errorf("Expected at least 3 docs, got %d", len(result.Model.Docs()))
 	}
-	if len(result.Model.Flows) < 3 {
-		t.Errorf("Expected at least 3 flows, got %d", len(result.Model.Flows))
+	if len(result.Model.Flows()) < 3 {
+		t.Errorf("Expected at least 3 flows, got %d", len(result.Model.Flows()))
 	}
 }

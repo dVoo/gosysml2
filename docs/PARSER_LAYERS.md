@@ -127,7 +127,7 @@ KerML library parsing also supports:
   - `Errors() []*Error`
   - `Tree antlr.Tree` (optional; can be discarded)
   - `Source string`
-  - `Hash string`
+  - `Hash string` (only populated with `sysml.WithContentHash()`)
   - `Rewrites []string`
 - `ParseError` / `Error`: high-level parse error model
 - `Model`: root aggregate with canonical `Elements` + typed accessors
@@ -151,13 +151,16 @@ KerML library parsing also supports:
 ### High-level options
 
 - `sysml.WithDiscardTree()`: keep model, drop parse tree
+- `sysml.WithoutResolution()`: build model, skip index/resolution
+- `sysml.WithoutModelBuild()`: syntax parse only
+- `sysml.WithContentHash()`: compute/store SHA-256 during parse
 - `sysml.WithSource(source)`: source id for in-memory parse
 - `sysml.WithoutCompatibilityRewrites()`: strict parsing without compatibility rewrites
 - `sysml.WithLibraryRegistry(reg)`: use preloaded library resolver
 - `sysml.WithStandardLibrary()`: auto-load standard library
 - `sysml.WithLibraryPath(path)`: custom standard library path
 
-`ParseDir` includes both `.sysml` and `.kerml` files.
+`ParseDir` includes both `.sysml` and `.kerml` files. With `Workers > 1`, result order is not guaranteed.
 
 ### Typical use cases
 

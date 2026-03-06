@@ -2,9 +2,10 @@
 //
 // This example demonstrates:
 // - Parse multiple files concurrently
-// - Use ParseDirectoryParallel
+// - Use ParseDir with sequential and parallel worker settings
 // - Show worker configuration
 // - Aggregate results from multiple files
+// - Highlight unordered results when Workers > 1
 //
 // Run with: go run main.go
 // Note: This example creates temporary files for demonstration
@@ -153,6 +154,7 @@ func main() {
 	parResults := collectParseResults(sysml.ParseDir(context.Background(), tmpDir, sysml.DirOptions{Workers: 0})) // 0 means use NumCPU
 	parDuration := time.Since(start)
 	fmt.Printf("   Parsed %d files in %v\n", len(parResults), parDuration)
+	fmt.Println("   Note: parallel ParseDir does not preserve result order.")
 
 	// Analyze parallel results
 	var parSuccess int
@@ -221,6 +223,14 @@ func main() {
 	fmt.Printf("   Package names: %v\n", packageNames)
 	fmt.Printf("   Total requirements: %d\n", requirementCount)
 	fmt.Printf("   Total parts: %d\n", partCount)
+	fmt.Printf("   Arrival order from parallel parse: ")
+	for i, r := range parResults {
+		if i > 0 {
+			fmt.Print(", ")
+		}
+		fmt.Print(filepath.Base(r.Source))
+	}
+	fmt.Println()
 	fmt.Println("   Element counts by kind:")
 	for kind, count := range totalCounts {
 		if count > 0 {
@@ -263,12 +273,32 @@ func main() {
 	fmt.Printf("   Streamed %d files in %v\n", len(files), streamDuration)
 	fmt.Printf("   Total elements processed: %d\n", elemCount)
 
+	// Demonstrate syntax-only parsing without model build
+	fmt.Println("\n10. Syntax-only parsing (fastest high-level path)...")
+	syntaxOK := 0
+	start = time.Now()
+	for r := range sysml.ParseDir(context.Background(), tmpDir, sysml.DirOptions{
+		Workers: 0,
+		ParseOptions: []sysml.ParseOption{
+			sysml.WithoutModelBuild(),
+			sysml.WithDiscardTree(),
+		},
+	}) {
+		if r.Err() == nil {
+			syntaxOK++
+		}
+	}
+	syntaxDuration := time.Since(start)
+	fmt.Printf("   Syntax-checked %d files in %v\n", syntaxOK, syntaxDuration)
+
 	// Memory optimization note
-	fmt.Println("\n10. Memory optimization options:")
-	fmt.Println("    - Use ParseDir(..., Workers:1) for small repositories (< 100 MB)")
-	fmt.Println("    - Use ParseDir(..., Workers:0) for multi-core machines")
+	fmt.Println("\n11. Performance options:")
+	fmt.Println("    - Use ParseDir(..., Workers:1) when result order matters")
+	fmt.Println("    - Use ParseDir(..., Workers:0) for multi-core throughput")
 	fmt.Println("    - Use ParseDir + range for streaming processing")
-	fmt.Println("    - Use WithDiscardTree() option to reduce memory by ~30%")
+	fmt.Println("    - Use WithoutModelBuild() for syntax-only validation")
+	fmt.Println("    - Use WithoutResolution() when semantic resolution is unnecessary")
+	fmt.Println("    - Use WithDiscardTree() to reduce retained memory")
 
 	fmt.Println("\n=== Example Complete ===")
 }

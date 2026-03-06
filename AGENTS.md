@@ -6,9 +6,11 @@
 - `internal/parser/`: Generated parser artifacts.
 - `cmd/`: Utility CLIs for validation/checking repository data.
 - `examples/`: Runnable usage examples (`basic`, `parallel`, `requirements`, `validation`, `visitor`).
-- `docs/`: User guides, architecture notes, performance notes, and grammar references.
-- `validationdata/`: Corpus used by tests and validation tooling.
-- `libraries/`: Standard library model files used for import resolution.
+- `docs/`: User guides, architecture notes, and performance notes.
+- Additional release assets such as `validationdata/`,
+  `libraries/sysml.library/`, and `docs/bnf/` are maintained in the upstream
+  SysML release repository:
+  - https://github.com/Systems-Modeling/SysML-v2-Release
 
 ## Build, Test, and Development Commands
 - `go build ./...`: Build all packages.
@@ -34,6 +36,7 @@
 - For parser changes, include positive and negative cases (valid parse + diagnostic assertions).
 
 ## Commit & Pull Request Guidelines
+- This project uses jj for version control
 - Keep change descriptions imperative and scoped (seen style: `parser: ...`, `refactor ...`).
 - One logical change per commit/change set.
 - PRs should include:

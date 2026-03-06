@@ -53,7 +53,7 @@ Other useful fields:
 
 - `Model *sysml.Model`
 - `Source string`
-- `Hash string` (SHA-256 of original input)
+- `Hash string` (SHA-256 of original input when `WithContentHash()` is used)
 - `Rewrites []string` (compatibility rewrites applied)
 - `Tree antlr.Tree` (unless discarded with `WithDiscardTree`)
 
@@ -108,14 +108,76 @@ results := slices.Collect(sysml.ParseDir(context.Background(), "./models", opts)
 _ = results
 ```
 
+Notes:
+
+- `Workers: 1` preserves walk order and minimizes memory pressure.
+- `Workers > 1` increases throughput but result order is not preserved.
+
 ## Parse Options
 
 - `WithDiscardTree()`
+- `WithoutResolution()` to skip index build and cross-reference resolution
+- `WithoutModelBuild()` for syntax-only parsing without high-level model construction
+- `WithContentHash()` to compute/store SHA-256 of the input
 - `WithSource(source)` for in-memory parse source labels
 - `WithoutCompatibilityRewrites()` for strict grammar mode
 - `WithStandardLibrary()`
 - `WithLibraryPath(path)`
 - `WithLibraryRegistry(reg)`
+- `WithParseCache(cache)` to reuse an existing cache handle
+- `WithDefaultParseCache()` to create a disposable temp-backed cache lazily
+- `WithParseCacheDir(dir)` to use a caller-managed persistent cache directory
+
+## Parse Cache
+
+The optimized interface for repeated parses is the regular parse API plus an
+explicit cache option. No separate parser type is required.
+
+```go
+cache, err := sysml.NewParseCache(
+    sysml.WithCacheDir(".gosysml2-cache"),
+    sysml.WithCachePersistence(true),
+)
+if err != nil {
+    panic(err)
+}
+defer cache.Close()
+
+result := sysml.ParseFile("model.sysml",
+    sysml.WithParseCache(cache),
+    sysml.WithDiscardTree(),
+)
+if err := result.Err(); err != nil {
+    panic(err)
+}
+```
+
+For repository-scale repeated parses, attach the same cache handle to `ParseDir`:
+
+```go
+opts := sysml.DirOptions{
+    Workers: 0,
+    ParseOptions: []sysml.ParseOption{
+        sysml.WithParseCache(cache),
+        sysml.WithDiscardTree(),
+    },
+}
+
+for r := range sysml.ParseDir(context.Background(), "./models", opts) {
+    if err := r.Err(); err != nil {
+        continue
+    }
+    _ = r.Model
+}
+```
+
+Behavior:
+
+- cache is disabled unless explicitly enabled
+- `ParseFile` and `ParseDir` reuse compatible cached file results automatically
+- `ParseBytes` uses the cache only when `source` is a stable filesystem path
+- cache entries are keyed by source path, content hash, parse mode, grammar version, and library fingerprint
+- `ParseDir` selectively re-resolves changed files and their dependency closure
 
 ## Working with Models
 
@@ -232,5 +294,7 @@ if errs.HasErrors() {
 ## Performance Notes
 
 - Use `WithDiscardTree()` to lower memory usage.
+- Use `WithoutResolution()` when semantic reference resolution is unnecessary.
+- Use `WithoutModelBuild()` for syntax-only parsing.
 - Use `ParseDir` with `Workers: 0` for parallel throughput.
 - Use `ParseDir` with `Workers: 1` and process each result immediately for streaming-like memory behavior.

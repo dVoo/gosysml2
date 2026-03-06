@@ -17,7 +17,7 @@ func TestFindRequirements(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse: %v", result.Errors)
+		t.Fatalf("Failed to parse: %v", result.Err())
 	}
 
 	reqs := FindAll[*Requirement](result.Model)
@@ -54,7 +54,7 @@ func TestFindVerifications(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse: %v", result.Errors)
+		t.Fatalf("Failed to parse: %v", result.Err())
 	}
 
 	vers := FindAll[*Verification](result.Model)
@@ -85,7 +85,7 @@ func TestFindConcerns(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse: %v", result.Errors)
+		t.Fatalf("Failed to parse: %v", result.Err())
 	}
 
 	concerns := FindAll[*Concern](result.Model)
@@ -104,7 +104,7 @@ func TestFindUseCases(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse: %v", result.Errors)
+		t.Fatalf("Failed to parse: %v", result.Err())
 	}
 
 	useCases := FindAll[*UseCase](result.Model)
@@ -123,7 +123,7 @@ func TestFindAnalysisCases(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse: %v", result.Errors)
+		t.Fatalf("Failed to parse: %v", result.Err())
 	}
 
 	analyses := FindAll[*AnalysisCase](result.Model)
@@ -144,7 +144,7 @@ func TestCounterWithVerification(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse: %v", result.Errors)
+		t.Fatalf("Failed to parse: %v", result.Err())
 	}
 
 	counter := NewCounter()
@@ -180,7 +180,7 @@ func TestWalkWithDepth(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse: %v", result.Errors)
+		t.Fatalf("Failed to parse: %v", result.Err())
 	}
 
 	depths := make(map[string]int)
@@ -211,7 +211,7 @@ func TestFilter(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse: %v", result.Errors)
+		t.Fatalf("Failed to parse: %v", result.Err())
 	}
 
 	parts := Filter(result.Model, func(elem Element) bool {
@@ -234,7 +234,7 @@ func TestFindByKindWithRequirements(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse: %v", result.Errors)
+		t.Fatalf("Failed to parse: %v", result.Err())
 	}
 
 	parts := FindByKind(result.Model, KindPart)
@@ -258,7 +258,7 @@ func TestFindByName(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse: %v", result.Errors)
+		t.Fatalf("Failed to parse: %v", result.Err())
 	}
 
 	vehicles := FindByName(result.Model, "Vehicle")
@@ -277,7 +277,7 @@ func TestRequirementIsDefinition(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse: %v", result.Errors)
+		t.Fatalf("Failed to parse: %v", result.Err())
 	}
 
 	reqs := FindAll[*Requirement](result.Model)
@@ -314,7 +314,7 @@ func TestQualifiedName(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse: %v", result.Errors)
+		t.Fatalf("Failed to parse: %v", result.Err())
 	}
 
 	// Find by qualified name
@@ -343,7 +343,7 @@ func TestTypedChildAccessors(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse: %v", result.Errors)
+		t.Fatalf("Failed to parse: %v", result.Err())
 	}
 
 	pkg := result.Model.FindPackage("TestPackage")
@@ -373,7 +373,7 @@ func TestDefinitionUsageInterface(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse: %v", result.Errors)
+		t.Fatalf("Failed to parse: %v", result.Err())
 	}
 
 	// Note: In Go's structural typing, both Part definitions and usages

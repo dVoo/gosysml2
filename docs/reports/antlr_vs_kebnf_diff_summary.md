@@ -1,9 +1,12 @@
 # ANTLR vs KEBNF Audit Summary
 
+Note: the referenced KEBNF sources are maintained in the upstream SysML release
+repository: https://github.com/Systems-Modeling/SysML-v2-Release
+
 This summarizes the structural diff between:
 
-- `docs/bnf/SysML-textual-bnf.kebnf`
-- `docs/bnf/KerML-textual-bnf.kebnf`
+- SysML textual KEBNF from the SysML-v2-Release project
+- KerML textual KEBNF from the SysML-v2-Release project
 - ANTLR-generated grammar artifacts:
   - `internal/parser/sysmlv2_parser.go`
   - `internal/parser/sysmlv2_lexer.go`

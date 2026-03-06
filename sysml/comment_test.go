@@ -211,15 +211,15 @@ func TestModelAddComment(t *testing.T) {
 
 	model.AddComment(comment)
 
-	if len(model.Comments) != 1 {
-		t.Errorf("Expected 1 comment in model, got %d", len(model.Comments))
+	if len(model.Comments()) != 1 {
+		t.Errorf("Expected 1 comment in model, got %d", len(model.Comments()))
 	}
 
 	if len(model.Elements) < 1 {
 		t.Errorf("Expected at least 1 element in model, got %d", len(model.Elements))
 	}
 
-	if model.Comments[0] != comment {
+	if model.Comments()[0] != comment {
 		t.Error("Comment not added correctly to model")
 	}
 }
@@ -230,15 +230,15 @@ func TestModelAddDoc(t *testing.T) {
 
 	model.AddDoc(doc)
 
-	if len(model.Docs) != 1 {
-		t.Errorf("Expected 1 doc in model, got %d", len(model.Docs))
+	if len(model.Docs()) != 1 {
+		t.Errorf("Expected 1 doc in model, got %d", len(model.Docs()))
 	}
 
 	if len(model.Elements) < 1 {
 		t.Errorf("Expected at least 1 element in model, got %d", len(model.Elements))
 	}
 
-	if model.Docs[0] != doc {
+	if model.Docs()[0] != doc {
 		t.Error("Doc not added correctly to model")
 	}
 }

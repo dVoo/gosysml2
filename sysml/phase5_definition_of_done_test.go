@@ -5,12 +5,13 @@ import "testing"
 func mustParsePhase5File(t *testing.T, path string) *Model {
 	t.Helper()
 
-	result := ParseFile(path)
+	resolvedPath := externalTestPath(t, path)
+	result := ParseFile(resolvedPath)
 	if !result.Success() {
-		t.Fatalf("parse failed for %s: %v", path, result.Errors)
+		t.Fatalf("parse failed for %s: %v", resolvedPath, result.Err())
 	}
 	if result.Model == nil {
-		t.Fatalf("model is nil for %s", path)
+		t.Fatalf("model is nil for %s", resolvedPath)
 	}
 	return result.Model
 }

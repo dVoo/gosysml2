@@ -17,7 +17,7 @@ package TestPackage {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse: %v", result.Errors)
+		t.Fatalf("Failed to parse: %v", result.Err())
 	}
 
 	model := result.Model
@@ -98,7 +98,7 @@ package TestPackage {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse: %v", result.Errors)
+		t.Fatalf("Failed to parse: %v", result.Err())
 	}
 
 	model := result.Model
@@ -150,7 +150,7 @@ package ChildPackage {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse: %v", result.Errors)
+		t.Fatalf("Failed to parse: %v", result.Err())
 	}
 
 	model := result.Model
@@ -184,6 +184,135 @@ package ChildPackage {
 	}
 }
 
+// TestRedefinitionNameDerivation verifies that usage members declared with :>>
+// and no explicit Identification get their name derived from the redefinition
+// target, so QualifiedName does not end with a trailing "::".
+func TestRedefinitionNameDerivation(t *testing.T) {
+	input := `
+package BugRepro {
+    part def Base { part x; }
+    part def Child :> Base {
+        part :>> x : Base;
+    }
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("Failed to parse: %v", result.Err())
+	}
+
+	parts := FindAll[*Part](result.Model)
+
+	var child *Part
+	for _, p := range parts {
+		if p.Name() == "Child" {
+			child = p
+		}
+	}
+	if child == nil {
+		t.Fatal("Child part not found")
+	}
+
+	childParts := child.Parts()
+	if len(childParts) != 1 {
+		t.Fatalf("Expected 1 nested part in Child, got %d", len(childParts))
+	}
+
+	nested := childParts[0]
+	if nested.Name() != "x" {
+		t.Errorf("Expected nested part name %q, got %q", "x", nested.Name())
+	}
+
+	want := "BugRepro::Child::x"
+	if got := nested.QualifiedName(); got != want {
+		t.Errorf("QualifiedName: want %q, got %q", want, got)
+	}
+}
+
+// TestRedefinitionNameDerivationItem verifies that item :>> foo inside a part def
+// derives its name from the redefinition target.
+func TestRedefinitionNameDerivationItem(t *testing.T) {
+	// item :>> x inside a part def is parsed as itemUsage with empty identification;
+	// the element name should be derived from the redefinition target.
+	input := `
+package BugRepro {
+    part def Child {
+        item :>> x : Base;
+    }
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("Failed to parse: %v", result.Err())
+	}
+
+	items := FindAll[*Item](result.Model)
+
+	var usage *Item
+	for _, i := range items {
+		if !i.IsDefinition {
+			usage = i
+		}
+	}
+	if usage == nil {
+		t.Fatal("item usage not found")
+	}
+
+	if usage.Name() != "x" {
+		t.Errorf("Expected item name %q, got %q", "x", usage.Name())
+	}
+}
+
+// TestRedefinitionNameDerivationAttributeWithName verifies that attribute foo :>> bar
+// (with explicit name) correctly records the redefinition target and QN.
+// Note: `attribute :>> x` without an explicit name is parsed by the ANTLR grammar
+// as a defaultReferenceUsage (keyword "attribute" as element name), so the name
+// derivation path in EnterAttributeUsage applies to other unnamed attribute usages.
+func TestRedefinitionNameDerivationAttributeWithName(t *testing.T) {
+	input := `
+package BugRepro {
+    part def Base {
+        attribute x = 0;
+    }
+    part def Child :> Base {
+        attribute y :>> x = 1;
+    }
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("Failed to parse: %v", result.Err())
+	}
+
+	parts := FindAll[*Part](result.Model)
+
+	var child *Part
+	for _, p := range parts {
+		if p.Name() == "Child" {
+			child = p
+			break
+		}
+	}
+	if child == nil {
+		t.Fatal("Child part not found")
+	}
+
+	attrs := child.Attributes()
+	if len(attrs) != 1 {
+		t.Fatalf("Expected 1 attribute in Child, got %d", len(attrs))
+	}
+
+	nested := attrs[0]
+	if nested.Name() != "y" {
+		t.Errorf("Expected attribute name %q, got %q", "y", nested.Name())
+	}
+
+	want := "BugRepro::Child::y"
+	if got := nested.QualifiedName(); got != want {
+		t.Errorf("QualifiedName: want %q, got %q", want, got)
+	}
+}
+
 // TestSpecializationUniqueness verifies that each part maintains its own
 // specialization reference independently.
 func TestSpecializationUniqueness(t *testing.T) {
@@ -198,7 +327,7 @@ package TestPackage {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Failed to parse: %v", result.Errors)
+		t.Fatalf("Failed to parse: %v", result.Err())
 	}
 
 	model := result.Model

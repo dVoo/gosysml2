@@ -37,7 +37,7 @@ func TestKerMLModelExtraction(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %v", result.Errors)
+		t.Fatalf("parse failed: %v", result.Err())
 	}
 	if result.Model == nil {
 		t.Fatal("expected model")

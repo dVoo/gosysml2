@@ -93,7 +93,7 @@ func TestConjugatedPortExists(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Parsing failed: %v", result.Errors)
+		t.Fatalf("Parsing failed: %v", result.Err())
 	}
 
 	// Find ports
@@ -136,7 +136,7 @@ func TestConjugatedPortOriginalRef(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Parsing failed: %v", result.Errors)
+		t.Fatalf("Parsing failed: %v", result.Err())
 	}
 
 	// Build index and resolve references
@@ -171,7 +171,7 @@ func TestConjugatedPortVisitor(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Parsing failed: %v", result.Errors)
+		t.Fatalf("Parsing failed: %v", result.Err())
 	}
 
 	// Test Counter visitor
@@ -191,7 +191,7 @@ func TestFindConjugatedPorts(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Parsing failed: %v", result.Errors)
+		t.Fatalf("Parsing failed: %v", result.Err())
 	}
 
 	conjugatedPorts := FindAll[*ConjugatedPort](result.Model)
@@ -218,7 +218,7 @@ func TestParsePortConjugation(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Parsing failed: %v", result.Errors)
+		t.Fatalf("Parsing failed: %v", result.Err())
 	}
 
 	// Find the port definition
@@ -256,7 +256,7 @@ func TestConjugatedPortOnlyForDefinitions(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Parsing failed: %v", result.Errors)
+		t.Fatalf("Parsing failed: %v", result.Err())
 	}
 
 	ports := FindAll[*Port](result.Model)
@@ -296,7 +296,7 @@ func TestMultipleConjugatedPorts(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Parsing failed: %v", result.Errors)
+		t.Fatalf("Parsing failed: %v", result.Err())
 	}
 
 	conjugatedPorts := FindAll[*ConjugatedPort](result.Model)
@@ -334,7 +334,7 @@ func TestConjugatedPortBaseVisitor(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Parsing failed: %v", result.Errors)
+		t.Fatalf("Parsing failed: %v", result.Err())
 	}
 
 	// Test that BaseVisitor handles ConjugatedPort without panic

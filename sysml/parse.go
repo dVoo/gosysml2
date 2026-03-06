@@ -1,6 +1,7 @@
 package sysml
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"unsafe"
 
 	"github.com/antlr4-go/antlr/v4"
 	"github.com/dVoo/gosysml2/internal/parser"
@@ -52,20 +54,14 @@ type ParseResult struct {
 	ParseError *ParseError // Any errors that occurred (nil if successful)
 	Tree       antlr.Tree  // The raw parse tree (for advanced use)
 	Source     string      // Source file path or identifier
-	Hash       string      // SHA-256 hash of original input content (computed lazily via ContentHash)
+	Hash       string      // SHA-256 hash of original input content when requested
 	Rewrites   []string    // Compatibility rewrites applied before parsing
-	rawInput   string      // stored for lazy hash computation
 }
 
-// ContentHash returns the SHA-256 hash of the original input content,
-// computing it on first access.
+// ContentHash returns the SHA-256 hash captured during parsing.
 func (r *ParseResult) ContentHash() string {
 	if r == nil {
 		return ""
-	}
-	if r.Hash == "" && r.rawInput != "" {
-		r.Hash = hashInput(r.rawInput)
-		r.rawInput = "" // release reference to allow GC
 	}
 	return r.Hash
 }
@@ -96,11 +92,23 @@ type ParseOption func(*parseConfig)
 
 type parseConfig struct {
 	discardTree       bool
+	buildModel        bool
+	resolveModel      bool
+	captureHash       bool
 	libraryRegistry   *LibraryRegistry
 	autoLoadLibraries bool
 	libraryPath       string
 	source            string
 	disableRewrites   bool
+	cache             *ParseCache
+	cacheErr          error
+}
+
+func defaultParseConfig() *parseConfig {
+	return &parseConfig{
+		buildModel:   true,
+		resolveModel: true,
+	}
 }
 
 type parseRewriteHints struct {
@@ -304,6 +312,28 @@ func WithDiscardTree() ParseOption {
 	}
 }
 
+// WithoutModelBuild skips high-level model construction and returns syntax results only.
+func WithoutModelBuild() ParseOption {
+	return func(c *parseConfig) {
+		c.buildModel = false
+		c.resolveModel = false
+	}
+}
+
+// WithoutResolution builds the model but skips indexing and reference resolution.
+func WithoutResolution() ParseOption {
+	return func(c *parseConfig) {
+		c.resolveModel = false
+	}
+}
+
+// WithContentHash computes and stores the input hash during parsing.
+func WithContentHash() ParseOption {
+	return func(c *parseConfig) {
+		c.captureHash = true
+	}
+}
+
 // WithLibraryRegistry uses an existing library registry for resolving imports.
 // The registry should already be loaded with the standard libraries.
 func WithLibraryRegistry(reg *LibraryRegistry) ParseOption {
@@ -313,7 +343,8 @@ func WithLibraryRegistry(reg *LibraryRegistry) ParseOption {
 }
 
 // WithStandardLibrary auto-loads the standard SysML library before parsing.
-// The library will be loaded from the default path (./libraries/sysml.library).
+// The default search paths prefer ~/projects/SysML-v2-Release/libraries/sysml.library
+// and fall back to the historical in-repo ./libraries/sysml.library location.
 func WithStandardLibrary() ParseOption {
 	return func(c *parseConfig) {
 		c.autoLoadLibraries = true
@@ -372,10 +403,31 @@ func hashInput(input string) string {
 	return fmt.Sprintf("%x", sum)
 }
 
+func hashBytes(input []byte) string {
+	sum := sha256.Sum256(input)
+	return fmt.Sprintf("%x", sum)
+}
+
+func bytesToString(input []byte) string {
+	if len(input) == 0 {
+		return ""
+	}
+	return unsafe.String(unsafe.SliceData(input), len(input))
+}
+
+func needsCompatibilityRewrite(input []byte) bool {
+	return bytes.Contains(input, []byte("in ref")) ||
+		bytes.Contains(input, []byte("require {")) ||
+		bytes.Contains(input, []byte("requirement")) ||
+		bytes.Contains(input, []byte("attribute")) ||
+		bytes.Contains(input, []byte("alias")) ||
+		bytes.Contains(input, []byte("ref var")) ||
+		bytes.Contains(input, []byte("assign var"))
+}
+
 func canceledParseResult(source string, input string, err error) *ParseResult {
 	return &ParseResult{
-		Source:   source,
-		rawInput: input,
+		Source: source,
 		ParseError: &ParseError{
 			Items: []*Error{{
 				Line:    -1,
@@ -391,16 +443,18 @@ func canceledParseResult(source string, input string, err error) *ParseResult {
 
 // parseWithSourceContext parses SysML input with source and cancellation support.
 func parseWithSourceContext(ctx context.Context, input, source string, opts ...ParseOption) (result *ParseResult) {
-	cfg := &parseConfig{}
+	cfg := defaultParseConfig()
 	for _, opt := range opts {
 		opt(cfg)
+	}
+	if cfg.cacheErr != nil {
+		return canceledParseResult(source, input, cfg.cacheErr)
 	}
 	if cfg.source != "" {
 		source = cfg.source
 	}
 	result = &ParseResult{
-		Source:   source,
-		rawInput: input,
+		Source: source,
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -442,11 +496,15 @@ func parseWithSourceContext(ctx context.Context, input, source string, opts ...P
 	}
 
 	// Use low-level parser
-	parseOpts := make([]low.ParseOption, 0, 1)
+	parseOpts := make([]low.ParseOption, 0, 3)
+	parseOpts = append(parseOpts, low.WithContext(ctx))
 	if strings.EqualFold(filepath.Ext(source), ".kerml") {
 		parseOpts = append(parseOpts, low.WithSyntaxMode(low.SyntaxModeKerML))
 	} else {
 		parseOpts = append(parseOpts, low.WithSyntaxMode(low.SyntaxModeSysML))
+	}
+	if !cfg.buildModel {
+		parseOpts = append(parseOpts, low.WithParseTree(false))
 	}
 	tree, lowErrors := low.Parse(normalizedInput, parseOpts...)
 	if err := ctx.Err(); err != nil {
@@ -463,8 +521,11 @@ func parseWithSourceContext(ctx context.Context, input, source string, opts ...P
 	}
 
 	// Build model from parse tree
-	if tree != nil {
-		result.Model = buildModel(tree, registry, rewriteHints)
+	if cfg.buildModel && tree != nil {
+		result.Model = buildModelWithOptions(tree, registry, rewriteHints, cfg.resolveModel)
+	}
+	if cfg.captureHash {
+		result.Hash = hashInput(input)
 	}
 
 	return result
@@ -473,6 +534,87 @@ func parseWithSourceContext(ctx context.Context, input, source string, opts ...P
 // parseWithSource parses SysML input with a specified source identifier.
 func parseWithSource(input, source string, opts ...ParseOption) *ParseResult {
 	return parseWithSourceContext(context.Background(), input, source, opts...)
+}
+
+func parseBytesWithSourceContext(ctx context.Context, input []byte, source string, opts ...ParseOption) (result *ParseResult) {
+	cfg := defaultParseConfig()
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	if cfg.cacheErr != nil {
+		return canceledParseResult(source, "", cfg.cacheErr)
+	}
+	if cfg.source != "" {
+		source = cfg.source
+	}
+	result = &ParseResult{Source: source}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return canceledParseResult(source, "", err)
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			result.Model = nil
+			result.Tree = nil
+			result.ParseError = &ParseError{
+				Items: []*Error{{
+					Line:    -1,
+					Column:  -1,
+					Message: fmt.Sprintf("parser panic: %v", r),
+					Context: "panic",
+				}},
+				Source: source,
+			}
+		}
+	}()
+
+	registry := getOrCreateRegistry(cfg)
+	rewriteHints := newParseRewriteHints()
+	parseOpts := make([]low.ParseOption, 0, 3)
+	parseOpts = append(parseOpts, low.WithContext(ctx))
+	if strings.EqualFold(filepath.Ext(source), ".kerml") {
+		parseOpts = append(parseOpts, low.WithSyntaxMode(low.SyntaxModeKerML))
+	} else {
+		parseOpts = append(parseOpts, low.WithSyntaxMode(low.SyntaxModeSysML))
+	}
+	if !cfg.buildModel {
+		parseOpts = append(parseOpts, low.WithParseTree(false))
+	}
+
+	var (
+		tree      parser.IEntryRuleRootNamespaceContext
+		lowErrors *low.ParseErrors
+	)
+
+	switch {
+	case strings.EqualFold(filepath.Ext(source), ".kerml"), cfg.disableRewrites, !needsCompatibilityRewrite(input):
+		tree, lowErrors = low.ParseBytes(input, parseOpts...)
+	default:
+		normalizedInput, hints, rewrites := normalizeUnsupportedRequirementSyntax(bytesToString(input))
+		rewriteHints = hints
+		result.Rewrites = rewrites
+		tree, lowErrors = low.Parse(normalizedInput, parseOpts...)
+	}
+	if err := ctx.Err(); err != nil {
+		return canceledParseResult(source, "", err)
+	}
+
+	if !cfg.discardTree {
+		result.Tree = tree
+	}
+	if lowErrors.HasErrors() {
+		result.ParseError = convertFromLowLevel(lowErrors, source)
+	}
+	if cfg.buildModel && tree != nil {
+		result.Model = buildModelWithOptions(tree, registry, rewriteHints, cfg.resolveModel)
+	}
+	if cfg.captureHash {
+		result.Hash = hashBytes(input)
+	}
+	return result
 }
 
 // ParseString parses a SysML string and returns a high-level model.
@@ -512,18 +654,42 @@ func ParseFileContext(ctx context.Context, filename string, opts ...ParseOption)
 			Source: filename,
 		}
 	}
-	return parseWithSourceContext(ctx, string(content), filename, opts...)
+	cfg := defaultParseConfig()
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	if cfg.cacheErr != nil {
+		return canceledParseResult(filename, "", cfg.cacheErr)
+	}
+	if cfg.cache != nil {
+		if sourcePath, ok := parseCacheEligibleSource(filename); ok {
+			return parseBytesWithCache(ctx, cfg, content, filename, sourcePath, opts...)
+		}
+	}
+	return parseBytesWithSourceContext(ctx, content, filename, opts...)
 }
 
 // ParseBytes parses SysML from a byte slice.
 // This is more efficient than ParseString when you already have []byte.
 func ParseBytes(input []byte, source string, opts ...ParseOption) *ParseResult {
-	return parseWithSource(string(input), source, opts...)
+	return parseBytesWithSourceContext(context.Background(), input, source, opts...)
 }
 
 // ParseBytesContext parses SysML bytes with cancellation support.
 func ParseBytesContext(ctx context.Context, input []byte, source string, opts ...ParseOption) *ParseResult {
-	return parseWithSourceContext(ctx, string(input), source, opts...)
+	cfg := defaultParseConfig()
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	if cfg.cacheErr != nil {
+		return canceledParseResult(source, "", cfg.cacheErr)
+	}
+	if cfg.cache != nil {
+		if sourcePath, ok := parseCacheEligibleSource(source); ok {
+			return parseBytesWithCache(ctx, cfg, input, source, sourcePath, opts...)
+		}
+	}
+	return parseBytesWithSourceContext(ctx, input, source, opts...)
 }
 
 // ParseReader parses SysML from an io.Reader.
@@ -554,7 +720,7 @@ func ParseReaderContext(ctx context.Context, r io.Reader, source string, opts ..
 			Source: source,
 		}
 	}
-	return parseWithSourceContext(ctx, string(content), source, opts...)
+	return parseBytesWithSourceContext(ctx, content, source, opts...)
 }
 
 func modelOrParseError(result *ParseResult, source string) (*Model, error) {
@@ -598,23 +764,46 @@ type DirOptions struct {
 	ParseOptions []ParseOption
 }
 
-func collectModelFiles(dir string) ([]string, error) {
-	var files []string
+func walkErrorResult(source string, err error) *ParseResult {
+	return &ParseResult{
+		Source: source,
+		ParseError: &ParseError{
+			Items: []*Error{{
+				Line:    -1,
+				Column:  -1,
+				Message: err.Error(),
+				Context: "walk",
+			}},
+			Source: source,
+		},
+	}
+}
+
+func walkModelFiles(ctx context.Context, dir string, fn func(string) bool) error {
+	errStop := fmt.Errorf("stop walk")
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("walking %s: %w", path, err)
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 		ext := strings.ToLower(filepath.Ext(path))
 		if d.IsDir() || (ext != ".sysml" && ext != ".kerml") {
 			return nil
 		}
-		files = append(files, path)
+		if !fn(path) {
+			return errStop
+		}
 		return nil
 	})
-	if err != nil {
-		return nil, fmt.Errorf("walking directory %s: %w", dir, err)
+	if err == errStop || err == context.Canceled {
+		return nil
 	}
-	return files, nil
+	if err != nil {
+		return fmt.Errorf("walking directory %s: %w", dir, err)
+	}
+	return nil
 }
 
 // ParseDir parses all .sysml and .kerml files and streams ParseResult values.
@@ -627,20 +816,30 @@ func ParseDir(ctx context.Context, dir string, opts DirOptions) iter.Seq[*ParseR
 			_ = yield(canceledParseResult(dir, "", err))
 			return
 		}
-		files, err := collectModelFiles(dir)
-		if err != nil {
-			_ = yield(&ParseResult{
-				Source: dir,
-				ParseError: &ParseError{
-					Items: []*Error{{
-						Line:    -1,
-						Column:  -1,
-						Message: err.Error(),
-						Context: "walk",
-					}},
-					Source: dir,
-				},
-			})
+
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		cfg := defaultParseConfig()
+		for _, opt := range opts.ParseOptions {
+			opt(cfg)
+		}
+		if cfg.cacheErr != nil {
+			_ = yield(canceledParseResult(dir, "", cfg.cacheErr))
+			return
+		}
+		if cfg.cache != nil {
+			results, err := parseDirWithCache(ctx, dir, cfg, opts.ParseOptions)
+			if err != nil {
+				_ = yield(walkErrorResult(dir, err))
+				return
+			}
+			for _, res := range results {
+				if !yield(res) {
+					cancel()
+					return
+				}
+			}
 			return
 		}
 
@@ -649,59 +848,65 @@ func ParseDir(ctx context.Context, dir string, opts DirOptions) iter.Seq[*ParseR
 			workers = runtime.NumCPU()
 		}
 		if workers <= 1 {
-			for _, file := range files {
-				if err := ctx.Err(); err != nil {
-					_ = yield(canceledParseResult(file, "", err))
-					return
+			err := walkModelFiles(ctx, dir, func(path string) bool {
+				if !yield(ParseFileContext(ctx, path, opts.ParseOptions...)) {
+					cancel()
+					return false
 				}
-				if !yield(ParseFileContext(ctx, file, opts.ParseOptions...)) {
-					return
-				}
+				return true
+			})
+			if err != nil && ctx.Err() == nil {
+				_ = yield(walkErrorResult(dir, err))
 			}
 			return
 		}
 
-		type indexedResult struct {
-			idx int
-			res *ParseResult
-		}
-		resultsCh := make(chan indexedResult, workers)
-		sem := make(chan struct{}, workers)
+		jobs := make(chan string, workers*2)
+		resultsCh := make(chan *ParseResult, workers*2)
+		walkErrCh := make(chan error, 1)
 		var wg sync.WaitGroup
 
-		for i, file := range files {
-			if ctx.Err() != nil {
-				break
-			}
+		for i := 0; i < workers; i++ {
 			wg.Add(1)
-			sem <- struct{}{}
-			go func(idx int, path string) {
+			go func() {
 				defer wg.Done()
-				defer func() { <-sem }()
-				resultsCh <- indexedResult{idx: idx, res: ParseFileContext(ctx, path, opts.ParseOptions...)}
-			}(i, file)
+				for path := range jobs {
+					select {
+					case <-ctx.Done():
+						return
+					case resultsCh <- ParseFileContext(ctx, path, opts.ParseOptions...):
+					}
+				}
+			}()
 		}
+
+		go func() {
+			walkErrCh <- walkModelFiles(ctx, dir, func(path string) bool {
+				select {
+				case <-ctx.Done():
+					return false
+				case jobs <- path:
+					return true
+				}
+			})
+			close(jobs)
+		}()
 
 		go func() {
 			wg.Wait()
 			close(resultsCh)
 		}()
 
-		ordered := make(map[int]*ParseResult)
-		next := 0
-		for item := range resultsCh {
-			ordered[item.idx] = item.res
-			for {
-				res, ok := ordered[next]
-				if !ok {
-					break
+		for res := range resultsCh {
+			if !yield(res) {
+				cancel()
+				for range resultsCh {
 				}
-				delete(ordered, next)
-				if !yield(res) {
-					return
-				}
-				next++
+				return
 			}
+		}
+		if err := <-walkErrCh; err != nil && ctx.Err() == nil {
+			_ = yield(walkErrorResult(dir, err))
 		}
 	}
 }
@@ -733,6 +938,10 @@ func ParseDirectoryStream(dir string, fn func(*ParseResult) error, opts ...Parse
 // buildModel converts the parse tree to a high-level Model.
 // If registry is provided, it will be used for resolving library imports and qualified names.
 func buildModel(tree parser.IEntryRuleRootNamespaceContext, registry *LibraryRegistry, rewriteHints *parseRewriteHints) *Model {
+	return buildModelWithOptions(tree, registry, rewriteHints, true)
+}
+
+func buildModelWithOptions(tree parser.IEntryRuleRootNamespaceContext, registry *LibraryRegistry, rewriteHints *parseRewriteHints, resolve bool) *Model {
 	if tree == nil {
 		return nil
 	}
@@ -752,8 +961,10 @@ func buildModel(tree parser.IEntryRuleRootNamespaceContext, registry *LibraryReg
 		model.SetLibraryRegistry(registry)
 	}
 
-	// Build index and resolve references in a single walk
-	model.BuildIndexAndResolve()
+	if resolve {
+		// Build index and resolve references in a single walk
+		model.BuildIndexAndResolve()
+	}
 
 	return model
 }
@@ -1194,6 +1405,7 @@ func (b *modelBuilder) EnterPartUsage(ctx *parser.PartUsageContext) {
 	name := ""
 	typeRef := ""
 	multiplicity := ""
+	redefinedRefs := make([]string, 0)
 
 	if ctx.Usage() != nil && ctx.Usage().UsageDeclaration() != nil {
 		usageDecl := ctx.Usage().UsageDeclaration()
@@ -1204,6 +1416,11 @@ func (b *modelBuilder) EnterPartUsage(ctx *parser.PartUsageContext) {
 		if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
 			typeRef = extractTypeReference(featSpecPart)
 			multiplicity = extractMultiplicity(featSpecPart)
+			redefinedRefs = extractRedefinitionNames(featSpecPart)
+		}
+		// For `part :>> foo`, the element inherits its name from the redefinition target.
+		if name == "" && len(redefinedRefs) > 0 {
+			name = lastPathComponent(redefinedRefs[0])
 		}
 	}
 
@@ -1294,6 +1511,13 @@ func (b *modelBuilder) EnterItemDefinition(ctx *parser.ItemDefinitionContext) {
 	}
 
 	b.addToParent(item)
+	b.elementStack = append(b.elementStack, item)
+}
+
+func (b *modelBuilder) ExitItemDefinition(ctx *parser.ItemDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
 }
 
 func (b *modelBuilder) EnterItemUsage(ctx *parser.ItemUsageContext) {
@@ -1310,6 +1534,10 @@ func (b *modelBuilder) EnterItemUsage(ctx *parser.ItemUsageContext) {
 			typeRef = extractTypeReference(featSpecPart)
 			subsettedRefs = extractSubsettedFeatureNames(featSpecPart)
 			redefinedRefs = extractRedefinitionNames(featSpecPart)
+		}
+		// For `item :>> foo`, the element inherits its name from the redefinition target.
+		if name == "" && len(redefinedRefs) > 0 {
+			name = lastPathComponent(redefinedRefs[0])
 		}
 	}
 
@@ -1333,9 +1561,14 @@ func (b *modelBuilder) EnterItemUsage(ctx *parser.ItemUsageContext) {
 		item.AddUnresolvedRedefinedFeature(ref)
 	}
 
-	if b.currentPkg != nil {
-		item.parent = b.currentPkg
-		b.currentPkg.AddChild(item)
+	item.parent = b.getCurrentParent()
+	b.addToParent(item)
+	b.elementStack = append(b.elementStack, item)
+}
+
+func (b *modelBuilder) ExitItemUsage(ctx *parser.ItemUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
@@ -1652,6 +1885,11 @@ func (b *modelBuilder) EnterRequirementUsage(ctx *parser.RequirementUsageContext
 			}
 			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
 				typeRef = extractTypeReference(featSpecPart)
+				if name == "" {
+					if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+						name = lastPathComponent(refs[0])
+					}
+				}
 			}
 		}
 	}
@@ -1722,6 +1960,11 @@ func (b *modelBuilder) EnterVerificationCaseUsage(ctx *parser.VerificationCaseUs
 		}
 		if featSpecPart := decl.UsageDeclaration().FeatureSpecializationPart(); featSpecPart != nil {
 			typeRef = extractTypeReference(featSpecPart)
+			if name == "" {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 
@@ -1770,6 +2013,11 @@ func (b *modelBuilder) EnterConcernUsage(ctx *parser.ConcernUsageContext) {
 		}
 		if featSpecPart := decl.FeatureSpecializationPart(); featSpecPart != nil {
 			typeRef = extractTypeReference(featSpecPart)
+			if name == "" {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 
@@ -1809,18 +2057,30 @@ func (b *modelBuilder) EnterUseCaseDefinition(ctx *parser.UseCaseDefinitionConte
 	}
 
 	useCase := NewUseCase(name, loc, true)
+	useCase.parent = b.getCurrentParent()
+	b.addToParent(useCase)
+	b.elementStack = append(b.elementStack, useCase)
+}
 
-	if b.currentPkg != nil {
-		useCase.parent = b.currentPkg
-		b.currentPkg.AddChild(useCase)
+func (b *modelBuilder) ExitUseCaseDefinition(ctx *parser.UseCaseDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
 func (b *modelBuilder) EnterUseCaseUsage(ctx *parser.UseCaseUsageContext) {
 	name := ""
 	if ctx.ConstraintUsageDeclaration() != nil && ctx.ConstraintUsageDeclaration().UsageDeclaration() != nil {
-		if ident := ctx.ConstraintUsageDeclaration().UsageDeclaration().Identification(); ident != nil {
+		usageDecl := ctx.ConstraintUsageDeclaration().UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		if name == "" {
+			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 
@@ -1830,10 +2090,14 @@ func (b *modelBuilder) EnterUseCaseUsage(ctx *parser.UseCaseUsageContext) {
 	}
 
 	useCase := NewUseCase(name, loc, false)
+	useCase.parent = b.getCurrentParent()
+	b.addToParent(useCase)
+	b.elementStack = append(b.elementStack, useCase)
+}
 
-	if b.currentPkg != nil {
-		useCase.parent = b.currentPkg
-		b.currentPkg.AddChild(useCase)
+func (b *modelBuilder) ExitUseCaseUsage(ctx *parser.UseCaseUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
@@ -1874,6 +2138,11 @@ func (b *modelBuilder) EnterViewUsage(ctx *parser.ViewUsageContext) {
 		}
 		if featSpecPart := decl.FeatureSpecializationPart(); featSpecPart != nil {
 			typeRef = extractTypeReference(featSpecPart)
+			if name == "" {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 
@@ -1933,6 +2202,11 @@ func (b *modelBuilder) EnterViewpointUsage(ctx *parser.ViewpointUsageContext) {
 		}
 		if featSpecPart := decl.FeatureSpecializationPart(); featSpecPart != nil {
 			typeRef = extractTypeReference(featSpecPart)
+			if name == "" {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 
@@ -1994,18 +2268,30 @@ func (b *modelBuilder) EnterAnalysisCaseDefinition(ctx *parser.AnalysisCaseDefin
 	}
 
 	analysis := NewAnalysisCase(name, loc, true)
+	analysis.parent = b.getCurrentParent()
+	b.addToParent(analysis)
+	b.elementStack = append(b.elementStack, analysis)
+}
 
-	if b.currentPkg != nil {
-		analysis.parent = b.currentPkg
-		b.currentPkg.AddChild(analysis)
+func (b *modelBuilder) ExitAnalysisCaseDefinition(ctx *parser.AnalysisCaseDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
 func (b *modelBuilder) EnterAnalysisCaseUsage(ctx *parser.AnalysisCaseUsageContext) {
 	name := ""
-	if ctx.ConstraintUsageDeclaration() != nil {
-		if ident := ctx.ConstraintUsageDeclaration().UsageDeclaration().Identification(); ident != nil {
+	if ctx.ConstraintUsageDeclaration() != nil && ctx.ConstraintUsageDeclaration().UsageDeclaration() != nil {
+		usageDecl := ctx.ConstraintUsageDeclaration().UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		if name == "" {
+			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 
@@ -2015,10 +2301,14 @@ func (b *modelBuilder) EnterAnalysisCaseUsage(ctx *parser.AnalysisCaseUsageConte
 	}
 
 	analysis := NewAnalysisCase(name, loc, false)
+	analysis.parent = b.getCurrentParent()
+	b.addToParent(analysis)
+	b.elementStack = append(b.elementStack, analysis)
+}
 
-	if b.currentPkg != nil {
-		analysis.parent = b.currentPkg
-		b.currentPkg.AddChild(analysis)
+func (b *modelBuilder) ExitAnalysisCaseUsage(ctx *parser.AnalysisCaseUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
@@ -2036,11 +2326,8 @@ func (b *modelBuilder) EnterCaseDefinition(ctx *parser.CaseDefinitionContext) {
 	}
 
 	c := NewCase(name, loc, true)
-
-	if b.currentPkg != nil {
-		c.parent = b.currentPkg
-		b.currentPkg.AddChild(c)
-	}
+	c.parent = b.getCurrentParent()
+	b.addToParent(c)
 
 	// Push onto element stack for nested elements (subject, actor, objective)
 	b.elementStack = append(b.elementStack, c)
@@ -2054,9 +2341,17 @@ func (b *modelBuilder) ExitCaseDefinition(ctx *parser.CaseDefinitionContext) {
 
 func (b *modelBuilder) EnterCaseUsage(ctx *parser.CaseUsageContext) {
 	name := ""
-	if ctx.ConstraintUsageDeclaration() != nil {
-		if ident := ctx.ConstraintUsageDeclaration().UsageDeclaration().Identification(); ident != nil {
+	if ctx.ConstraintUsageDeclaration() != nil && ctx.ConstraintUsageDeclaration().UsageDeclaration() != nil {
+		usageDecl := ctx.ConstraintUsageDeclaration().UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		if name == "" {
+			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 
@@ -2066,11 +2361,8 @@ func (b *modelBuilder) EnterCaseUsage(ctx *parser.CaseUsageContext) {
 	}
 
 	c := NewCase(name, loc, false)
-
-	if b.currentPkg != nil {
-		c.parent = b.currentPkg
-		b.currentPkg.AddChild(c)
-	}
+	c.parent = b.getCurrentParent()
+	b.addToParent(c)
 
 	// Push onto element stack for nested elements (subject, actor, objective)
 	b.elementStack = append(b.elementStack, c)
@@ -2143,38 +2435,9 @@ func (b *modelBuilder) EnterAttributeDefinition(ctx *parser.AttributeDefinitionC
 
 	attr := NewAttribute(name, loc, true)
 
-	// Add to current parent (checks element stack first, then package)
-	if len(b.elementStack) > 0 {
-		// We're inside another element (Package, Part, Requirement, Verification, etc.)
-		parent := b.elementStack[len(b.elementStack)-1]
-		attr.parent = parent
-		switch p := parent.(type) {
-		case *Package:
-			p.AddChild(attr)
-		case *Part:
-			p.AddChild(attr)
-		case *Requirement:
-			p.AddChild(attr)
-		case *Verification:
-			p.AddChild(attr)
-		case *Item:
-			p.AddChild(attr)
-		case *Action:
-			p.AddChild(attr)
-		case *State:
-			p.AddChild(attr)
-		case *Interface:
-			p.AddChild(attr)
-		case *Constraint:
-			p.AddChild(attr)
-		default:
-			// Parent type doesn't support attributes
-		}
-	} else if b.currentPkg != nil {
-		// We're at package level (shouldn't happen if package pushed to stack)
-		attr.parent = b.currentPkg
-		b.currentPkg.AddChild(attr)
-	}
+	// Add to current parent
+	attr.parent = b.getCurrentParent()
+	b.addToParent(attr)
 }
 
 func (b *modelBuilder) EnterAttributeUsage(ctx *parser.AttributeUsageContext) {
@@ -2192,13 +2455,9 @@ func (b *modelBuilder) EnterAttributeUsage(ctx *parser.AttributeUsageContext) {
 			subsettedRefs = extractSubsettedFeatureNames(featSpecPart)
 			redefinedRefs = extractRedefinitionNames(featSpecPart)
 		}
-		// If no name from identification, check for redefinition
-		if name == "" {
-			if len(redefinedRefs) > 0 {
-				name = redefinedRefs[0]
-			} else if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
-				name = extractRedefinitionName(featSpecPart)
-			}
+		// For `attribute :>> foo`, the element inherits its name from the redefinition target.
+		if name == "" && len(redefinedRefs) > 0 {
+			name = lastPathComponent(redefinedRefs[0])
 		}
 	}
 
@@ -2234,53 +2493,8 @@ func (b *modelBuilder) EnterAttributeUsage(ctx *parser.AttributeUsageContext) {
 	}
 
 	// Add to current parent (checks element stack first, then package)
-	parent := b.getCurrentParent()
-	if parent != nil {
-		attr.parent = parent
-		// Type assert to call the appropriate AddChild method
-		// Note: nil checks needed because getCurrentParent() can return typed nil
-		switch p := parent.(type) {
-		case *Package:
-			if p != nil {
-				p.AddChild(attr)
-			}
-		case *Part:
-			if p != nil {
-				p.AddChild(attr)
-			}
-		case *Requirement:
-			if p != nil {
-				p.AddChild(attr)
-			}
-		case *Verification:
-			if p != nil {
-				p.AddChild(attr)
-			}
-		case *Item:
-			if p != nil {
-				p.AddChild(attr)
-			}
-		case *Action:
-			if p != nil {
-				p.AddChild(attr)
-			}
-		case *State:
-			if p != nil {
-				p.AddChild(attr)
-			}
-		case *Interface:
-			if p != nil {
-				p.AddChild(attr)
-			}
-		case *Constraint:
-			if p != nil {
-				p.AddChild(attr)
-			}
-		default:
-			// For types without specific AddChild, just set parent
-			// The baseElement will track it in children
-		}
-	}
+	attr.parent = b.getCurrentParent()
+	b.addToParent(attr)
 }
 
 func (b *modelBuilder) EnterPortDefinition(ctx *parser.PortDefinitionContext) {
@@ -2302,28 +2516,9 @@ func (b *modelBuilder) EnterPortDefinition(ctx *parser.PortDefinitionContext) {
 
 	port := NewPort(name, loc, true)
 
-	// Add to current parent (checks element stack first, then package)
-	if len(b.elementStack) > 0 {
-		// We're inside another element (Package, Part, Port, etc.)
-		parent := b.elementStack[len(b.elementStack)-1]
-		port.parent = parent
-		switch p := parent.(type) {
-		case *Package:
-			p.AddChild(port)
-		case *Part:
-			p.AddChild(port)
-		case *Port:
-			p.AddChild(port)
-		case *Interface:
-			p.AddChild(port)
-		default:
-			// Parent type doesn't support ports
-		}
-	} else if b.currentPkg != nil {
-		// We're at package level (shouldn't happen if package pushed to stack)
-		port.parent = b.currentPkg
-		b.currentPkg.AddChild(port)
-	}
+	// Add to current parent
+	port.parent = b.getCurrentParent()
+	b.addToParent(port)
 
 	// Per SysML spec: PortDefinition always contains a ConjugatedPortDefinition
 	// with effective name "~" + original port name
@@ -2347,8 +2542,16 @@ func (b *modelBuilder) ExitPortDefinition(ctx *parser.PortDefinitionContext) {
 func (b *modelBuilder) EnterPortUsage(ctx *parser.PortUsageContext) {
 	name := ""
 	if ctx.Usage() != nil && ctx.Usage().UsageDeclaration() != nil {
-		if ident := ctx.Usage().UsageDeclaration().Identification(); ident != nil {
+		usageDecl := ctx.Usage().UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		if name == "" {
+			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 
@@ -2363,32 +2566,9 @@ func (b *modelBuilder) EnterPortUsage(ctx *parser.PortUsageContext) {
 
 	port := NewPort(name, loc, false)
 
-	// Add to current parent (checks element stack first, then package)
-	parent := b.getCurrentParent()
-	if parent != nil {
-		port.parent = parent
-		// Note: nil checks needed because getCurrentParent() can return typed nil
-		switch p := parent.(type) {
-		case *Package:
-			if p != nil {
-				p.AddChild(port)
-			}
-		case *Part:
-			if p != nil {
-				p.AddChild(port)
-			}
-		case *Port:
-			if p != nil {
-				p.AddChild(port)
-			}
-		case *Interface:
-			if p != nil {
-				p.AddChild(port)
-			}
-		default:
-			// For types without specific AddChild support for ports
-		}
-	}
+	// Add to current parent
+	port.parent = b.getCurrentParent()
+	b.addToParent(port)
 
 	// Push port onto stack for nested elements (ports can have nested ports)
 	b.elementStack = append(b.elementStack, port)
@@ -2418,18 +2598,30 @@ func (b *modelBuilder) EnterConnectionDefinition(ctx *parser.ConnectionDefinitio
 	}
 
 	conn := NewConnection(name, loc, true)
+	conn.parent = b.getCurrentParent()
+	b.addToParent(conn)
+	b.elementStack = append(b.elementStack, conn)
+}
 
-	if b.currentPkg != nil {
-		conn.parent = b.currentPkg
-		b.currentPkg.AddChild(conn)
+func (b *modelBuilder) ExitConnectionDefinition(ctx *parser.ConnectionDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
 func (b *modelBuilder) EnterConnectionUsage(ctx *parser.ConnectionUsageContext) {
 	name := ""
 	if ctx.UsageDeclaration() != nil {
-		if ident := ctx.UsageDeclaration().Identification(); ident != nil {
+		usageDecl := ctx.UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		if name == "" {
+			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 
@@ -2443,10 +2635,14 @@ func (b *modelBuilder) EnterConnectionUsage(ctx *parser.ConnectionUsageContext) 
 	}
 
 	conn := NewConnection(name, loc, false)
+	conn.parent = b.getCurrentParent()
+	b.addToParent(conn)
+	b.elementStack = append(b.elementStack, conn)
+}
 
-	if b.currentPkg != nil {
-		conn.parent = b.currentPkg
-		b.currentPkg.AddChild(conn)
+func (b *modelBuilder) ExitConnectionUsage(ctx *parser.ConnectionUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
@@ -2468,35 +2664,47 @@ func (b *modelBuilder) EnterInterfaceDefinition(ctx *parser.InterfaceDefinitionC
 	}
 
 	iface := NewInterface(name, loc, true)
+	iface.parent = b.getCurrentParent()
+	b.addToParent(iface)
+	b.elementStack = append(b.elementStack, iface)
+}
 
-	if b.currentPkg != nil {
-		iface.parent = b.currentPkg
-		b.currentPkg.AddChild(iface)
+func (b *modelBuilder) ExitInterfaceDefinition(ctx *parser.InterfaceDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
 func (b *modelBuilder) EnterInterfaceUsage(ctx *parser.InterfaceUsageContext) {
 	name := ""
+	typeRef := ""
 	if ctx.InterfaceUsageDeclaration() != nil && ctx.InterfaceUsageDeclaration().UsageDeclaration() != nil {
-		if ident := ctx.InterfaceUsageDeclaration().UsageDeclaration().Identification(); ident != nil {
+		usageDecl := ctx.InterfaceUsageDeclaration().UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+			typeRef = extractTypeReference(featSpecPart)
+			if name == "" {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 
-	loc := Location{
-		Line:   ctx.GetStart().GetLine() - 1,
-		Column: ctx.GetStart().GetColumn(),
+	iface := NewInterface(name, locationFromContext(ctx), false)
+	iface.parent = b.getCurrentParent()
+	if typeRef != "" {
+		iface.TypeRef = NewRef[*Interface](typeRef)
 	}
-	if ctx.GetStop() != nil {
-		loc.EndLine = ctx.GetStop().GetLine() - 1
-		loc.EndColumn = ctx.GetStop().GetColumn()
-	}
+	b.addToParent(iface)
+	b.elementStack = append(b.elementStack, iface)
+}
 
-	iface := NewInterface(name, loc, false)
-
-	if b.currentPkg != nil {
-		iface.parent = b.currentPkg
-		b.currentPkg.AddChild(iface)
+func (b *modelBuilder) ExitInterfaceUsage(ctx *parser.InterfaceUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
@@ -2518,18 +2726,23 @@ func (b *modelBuilder) EnterAllocationDefinition(ctx *parser.AllocationDefinitio
 	}
 
 	alloc := NewAllocation(name, loc, true)
-
-	if b.currentPkg != nil {
-		alloc.parent = b.currentPkg
-		b.currentPkg.AddChild(alloc)
-	}
+	alloc.parent = b.getCurrentParent()
+	b.addToParent(alloc)
 }
 
 func (b *modelBuilder) EnterAllocationUsage(ctx *parser.AllocationUsageContext) {
 	name := ""
 	if ctx.AllocationUsageDeclaration() != nil && ctx.AllocationUsageDeclaration().UsageDeclaration() != nil {
-		if ident := ctx.AllocationUsageDeclaration().UsageDeclaration().Identification(); ident != nil {
+		usageDecl := ctx.AllocationUsageDeclaration().UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		if name == "" {
+			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 
@@ -2543,11 +2756,8 @@ func (b *modelBuilder) EnterAllocationUsage(ctx *parser.AllocationUsageContext) 
 	}
 
 	alloc := NewAllocation(name, loc, false)
-
-	if b.currentPkg != nil {
-		alloc.parent = b.currentPkg
-		b.currentPkg.AddChild(alloc)
-	}
+	alloc.parent = b.getCurrentParent()
+	b.addToParent(alloc)
 }
 
 func (b *modelBuilder) EnterStateDefinition(ctx *parser.StateDefinitionContext) {
@@ -2568,18 +2778,30 @@ func (b *modelBuilder) EnterStateDefinition(ctx *parser.StateDefinitionContext) 
 	}
 
 	state := NewState(name, loc, true)
+	state.parent = b.getCurrentParent()
+	b.addToParent(state)
+	b.elementStack = append(b.elementStack, state)
+}
 
-	if b.currentPkg != nil {
-		state.parent = b.currentPkg
-		b.currentPkg.AddChild(state)
+func (b *modelBuilder) ExitStateDefinition(ctx *parser.StateDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
 func (b *modelBuilder) EnterStateUsage(ctx *parser.StateUsageContext) {
 	name := ""
 	if ctx.ActionUsageDeclaration() != nil && ctx.ActionUsageDeclaration().UsageDeclaration() != nil {
-		if ident := ctx.ActionUsageDeclaration().UsageDeclaration().Identification(); ident != nil {
+		usageDecl := ctx.ActionUsageDeclaration().UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		if name == "" {
+			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 
@@ -2593,10 +2815,14 @@ func (b *modelBuilder) EnterStateUsage(ctx *parser.StateUsageContext) {
 	}
 
 	state := NewState(name, loc, false)
+	state.parent = b.getCurrentParent()
+	b.addToParent(state)
+	b.elementStack = append(b.elementStack, state)
+}
 
-	if b.currentPkg != nil {
-		state.parent = b.currentPkg
-		b.currentPkg.AddChild(state)
+func (b *modelBuilder) ExitStateUsage(ctx *parser.StateUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
@@ -2642,10 +2868,8 @@ func (b *modelBuilder) EnterTransitionUsage(ctx *parser.TransitionUsageContext) 
 		transition.TriggerExpr = ctx.TriggerActionMember().GetText()
 	}
 
-	if b.currentPkg != nil {
-		transition.parent = b.currentPkg
-		b.currentPkg.AddChild(transition)
-	}
+	transition.parent = b.getCurrentParent()
+	b.addToParent(transition)
 }
 
 func (b *modelBuilder) EnterActionDefinition(ctx *parser.ActionDefinitionContext) {
@@ -2666,18 +2890,30 @@ func (b *modelBuilder) EnterActionDefinition(ctx *parser.ActionDefinitionContext
 	}
 
 	action := NewAction(name, loc, true)
+	action.parent = b.getCurrentParent()
+	b.addToParent(action)
+	b.elementStack = append(b.elementStack, action)
+}
 
-	if b.currentPkg != nil {
-		action.parent = b.currentPkg
-		b.currentPkg.AddChild(action)
+func (b *modelBuilder) ExitActionDefinition(ctx *parser.ActionDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
 func (b *modelBuilder) EnterActionUsage(ctx *parser.ActionUsageContext) {
 	name := ""
 	if ctx.ActionUsageDeclaration() != nil && ctx.ActionUsageDeclaration().UsageDeclaration() != nil {
-		if ident := ctx.ActionUsageDeclaration().UsageDeclaration().Identification(); ident != nil {
+		usageDecl := ctx.ActionUsageDeclaration().UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		if name == "" {
+			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 
@@ -2691,10 +2927,14 @@ func (b *modelBuilder) EnterActionUsage(ctx *parser.ActionUsageContext) {
 	}
 
 	action := NewAction(name, loc, false)
+	action.parent = b.getCurrentParent()
+	b.addToParent(action)
+	b.elementStack = append(b.elementStack, action)
+}
 
-	if b.currentPkg != nil {
-		action.parent = b.currentPkg
-		b.currentPkg.AddChild(action)
+func (b *modelBuilder) ExitActionUsage(ctx *parser.ActionUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
@@ -2716,18 +2956,30 @@ func (b *modelBuilder) EnterCalculationDefinition(ctx *parser.CalculationDefinit
 	}
 
 	calc := NewCalculation(name, loc, true)
+	calc.parent = b.getCurrentParent()
+	b.addToParent(calc)
+	b.elementStack = append(b.elementStack, calc)
+}
 
-	if b.currentPkg != nil {
-		calc.parent = b.currentPkg
-		b.currentPkg.AddChild(calc)
+func (b *modelBuilder) ExitCalculationDefinition(ctx *parser.CalculationDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
 func (b *modelBuilder) EnterCalculationUsage(ctx *parser.CalculationUsageContext) {
 	name := ""
 	if ctx.ActionUsageDeclaration() != nil && ctx.ActionUsageDeclaration().UsageDeclaration() != nil {
-		if ident := ctx.ActionUsageDeclaration().UsageDeclaration().Identification(); ident != nil {
+		usageDecl := ctx.ActionUsageDeclaration().UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		if name == "" {
+			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 
@@ -2741,10 +2993,14 @@ func (b *modelBuilder) EnterCalculationUsage(ctx *parser.CalculationUsageContext
 	}
 
 	calc := NewCalculation(name, loc, false)
+	calc.parent = b.getCurrentParent()
+	b.addToParent(calc)
+	b.elementStack = append(b.elementStack, calc)
+}
 
-	if b.currentPkg != nil {
-		calc.parent = b.currentPkg
-		b.currentPkg.AddChild(calc)
+func (b *modelBuilder) ExitCalculationUsage(ctx *parser.CalculationUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
@@ -2766,18 +3022,30 @@ func (b *modelBuilder) EnterConstraintDefinition(ctx *parser.ConstraintDefinitio
 	}
 
 	constraint := NewConstraint(name, loc, true)
+	constraint.parent = b.getCurrentParent()
+	b.addToParent(constraint)
+	b.elementStack = append(b.elementStack, constraint)
+}
 
-	if b.currentPkg != nil {
-		constraint.parent = b.currentPkg
-		b.currentPkg.AddChild(constraint)
+func (b *modelBuilder) ExitConstraintDefinition(ctx *parser.ConstraintDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
 func (b *modelBuilder) EnterConstraintUsage(ctx *parser.ConstraintUsageContext) {
 	name := ""
 	if ctx.ConstraintUsageDeclaration() != nil && ctx.ConstraintUsageDeclaration().UsageDeclaration() != nil {
-		if ident := ctx.ConstraintUsageDeclaration().UsageDeclaration().Identification(); ident != nil {
+		usageDecl := ctx.ConstraintUsageDeclaration().UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		if name == "" {
+			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 
@@ -2791,18 +3059,30 @@ func (b *modelBuilder) EnterConstraintUsage(ctx *parser.ConstraintUsageContext) 
 	}
 
 	constraint := NewConstraint(name, loc, false)
+	constraint.parent = b.getCurrentParent()
+	b.addToParent(constraint)
+	b.elementStack = append(b.elementStack, constraint)
+}
 
-	if b.currentPkg != nil {
-		constraint.parent = b.currentPkg
-		b.currentPkg.AddChild(constraint)
+func (b *modelBuilder) ExitConstraintUsage(ctx *parser.ConstraintUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
 func (b *modelBuilder) EnterAssertConstraintUsage(ctx *parser.AssertConstraintUsageContext) {
 	name := ""
 	if ctx.ConstraintUsageDeclaration() != nil && ctx.ConstraintUsageDeclaration().UsageDeclaration() != nil {
-		if ident := ctx.ConstraintUsageDeclaration().UsageDeclaration().Identification(); ident != nil {
+		usageDecl := ctx.ConstraintUsageDeclaration().UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		if name == "" {
+			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 
@@ -2816,12 +3096,8 @@ func (b *modelBuilder) EnterAssertConstraintUsage(ctx *parser.AssertConstraintUs
 	}
 
 	constraint := NewConstraint(name, loc, false)
-	// Assert constraints could have a flag or be distinguished somehow
-
-	if b.currentPkg != nil {
-		constraint.parent = b.currentPkg
-		b.currentPkg.AddChild(constraint)
-	}
+	constraint.parent = b.getCurrentParent()
+	b.addToParent(constraint)
 }
 
 func (b *modelBuilder) EnterEnumerationDefinition(ctx *parser.EnumerationDefinitionContext) {
@@ -2842,10 +3118,14 @@ func (b *modelBuilder) EnterEnumerationDefinition(ctx *parser.EnumerationDefinit
 	}
 
 	enum := NewEnumeration(name, loc, true)
+	enum.parent = b.getCurrentParent()
+	b.addToParent(enum)
+	b.elementStack = append(b.elementStack, enum)
+}
 
-	if b.currentPkg != nil {
-		enum.parent = b.currentPkg
-		b.currentPkg.AddChild(enum)
+func (b *modelBuilder) ExitEnumerationDefinition(ctx *parser.EnumerationDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
@@ -2867,10 +3147,14 @@ func (b *modelBuilder) EnterEnumerationUsage(ctx *parser.EnumerationUsageContext
 	}
 
 	enum := NewEnumeration(name, loc, false)
+	enum.parent = b.getCurrentParent()
+	b.addToParent(enum)
+	b.elementStack = append(b.elementStack, enum)
+}
 
-	if b.currentPkg != nil {
-		enum.parent = b.currentPkg
-		b.currentPkg.AddChild(enum)
+func (b *modelBuilder) ExitEnumerationUsage(ctx *parser.EnumerationUsageContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
 }
 
@@ -2892,12 +3176,8 @@ func (b *modelBuilder) EnterEnumeratedValue(ctx *parser.EnumeratedValueContext) 
 	}
 
 	value := NewEnumerationValue(name, loc)
-
-	// Add to parent (should be an Enumeration)
-	if b.currentPkg != nil {
-		value.parent = b.currentPkg
-		b.currentPkg.AddChild(value)
-	}
+	value.parent = b.getCurrentParent()
+	b.addToParent(value)
 }
 
 // EnterSubjectMember captures the subject of a requirement or verification.
@@ -3243,6 +3523,15 @@ func extractRedefinitionNames(featSpecPart parser.IFeatureSpecializationPartCont
 	return names
 }
 
+// lastPathComponent returns the last "::" segment of a qualified name.
+// Used to derive an element's own name from a redefinition target like "Pkg::foo" → "foo".
+func lastPathComponent(ref string) string {
+	if i := strings.LastIndex(ref, "::"); i >= 0 {
+		return ref[i+2:]
+	}
+	return ref
+}
+
 // extractSubsettedFeatureNames extracts all subsetted or reference-subsetted feature names.
 func extractSubsettedFeatureNames(featSpecPart parser.IFeatureSpecializationPartContext) []string {
 	if featSpecPart == nil {
@@ -3528,11 +3817,9 @@ func (b *modelBuilder) EnterDependency(ctx *parser.DependencyContext) {
 		}
 	}
 
-	// Add to current package
-	if b.currentPkg != nil {
-		dep.parent = b.currentPkg
-		b.currentPkg.AddChild(dep)
-	}
+	// Add to current parent
+	dep.parent = b.getCurrentParent()
+	b.addToParent(dep)
 
 	// Add to model's dependency list
 	b.model.AddDependency(dep)
@@ -3579,12 +3866,10 @@ func (b *modelBuilder) EnterComment(ctx *parser.CommentContext) {
 		}
 	}
 
-	// Add to current package
-	if b.currentPkg != nil {
-		comment.parent = b.currentPkg
-		b.currentPkg.AddChild(comment)
-		b.model.AddComment(comment)
-	}
+	// Add to current parent (may be inside any element)
+	comment.parent = b.getCurrentParent()
+	b.addToParent(comment)
+	b.model.AddComment(comment)
 }
 
 // EnterDocumentation handles documentation declarations.
@@ -3634,12 +3919,10 @@ func (b *modelBuilder) EnterFlowDefinition(ctx *parser.FlowDefinitionContext) {
 	loc := locationFromContext(ctx)
 	flow := NewFlow(name, loc, true)
 
-	// Add to current package
-	if b.currentPkg != nil {
-		flow.parent = b.currentPkg
-		b.currentPkg.AddChild(flow)
-		b.model.AddFlow(flow)
-	}
+	// Add to parent (may be inside another element)
+	flow.parent = b.getCurrentParent()
+	b.addToParent(flow)
+	b.model.AddFlow(flow)
 
 	// Push to element stack for nested content
 	b.elementStack = append(b.elementStack, flow)
@@ -3657,20 +3940,24 @@ func (b *modelBuilder) ExitFlowDefinition(ctx *parser.FlowDefinitionContext) {
 func (b *modelBuilder) EnterFlowUsage(ctx *parser.FlowUsageContext) {
 	name := ""
 	if ctx.FlowDeclaration() != nil && ctx.FlowDeclaration().UsageDeclaration() != nil {
-		if ident := ctx.FlowDeclaration().UsageDeclaration().Identification(); ident != nil {
+		usageDecl := ctx.FlowDeclaration().UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		if name == "" {
+			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 
 	loc := locationFromContext(ctx)
 	flow := NewFlow(name, loc, false)
-
-	// Add to current package
-	if b.currentPkg != nil {
-		flow.parent = b.currentPkg
-		b.currentPkg.AddChild(flow)
-		b.model.AddFlow(flow)
-	}
+	flow.parent = b.getCurrentParent()
+	b.addToParent(flow)
+	b.model.AddFlow(flow)
 
 	// Push to element stack for nested content
 	b.elementStack = append(b.elementStack, flow)
@@ -3763,11 +4050,9 @@ func (b *modelBuilder) EnterControlNode(ctx *parser.ControlNodeContext) {
 	loc := locationFromContext(ctx)
 	node := NewControlNode(kind, loc)
 
-	// Add to current package
-	if b.currentPkg != nil {
-		node.parent = b.currentPkg
-		b.currentPkg.AddChild(node)
-	}
+	// Add to parent (may be inside an action, state, etc.)
+	node.parent = b.getCurrentParent()
+	b.addToParent(node)
 
 	// Add to model
 	b.model.AddControlNode(node)
@@ -3795,15 +4080,7 @@ func (b *modelBuilder) EnterOccurrenceDefinition(ctx *parser.OccurrenceDefinitio
 
 	loc := locationFromContext(ctx)
 	occ := NewOccurrence(name, loc, true, false)
-
-	// Add to current package
-	if b.currentPkg != nil {
-		occ.parent = b.currentPkg
-		b.currentPkg.AddChild(occ)
-	}
-
-	// Add to model
-	b.model.AddOccurrence(occ)
+	b.addOccurrenceToModel(occ)
 
 	// Push to element stack
 	b.elementStack = append(b.elementStack, occ)
@@ -3811,6 +4088,34 @@ func (b *modelBuilder) EnterOccurrenceDefinition(ctx *parser.OccurrenceDefinitio
 
 // ExitOccurrenceDefinition pops the occurrence from the element stack.
 func (b *modelBuilder) ExitOccurrenceDefinition(ctx *parser.OccurrenceDefinitionContext) {
+	if len(b.elementStack) > 0 {
+		b.elementStack = b.elementStack[:len(b.elementStack)-1]
+	}
+}
+
+// EnterOccurrenceUsage handles occurrence usage declarations (occurrence foo : Type).
+func (b *modelBuilder) EnterOccurrenceUsage(ctx *parser.OccurrenceUsageContext) {
+	name := ""
+	if ctx.Usage() != nil && ctx.Usage().UsageDeclaration() != nil {
+		usageDecl := ctx.Usage().UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
+			name = extractName(ident)
+		}
+		if name == "" {
+			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
+		}
+	}
+	occ := NewOccurrence(name, locationFromContext(ctx), false, false)
+	b.addOccurrenceToModel(occ)
+	b.elementStack = append(b.elementStack, occ)
+}
+
+// ExitOccurrenceUsage pops the occurrence from the element stack.
+func (b *modelBuilder) ExitOccurrenceUsage(ctx *parser.OccurrenceUsageContext) {
 	if len(b.elementStack) > 0 {
 		b.elementStack = b.elementStack[:len(b.elementStack)-1]
 	}
@@ -3840,8 +4145,16 @@ func (b *modelBuilder) ExitIndividualDefinition(ctx *parser.IndividualDefinition
 func (b *modelBuilder) EnterIndividualUsage(ctx *parser.IndividualUsageContext) {
 	name := ""
 	if usage := ctx.Usage(); usage != nil && usage.UsageDeclaration() != nil {
-		if ident := usage.UsageDeclaration().Identification(); ident != nil {
+		usageDecl := usage.UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		if name == "" {
+			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 	occ := NewOccurrence(name, locationFromContext(ctx), false, true)
@@ -3859,8 +4172,16 @@ func (b *modelBuilder) ExitIndividualUsage(ctx *parser.IndividualUsageContext) {
 func (b *modelBuilder) EnterPortionUsage(ctx *parser.PortionUsageContext) {
 	name := ""
 	if usage := ctx.Usage(); usage != nil && usage.UsageDeclaration() != nil {
-		if ident := usage.UsageDeclaration().Identification(); ident != nil {
+		usageDecl := usage.UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		if name == "" {
+			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 	occ := NewOccurrence(name, locationFromContext(ctx), false, ctx.INDIVIDUAL() != nil)
@@ -3891,6 +4212,13 @@ func (b *modelBuilder) EnterEventOccurrenceUsage(ctx *parser.EventOccurrenceUsag
 		if ident := decl.Identification(); ident != nil {
 			name = extractName(ident)
 		}
+		if name == "" {
+			if featSpecPart := decl.FeatureSpecializationPart(); featSpecPart != nil {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
+		}
 	}
 	occ := NewEventOccurrence(name, locationFromContext(ctx))
 	b.addOccurrenceToModel(occ)
@@ -3907,8 +4235,16 @@ func (b *modelBuilder) ExitEventOccurrenceUsage(ctx *parser.EventOccurrenceUsage
 func (b *modelBuilder) EnterPerformActionUsage(ctx *parser.PerformActionUsageContext) {
 	name := ""
 	if decl := ctx.PerformActionUsageDeclaration(); decl != nil && decl.UsageDeclaration() != nil {
-		if ident := decl.UsageDeclaration().Identification(); ident != nil {
+		usageDecl := decl.UsageDeclaration()
+		if ident := usageDecl.Identification(); ident != nil {
 			name = extractName(ident)
+		}
+		if name == "" {
+			if featSpecPart := usageDecl.FeatureSpecializationPart(); featSpecPart != nil {
+				if refs := extractRedefinitionNames(featSpecPart); len(refs) > 0 {
+					name = lastPathComponent(refs[0])
+				}
+			}
 		}
 	}
 	action := NewAction(name, locationFromContext(ctx), false)

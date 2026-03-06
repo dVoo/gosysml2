@@ -16,4 +16,9 @@ This directory contains user guides and API/reference documentation for `gosysml
 - [`USAGE.md`](USAGE.md): extended usage patterns
 - [`PERFORMANCE.md`](PERFORMANCE.md): parsing performance guidance
 - [`reports/`](reports/): historical parser analysis and grammar diff reports
-- [`bnf/`](bnf/): SysML/KerML grammar documentation and artifacts
+
+External assets:
+
+- Additional grammar artifacts, validation corpus, and standard library models
+  can be found in the upstream SysML release repository:
+  https://github.com/Systems-Modeling/SysML-v2-Release

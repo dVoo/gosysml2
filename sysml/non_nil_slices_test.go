@@ -83,7 +83,7 @@ package P {
 }
 `)
 	if !result.Success() {
-		t.Fatalf("parse failed: %v", result.Errors)
+		t.Fatalf("parse failed: %v", result.Err())
 	}
 
 	model := result.Model

@@ -228,12 +228,7 @@ func TestLibraryResolverInvalidPatterns(t *testing.T) {
 
 // TestStandardLibraryLoading tests loading the actual standard library.
 func TestStandardLibraryLoading(t *testing.T) {
-	// Skip if standard library doesn't exist
-	if _, err := os.Stat("../../libraries/sysml.library"); os.IsNotExist(err) {
-		t.Skip("Standard library not found, skipping test")
-	}
-
-	registry := NewLibraryRegistry(WithLibraryPaths("../../libraries/sysml.library"))
+	registry := NewLibraryRegistry(WithLibraryPaths(standardLibraryDir(t)))
 
 	// Load standard library
 	err := registry.RegisterStandardLibrary()
@@ -372,16 +367,12 @@ func TestLibraryMultiplePaths(t *testing.T) {
 
 // BenchmarkLibraryDiscovery benchmarks the library discovery process.
 func BenchmarkLibraryDiscovery(b *testing.B) {
-	// Skip if standard library doesn't exist
-	if _, err := os.Stat("../../libraries/sysml.library"); os.IsNotExist(err) {
-		b.Skip("Standard library not found")
-	}
-
 	registry := NewLibraryRegistry()
+	libDir := standardLibraryDir(b)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := registry.DiscoverLibraries("../../libraries/sysml.library")
+		_, err := registry.DiscoverLibraries(libDir)
 		if err != nil {
 			b.Fatalf("Discovery failed: %v", err)
 		}

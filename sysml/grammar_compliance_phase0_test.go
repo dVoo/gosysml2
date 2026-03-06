@@ -107,13 +107,14 @@ func TestRepresentativeValidationParseTreeAndModelExtraction(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(filepath.Base(tc.path), func(t *testing.T) {
-			if _, err := os.Stat(tc.path); os.IsNotExist(err) {
-				t.Skipf("validation file not found: %s", tc.path)
+			path := externalTestPath(t, tc.path)
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				t.Skipf("validation file not found: %s", path)
 			}
 
-			result := ParseFile(tc.path)
+			result := ParseFile(path)
 			if !result.Success() {
-				t.Fatalf("parse failed for %s: %v", tc.path, result.Errors)
+				t.Fatalf("parse failed for %s: %v", tc.path, result.Err())
 			}
 			if result.Tree == nil {
 				t.Fatalf("parse tree is nil for %s", tc.path)

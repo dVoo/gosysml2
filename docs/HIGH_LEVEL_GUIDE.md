@@ -94,11 +94,17 @@ Reference resolution uses qualified names and short-name index paths.
 ## Options
 
 - `sysml.WithDiscardTree()` for lower memory usage
+- `sysml.WithoutResolution()` to skip index build and reference resolution
+- `sysml.WithoutModelBuild()` for syntax-only parsing
+- `sysml.WithContentHash()` to compute/store SHA-256 during parse
 - `sysml.WithSource(source)` to set source id for in-memory parses
 - `sysml.WithoutCompatibilityRewrites()` to disable pre-parse compatibility rewrites
 - `sysml.WithStandardLibrary()` to load/resolve against standard libraries
 - `sysml.WithLibraryPath(path)` for custom library location
 - `sysml.WithLibraryRegistry(reg)` for preloaded registry usage
+- `sysml.WithParseCache(cache)` to reuse an explicit parse cache handle
+- `sysml.WithDefaultParseCache()` for a lazy temp-backed cache
+- `sysml.WithParseCacheDir(dir)` for a caller-managed persistent cache directory
 
 ## ParseResult Contract
 
@@ -111,7 +117,7 @@ Reference resolution uses qualified names and short-name index paths.
 And parse metadata:
 
 - `Source string`
-- `Hash string` (SHA-256 of original input)
+- `Hash string` (SHA-256 of original input when `WithContentHash()` is used)
 - `Rewrites []string` (compatibility rewrites applied)
 - `Tree antlr.Tree` (optional; omitted with `WithDiscardTree`)
 
@@ -133,6 +139,47 @@ for r := range sysml.ParseDir(ctx, "./models", opts) {
     fmt.Printf("ok: %s\n", r.Source)
 }
 ```
+
+`ParseDir` ordering rules:
+
+- `Workers: 1` preserves walk order.
+- `Workers > 1` does not preserve result order.
+
+For repeated repository parses, the optimized interface is still `ParseDir`, but
+with an attached cache option:
+
+```go
+cache, err := sysml.NewParseCache(
+    sysml.WithCacheDir(".gosysml2-cache"),
+    sysml.WithCachePersistence(true),
+)
+if err != nil {
+    panic(err)
+}
+defer cache.Close()
+
+opts := sysml.DirOptions{
+    Workers: 0,
+    ParseOptions: []sysml.ParseOption{
+        sysml.WithParseCache(cache),
+        sysml.WithDiscardTree(),
+    },
+}
+
+for r := range sysml.ParseDir(ctx, "./models", opts) {
+    if err := r.Err(); err != nil {
+        continue
+    }
+    _ = r.Model
+}
+```
+
+Cache behavior summary:
+
+- no cache is used unless explicitly requested
+- `ParseFile` and `ParseDir` reuse compatible cached results automatically
+- `ParseBytes` participates only when `source` names a stable filesystem path
+- `ParseDir` reparses changed files, rebuilds a shared repo index, and selectively re-resolves affected files
 
 ## Traversal APIs
 

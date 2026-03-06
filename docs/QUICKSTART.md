@@ -77,7 +77,40 @@ for _, r := range results {
 }
 ```
 
-## 5. Validate Syntax Only (Low-Level)
+When `Workers > 1`, `ParseDir` results are not ordered.
+
+## 5. Parse a Directory with Cache
+
+For repeated repository parses, keep a cache handle and reuse it:
+
+```go
+cache, err := sysml.NewParseCache(
+    sysml.WithCacheDir(".gosysml2-cache"),
+    sysml.WithCachePersistence(true),
+)
+if err != nil {
+    panic(err)
+}
+defer cache.Close()
+
+opts := sysml.DirOptions{
+    Workers: 0,
+    ParseOptions: []sysml.ParseOption{
+        sysml.WithParseCache(cache),
+        sysml.WithDiscardTree(),
+    },
+}
+
+for r := range sysml.ParseDir(context.Background(), "./models", opts) {
+    if err := r.Err(); err != nil {
+        fmt.Printf("failed: %s: %v\n", r.Source, err)
+        continue
+    }
+    fmt.Printf("ok: %s\n", r.Source)
+}
+```
+
+## 6. Validate Syntax Only (Low-Level)
 
 Use `low` for pure syntax checks and ANTLR-level work.
 
@@ -88,7 +121,7 @@ if errs.HasErrors() {
 }
 ```
 
-## 6. Next Reading
+## 7. Next Reading
 
 - [`LOW_LEVEL_GUIDE.md`](LOW_LEVEL_GUIDE.md)
 - [`HIGH_LEVEL_GUIDE.md`](HIGH_LEVEL_GUIDE.md)

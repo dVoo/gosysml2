@@ -37,10 +37,19 @@ type ValidationReport struct {
 	Duration      time.Duration   `json:"duration"`
 }
 
+func defaultReleasePath(parts ...string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return filepath.Join(parts...)
+	}
+	base := filepath.Join(home, "projects", "SysML-v2-Release")
+	return filepath.Join(append([]string{base}, parts...)...)
+}
+
 func main() {
 	var (
-		libraryPath    = flag.String("library-path", "./libraries/sysml.library", "Path to standard library")
-		validationPath = flag.String("validation-path", "./validationdata", "Path to validation data")
+		libraryPath    = flag.String("library-path", defaultReleasePath("libraries", "sysml.library"), "Path to standard library")
+		validationPath = flag.String("validation-path", defaultReleasePath("validationdata"), "Path to validation data")
 		verbose        = flag.Bool("verbose", false, "Show detailed per-file output")
 		category       = flag.String("category", "", "Test specific category only (e.g., '01-Parts Tree')")
 		jsonOutput     = flag.Bool("json", false, "Output results as JSON")
