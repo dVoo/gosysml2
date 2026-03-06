@@ -427,6 +427,9 @@ func (e *baseElement) QualifiedName() string {
 		parentQN := e.parent.QualifiedName()
 		if parentQN == "" {
 			e.cachedQN = e.name
+		} else if e.name == "" {
+			// Anonymous element: return parent QN without a trailing "::".
+			e.cachedQN = parentQN
 		} else {
 			e.cachedQN = parentQN + "::" + e.name
 		}
@@ -822,9 +825,17 @@ type Part struct {
 	unresolvedSpecializes string
 
 	// Typed children
-	attributes []*Attribute
-	parts      []*Part
-	ports      []*Port
+	attributes   []*Attribute
+	parts        []*Part
+	ports        []*Port
+	items        []*Item
+	connections  []*Connection
+	states       []*State
+	actions      []*Action
+	constraints  []*Constraint
+	requirements []*Requirement
+	enumerations []*Enumeration
+	flows        []*Flow
 }
 
 func (p *Part) isDefinition() {}
@@ -886,6 +897,38 @@ func (p *Part) AddChild(child Element) {
 		if c != nil {
 			p.ports = append(p.ports, c)
 		}
+	case *Item:
+		if c != nil {
+			p.items = append(p.items, c)
+		}
+	case *Connection:
+		if c != nil {
+			p.connections = append(p.connections, c)
+		}
+	case *State:
+		if c != nil {
+			p.states = append(p.states, c)
+		}
+	case *Action:
+		if c != nil {
+			p.actions = append(p.actions, c)
+		}
+	case *Constraint:
+		if c != nil {
+			p.constraints = append(p.constraints, c)
+		}
+	case *Requirement:
+		if c != nil {
+			p.requirements = append(p.requirements, c)
+		}
+	case *Enumeration:
+		if c != nil {
+			p.enumerations = append(p.enumerations, c)
+		}
+	case *Flow:
+		if c != nil {
+			p.flows = append(p.flows, c)
+		}
 	}
 }
 
@@ -897,6 +940,30 @@ func (p *Part) Parts() []*Part { return p.parts }
 
 // Ports returns all ports.
 func (p *Part) Ports() []*Port { return p.ports }
+
+// Items returns all nested items.
+func (p *Part) Items() []*Item { return p.items }
+
+// Connections returns all nested connections.
+func (p *Part) Connections() []*Connection { return p.connections }
+
+// States returns all nested states.
+func (p *Part) States() []*State { return p.states }
+
+// Actions returns all nested actions.
+func (p *Part) Actions() []*Action { return p.actions }
+
+// Constraints returns all nested constraints.
+func (p *Part) Constraints() []*Constraint { return p.constraints }
+
+// Requirements returns all nested requirements.
+func (p *Part) Requirements() []*Requirement { return p.requirements }
+
+// Enumerations returns all nested enumerations.
+func (p *Part) Enumerations() []*Enumeration { return p.enumerations }
+
+// Flows returns all nested flows.
+func (p *Part) Flows() []*Flow { return p.flows }
 
 // String returns a string representation of the part for debugging.
 func (p *Part) String() string {
@@ -926,8 +993,9 @@ type Port struct {
 	Direction    PortDirection
 
 	// Typed children
-	ports []*Port
-	parts []*Part
+	ports      []*Port
+	parts      []*Part
+	attributes []*Attribute
 
 	// Conjugated port - automatically created for each PortDefinition
 	ConjugatedPort *ConjugatedPort
@@ -1034,6 +1102,10 @@ func (p *Port) AddChild(child Element) {
 		if c != nil {
 			p.parts = append(p.parts, c)
 		}
+	case *Attribute:
+		if c != nil {
+			p.attributes = append(p.attributes, c)
+		}
 	}
 }
 
@@ -1042,6 +1114,9 @@ func (p *Port) Ports() []*Port { return p.ports }
 
 // Parts returns nested parts.
 func (p *Port) Parts() []*Part { return p.parts }
+
+// Attributes returns nested attributes.
+func (p *Port) Attributes() []*Attribute { return p.attributes }
 
 // RequirementConstraint represents a constraint within a requirement (assume or require).
 type RequirementConstraint struct {
@@ -1072,6 +1147,7 @@ type Constraint struct {
 
 	// Typed children
 	constraints []*Constraint
+	attributes  []*Attribute
 }
 
 func (c *Constraint) isDefinition() {}
@@ -1108,15 +1184,23 @@ func NewConstraint(name string, loc Location, isDefinition bool) *Constraint {
 func (c *Constraint) AddChild(child Element) {
 	c.baseElement.addChild(child, c)
 
-	if nested, ok := child.(*Constraint); ok {
-		if nested != nil {
-			c.constraints = append(c.constraints, nested)
+	switch ch := child.(type) {
+	case *Constraint:
+		if ch != nil {
+			c.constraints = append(c.constraints, ch)
+		}
+	case *Attribute:
+		if ch != nil {
+			c.attributes = append(c.attributes, ch)
 		}
 	}
 }
 
 // Constraints returns nested constraints.
 func (c *Constraint) Constraints() []*Constraint { return c.constraints }
+
+// Attributes returns nested attributes.
+func (c *Constraint) Attributes() []*Attribute { return c.attributes }
 
 // Requirement represents a SysML requirement definition or usage.
 type Requirement struct {
@@ -1141,6 +1225,8 @@ type Requirement struct {
 
 	// Nested requirements
 	requirements []*Requirement
+	attributes   []*Attribute
+	parts        []*Part
 
 	// Unresolved references (used during parsing, before resolution)
 	unresolvedDerivedFrom []string
@@ -1206,8 +1292,22 @@ func (r *Requirement) AddChild(child Element) {
 				r.Constraints = append(r.Constraints, c)
 			}
 		}
+	case *Attribute:
+		if c != nil {
+			r.attributes = append(r.attributes, c)
+		}
+	case *Part:
+		if c != nil {
+			r.parts = append(r.parts, c)
+		}
 	}
 }
+
+// Attributes returns nested attributes.
+func (r *Requirement) Attributes() []*Attribute { return r.attributes }
+
+// Parts returns nested parts (e.g., subject parts).
+func (r *Requirement) Parts() []*Part { return r.parts }
 
 // Requirements returns nested requirements.
 func (r *Requirement) Requirements() []*Requirement { return r.requirements }
@@ -1247,7 +1347,14 @@ type Action struct {
 	TypeRef      Ref[*Action]
 
 	// Typed children
-	actions []*Action
+	actions      []*Action
+	controlNodes []*ControlNode
+	flows        []*Flow
+	attributes   []*Attribute
+	parts        []*Part
+	items        []*Item
+	constraints  []*Constraint
+	states       []*State
 }
 
 func (a *Action) isDefinition() {}
@@ -1284,15 +1391,65 @@ func NewAction(name string, loc Location, isDefinition bool) *Action {
 func (a *Action) AddChild(child Element) {
 	a.baseElement.addChild(child, a)
 
-	if c, ok := child.(*Action); ok {
+	switch c := child.(type) {
+	case *Action:
 		if c != nil {
 			a.actions = append(a.actions, c)
+		}
+	case *ControlNode:
+		if c != nil {
+			a.controlNodes = append(a.controlNodes, c)
+		}
+	case *Flow:
+		if c != nil {
+			a.flows = append(a.flows, c)
+		}
+	case *Attribute:
+		if c != nil {
+			a.attributes = append(a.attributes, c)
+		}
+	case *Part:
+		if c != nil {
+			a.parts = append(a.parts, c)
+		}
+	case *Item:
+		if c != nil {
+			a.items = append(a.items, c)
+		}
+	case *Constraint:
+		if c != nil {
+			a.constraints = append(a.constraints, c)
+		}
+	case *State:
+		if c != nil {
+			a.states = append(a.states, c)
 		}
 	}
 }
 
 // Actions returns nested actions.
 func (a *Action) Actions() []*Action { return a.actions }
+
+// ControlNodes returns nested control nodes (fork, join, merge, decision).
+func (a *Action) ControlNodes() []*ControlNode { return a.controlNodes }
+
+// Flows returns nested flows.
+func (a *Action) Flows() []*Flow { return a.flows }
+
+// Attributes returns nested attributes.
+func (a *Action) Attributes() []*Attribute { return a.attributes }
+
+// Parts returns nested parts.
+func (a *Action) Parts() []*Part { return a.parts }
+
+// Items returns nested items.
+func (a *Action) Items() []*Item { return a.items }
+
+// Constraints returns nested constraints.
+func (a *Action) Constraints() []*Constraint { return a.constraints }
+
+// States returns nested states.
+func (a *Action) States() []*State { return a.states }
 
 // Verification represents a SysML verification case definition or usage.
 type Verification struct {
@@ -1441,6 +1598,11 @@ func NewConcern(name string, loc Location, isDefinition bool) *Concern {
 	}
 }
 
+// AddChild adds a child element to the concern.
+func (c *Concern) AddChild(child Element) {
+	c.baseElement.addChild(child, c)
+}
+
 // Text returns the documentation text (concern text).
 func (c *Concern) Text() string { return c.documentation }
 
@@ -1575,6 +1737,11 @@ func (a *AnalysisCase) TypeName() string { return a.TypeRef.EffectiveName() }
 
 func (a *AnalysisCase) Type() Element {
 	return resolvedElementFromRef(a.TypeRef)
+}
+
+// AddChild adds a child element to the analysis case.
+func (a *AnalysisCase) AddChild(child Element) {
+	a.baseElement.addChild(child, a)
 }
 
 // NewAnalysisCase creates a new AnalysisCase element.
@@ -1748,6 +1915,8 @@ type Item struct {
 	// Typed children
 	attributes []*Attribute
 	items      []*Item
+	ports      []*Port
+	parts      []*Part
 
 	// Feature relationships for item usages
 	SubsettedFeatures []Element // Features this item subsets (::>, :>, subsets)
@@ -1815,6 +1984,14 @@ func (i *Item) AddChild(child Element) {
 		if c != nil {
 			i.items = append(i.items, c)
 		}
+	case *Port:
+		if c != nil {
+			i.ports = append(i.ports, c)
+		}
+	case *Part:
+		if c != nil {
+			i.parts = append(i.parts, c)
+		}
 	}
 }
 
@@ -1823,6 +2000,12 @@ func (i *Item) Attributes() []*Attribute { return i.attributes }
 
 // Items returns all nested items.
 func (i *Item) Items() []*Item { return i.items }
+
+// Ports returns all nested ports.
+func (i *Item) Ports() []*Port { return i.ports }
+
+// Parts returns all nested parts.
+func (i *Item) Parts() []*Part { return i.parts }
 
 // String returns a string representation of the item for debugging.
 func (i *Item) String() string {
@@ -1896,6 +2079,11 @@ func NewCalculation(name string, loc Location, isDefinition bool) *Calculation {
 	}
 }
 
+// AddChild adds a child element to the calculation.
+func (c *Calculation) AddChild(child Element) {
+	c.baseElement.addChild(child, c)
+}
+
 // SetUnresolvedReturnType sets the unresolved return type reference.
 func (c *Calculation) SetUnresolvedReturnType(ref string) {
 	c.unresolvedReturnType = ref
@@ -1915,6 +2103,9 @@ type State struct {
 	// Nested states and transitions
 	states      []*State
 	transitions []*Transition
+	actions     []*Action
+	attributes  []*Attribute
+	constraints []*Constraint
 }
 
 func (s *State) isDefinition() {}
@@ -1961,6 +2152,18 @@ func (s *State) AddChild(child Element) {
 		if c != nil {
 			s.transitions = append(s.transitions, c)
 		}
+	case *Action:
+		if c != nil {
+			s.actions = append(s.actions, c)
+		}
+	case *Attribute:
+		if c != nil {
+			s.attributes = append(s.attributes, c)
+		}
+	case *Constraint:
+		if c != nil {
+			s.constraints = append(s.constraints, c)
+		}
 	}
 }
 
@@ -1969,6 +2172,15 @@ func (s *State) States() []*State { return s.states }
 
 // Transitions returns transitions.
 func (s *State) Transitions() []*Transition { return s.transitions }
+
+// Actions returns nested actions.
+func (s *State) Actions() []*Action { return s.actions }
+
+// Attributes returns nested attributes.
+func (s *State) Attributes() []*Attribute { return s.attributes }
+
+// Constraints returns nested constraints.
+func (s *State) Constraints() []*Constraint { return s.constraints }
 
 // Transition represents a SysML transition usage.
 type Transition struct {
@@ -2032,6 +2244,10 @@ type Connection struct {
 	Ends         []*ConnectionEnd // Connection endpoints
 
 	unresolvedEnds []string
+
+	// Typed children
+	ports      []*Port
+	attributes []*Attribute
 }
 
 func (c *Connection) isDefinition() {}
@@ -2065,6 +2281,28 @@ func NewConnection(name string, loc Location, isDefinition bool) *Connection {
 	}
 }
 
+// AddChild adds a child element to the connection.
+func (c *Connection) AddChild(child Element) {
+	c.baseElement.addChild(child, c)
+
+	switch ch := child.(type) {
+	case *Port:
+		if ch != nil {
+			c.ports = append(c.ports, ch)
+		}
+	case *Attribute:
+		if ch != nil {
+			c.attributes = append(c.attributes, ch)
+		}
+	}
+}
+
+// Ports returns nested ports.
+func (c *Connection) Ports() []*Port { return c.ports }
+
+// Attributes returns nested attributes.
+func (c *Connection) Attributes() []*Attribute { return c.attributes }
+
 // AddUnresolvedEnd adds an unresolved end reference.
 func (c *Connection) AddUnresolvedEnd(ref string) {
 	c.unresolvedEnds = append(c.unresolvedEnds, ref)
@@ -2077,7 +2315,8 @@ type Interface struct {
 	TypeRef      Ref[*Interface]
 
 	// Typed children
-	ports []*Port
+	ports      []*Port
+	attributes []*Attribute
 }
 
 func (i *Interface) isDefinition() {}
@@ -2114,15 +2353,23 @@ func NewInterface(name string, loc Location, isDefinition bool) *Interface {
 func (i *Interface) AddChild(child Element) {
 	i.baseElement.addChild(child, i)
 
-	if p, ok := child.(*Port); ok {
-		if p != nil {
-			i.ports = append(i.ports, p)
+	switch c := child.(type) {
+	case *Port:
+		if c != nil {
+			i.ports = append(i.ports, c)
+		}
+	case *Attribute:
+		if c != nil {
+			i.attributes = append(i.attributes, c)
 		}
 	}
 }
 
 // Ports returns all ports.
 func (i *Interface) Ports() []*Port { return i.ports }
+
+// Attributes returns all attributes.
+func (i *Interface) Attributes() []*Attribute { return i.attributes }
 
 // Allocation represents a SysML allocation definition or usage.
 type Allocation struct {
@@ -2163,6 +2410,11 @@ func NewAllocation(name string, loc Location, isDefinition bool) *Allocation {
 		},
 		IsDefinition: isDefinition,
 	}
+}
+
+// AddChild adds a child element to the allocation.
+func (a *Allocation) AddChild(child Element) {
+	a.baseElement.addChild(child, a)
 }
 
 // SetUnresolvedSource sets the unresolved source reference.
@@ -2218,6 +2470,11 @@ func NewViewpoint(name string, loc Location, isDefinition bool) *Viewpoint {
 		unresolvedConcerns:     make([]string, 0),
 		unresolvedStakeholders: make([]string, 0),
 	}
+}
+
+// AddChild adds a child element to the viewpoint.
+func (v *Viewpoint) AddChild(child Element) {
+	v.baseElement.addChild(child, v)
 }
 
 // AddUnresolvedConcern adds an unresolved concern reference.
@@ -2283,6 +2540,11 @@ func NewView(name string, loc Location, isDefinition bool) *View {
 		Exposures:                 make([]ViewExposure, 0),
 		unresolvedExposedElements: make([]string, 0),
 	}
+}
+
+// AddChild adds a child element to the view.
+func (v *View) AddChild(child Element) {
+	v.baseElement.addChild(child, v)
 }
 
 // AddUnresolvedExposedElement adds an unresolved exposed element reference.
@@ -2377,8 +2639,8 @@ func (m *Model) Metadata() []*Metadata             { return topLevelOfType[*Meta
 func (m *Model) Renderings() []*Rendering          { return topLevelOfType[*Rendering](m) }
 func (m *Model) Messages() []*Message              { return topLevelOfType[*Message](m) }
 func (m *Model) Filters() []*ElementFilter         { return topLevelOfType[*ElementFilter](m) }
-func (m *Model) Satisfies() []*SatisfyRelationship { return topLevelOfType[*SatisfyRelationship](m) }
-func (m *Model) Verifies() []*VerifyRelationship   { return topLevelOfType[*VerifyRelationship](m) }
+func (m *Model) Satisfies() []*SatisfyRelationship { return FindAll[*SatisfyRelationship](m) }
+func (m *Model) Verifies() []*VerifyRelationship   { return FindAll[*VerifyRelationship](m) }
 
 // AddDoc adds a documentation element to the model.
 func (m *Model) AddDoc(doc *Doc) {
@@ -2541,26 +2803,30 @@ func (m *Model) BuildIndex() {
 	})
 }
 
+func (m *Model) applyRepoIndex(idx *RepoIndex) {
+	if m == nil || idx == nil {
+		return
+	}
+	m.elementIndex = idx.elementIndex
+	m.shortNameIndex = idx.shortNameIndex
+	m.libraryRegistry = idx.libraryRegistry
+}
+
 // BuildIndexAndResolve builds the element index and resolves references in a single walk.
 func (m *Model) BuildIndexAndResolve() {
-	m.elementIndex = make(map[string]Element)
-	m.shortNameIndex = make(map[string][]Element)
-	// First pass: build index (needed before resolving references)
-	m.Walk(func(elem Element) bool {
-		qn := elem.QualifiedName()
-		if qn != "" {
-			m.elementIndex[qn] = elem
-		}
-		if snElem, ok := elem.(interface{ DeclaredShortName() string }); ok {
-			sn := snElem.DeclaredShortName()
-			if sn != "" {
-				m.shortNameIndex[sn] = append(m.shortNameIndex[sn], elem)
-			}
-		}
-		// Resolve references inline during the same walk
-		m.resolveElementRefs(elem)
-		return true
-	})
+	m.BuildIndex()
+	m.ResetResolutionState()
+	m.ResolveReferences()
+}
+
+// ResolveReferencesWithIndex resolves model references against a shared repository index.
+func (m *Model) ResolveReferencesWithIndex(idx *RepoIndex) {
+	if m == nil || idx == nil {
+		return
+	}
+	m.applyRepoIndex(idx)
+	m.ResetResolutionState()
+	m.ResolveReferences()
 }
 
 // resolveElementRefs resolves references for a single element.
@@ -2642,6 +2908,154 @@ func (m *Model) resolveElementRefs(elem Element) {
 func (m *Model) ResolveReferences() {
 	m.Walk(func(elem Element) bool {
 		m.resolveElementRefs(elem)
+		return true
+	})
+}
+
+func resetRef[T Element](ref *Ref[T]) {
+	if ref == nil {
+		return
+	}
+	var zero T
+	ref.resolved = zero
+	ref.ok = false
+}
+
+// ResetResolutionState clears derived resolved fields so reference resolution can be rerun safely.
+func (m *Model) ResetResolutionState() {
+	if m == nil {
+		return
+	}
+	m.Walk(func(elem Element) bool {
+		switch e := elem.(type) {
+		case *Requirement:
+			e.DerivedFrom = e.DerivedFrom[:0]
+			e.DerivedReqs = e.DerivedReqs[:0]
+			e.SatisfiedBy = e.SatisfiedBy[:0]
+			e.VerifiedBy = e.VerifiedBy[:0]
+			resetRef(&e.Subject)
+			resetRef(&e.TypeRef)
+		case *Verification:
+			e.VerifiedRequirement = nil
+			resetRef(&e.Subject)
+			resetRef(&e.TypeRef)
+		case *Part:
+			resetRef(&e.TypeRef)
+			resetRef(&e.Specializes)
+		case *Item:
+			resetRef(&e.TypeRef)
+			resetRef(&e.Specializes)
+			e.SubsettedFeatures = e.SubsettedFeatures[:0]
+			e.RedefinedFeatures = e.RedefinedFeatures[:0]
+		case *UseCase:
+			resetRef(&e.Subject)
+			resetRef(&e.TypeRef)
+			e.Actors = e.Actors[:0]
+			e.IncludedUseCases = e.IncludedUseCases[:0]
+		case *Concern:
+			resetRef(&e.TypeRef)
+			e.Stakeholders = e.Stakeholders[:0]
+		case *AnalysisCase:
+			resetRef(&e.Subject)
+			resetRef(&e.ReturnType)
+			resetRef(&e.TypeRef)
+		case *Case:
+			resetRef(&e.Subject)
+			resetRef(&e.TypeRef)
+			e.Actors = e.Actors[:0]
+			e.Objectives = e.Objectives[:0]
+		case *IncludeUseCase:
+			resetRef(&e.IncludedUseCase)
+			resetRef(&e.Owner)
+		case *Transition:
+			resetRef(&e.Source)
+			resetRef(&e.Target)
+		case *Connection:
+			resetRef(&e.TypeRef)
+			e.Ends = e.Ends[:0]
+		case *Allocation:
+			resetRef(&e.Source)
+			resetRef(&e.Target)
+			resetRef(&e.TypeRef)
+		case *View:
+			resetRef(&e.Viewpoint)
+			resetRef(&e.TypeRef)
+			e.ExposedElements = e.ExposedElements[:0]
+		case *Viewpoint:
+			resetRef(&e.TypeRef)
+			e.Concerns = e.Concerns[:0]
+			e.Stakeholders = e.Stakeholders[:0]
+		case *Calculation:
+			resetRef(&e.ReturnType)
+			resetRef(&e.TypeRef)
+		case *State:
+			resetRef(&e.TypeRef)
+		case *Action:
+			resetRef(&e.TypeRef)
+		case *Constraint:
+			resetRef(&e.TypeRef)
+		case *Enumeration:
+			resetRef(&e.TypeRef)
+		case *Port:
+			resetRef(&e.TypeRef)
+		case *ConjugatedPort:
+			if e.unresolvedOriginalPort != "" {
+				resetRef(&e.OriginalPort)
+			}
+		case *Attribute:
+			resetRef(&e.TypeRef)
+			e.SubsettedFeatures = e.SubsettedFeatures[:0]
+			e.RedefinedFeatures = e.RedefinedFeatures[:0]
+		case *Interface:
+			resetRef(&e.TypeRef)
+		case *SuccessionFlow:
+			resetRef(&e.Source)
+			resetRef(&e.Target)
+		case *Dependency:
+			e.Client = e.Client[:0]
+			e.Supplier = e.Supplier[:0]
+		case *Comment:
+			e.About = e.About[:0]
+		case *Alias:
+			resetRef(&e.Target)
+		case *Metadata:
+			resetRef(&e.TypeRef)
+			for _, annotation := range e.annotations {
+				if annotation == nil {
+					continue
+				}
+				resetRef(&annotation.Metadata)
+			}
+		case *Rendering:
+			resetRef(&e.TypeRef)
+		case *Message:
+			resetRef(&e.Sender)
+			resetRef(&e.Receiver)
+		case *KerMLType:
+			e.Specializes = e.Specializes[:0]
+		case *KerMLFeature:
+			resetRef(&e.TypeRef)
+			e.SubsettedFeatures = e.SubsettedFeatures[:0]
+			e.RedefinedFeatures = e.RedefinedFeatures[:0]
+		case *SatisfyRelationship:
+			resetRef(&e.Satisfier)
+			resetRef(&e.Required)
+			if e.unresolvedSatisfier != "" {
+				e.Satisfier = NewRef[Element](e.unresolvedSatisfier)
+			}
+			if e.unresolvedRequired != "" {
+				e.Required = NewRef[*Requirement](e.unresolvedRequired)
+			}
+		case *VerifyRelationship:
+			resetRef(&e.Verifier)
+			resetRef(&e.Required)
+			if e.unresolvedVerifier != "" {
+				e.Verifier = NewRef[*Verification](e.unresolvedVerifier)
+			}
+			if e.unresolvedRequired != "" {
+				e.Required = NewRef[*Requirement](e.unresolvedRequired)
+			}
+		}
 		return true
 	})
 }

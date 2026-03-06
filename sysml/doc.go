@@ -97,7 +97,8 @@
 //	// Parse from file
 //	result := sysml.ParseFile("model.sysml")
 //
-//	// Parse from bytes (avoids copy)
+//	// Parse from bytes.
+//	// This avoids an extra high-level []byte -> string copy.
 //	result := sysml.ParseBytes(data, "source.sysml")
 //
 //	// Parse directory with configurable workers and parse options
@@ -111,6 +112,7 @@
 //	        continue
 //	    }
 //	}
+//	// Note: with Workers > 1, ParseDir does not preserve result order.
 //
 // # Parse Options
 //
@@ -118,6 +120,17 @@
 //
 //	// Discard parse tree to reduce memory (~30% savings)
 //	result := sysml.ParseFile("model.sysml", sysml.WithDiscardTree())
+//
+//	// Build a model but skip index build and reference resolution
+//	result := sysml.ParseFile("model.sysml", sysml.WithoutResolution())
+//
+//	// Syntax parse only, skip high-level model construction entirely
+//	result := sysml.ParseFile("model.sysml",
+//	    sysml.WithoutModelBuild(),
+//	    sysml.WithDiscardTree())
+//
+//	// Compute and retain input SHA-256 during parsing
+//	result := sysml.ParseFile("model.sysml", sysml.WithContentHash())
 //
 //	// Use standard library for imports
 //	result := sysml.ParseFile("model.sysml", sysml.WithStandardLibrary())

@@ -143,15 +143,15 @@ func TestModelAddControlNode(t *testing.T) {
 
 	model.AddControlNode(node)
 
-	if len(model.ControlNodes) != 1 {
-		t.Errorf("Expected 1 control node in model, got %d", len(model.ControlNodes))
+	if len(model.ControlNodes()) != 1 {
+		t.Errorf("Expected 1 control node in model, got %d", len(model.ControlNodes()))
 	}
 
 	if len(model.Elements) != 1 {
 		t.Errorf("Expected 1 element in model, got %d", len(model.Elements))
 	}
 
-	if model.ControlNodes[0] != node {
+	if model.ControlNodes()[0] != node {
 		t.Error("Control node not added correctly to model")
 	}
 }
@@ -194,8 +194,8 @@ func TestControlNodeQualifiedName(t *testing.T) {
 	// Add to package
 	pkg.AddChild(node)
 
-	// Now qualified name should include package
-	expected := "TestPkg::"
+	// Anonymous elements (no name) return the parent QN without a trailing "::".
+	expected := "TestPkg"
 	qn := node.QualifiedName()
 	if qn != expected {
 		t.Errorf("Expected qualified name '%s', got '%s'", expected, qn)

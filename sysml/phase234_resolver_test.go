@@ -112,13 +112,13 @@ func TestPhase234ResolveNewRepresentationRefs(t *testing.T) {
 
 func TestPhase234ModelTracksNestedSatisfyAndVerify(t *testing.T) {
 	satModel := mustParsePhase5File(t, "../validationdata/08-Requirements/8-Requirements.sysml")
-	if len(satModel.Satisfies) == 0 {
+	if len(satModel.Satisfies()) == 0 {
 		t.Fatal("expected model.Satisfies to include package-nested satisfy relationships")
 	}
 
 	verModel := mustParsePhase5File(t, "../validationdata/09-Verification/9-Verification-simplified.sysml")
-	if len(verModel.Verifies) == 0 {
-		t.Fatal("expected model.Verifies to include package-nested verify relationships")
+	if len(verModel.Verifies()) == 0 {
+		t.Fatal("expected model.Verifies() to include package-nested verify relationships")
 	}
 }
 
@@ -180,14 +180,14 @@ func TestPhase234RelationshipRefNamesArePreserved(t *testing.T) {
 func TestPhase234NoDuplicateFindAllForSatisfyAndVerify(t *testing.T) {
 	satModel := mustParsePhase5File(t, "../validationdata/08-Requirements/8-Requirements.sysml")
 	satFindAll := FindAll[*SatisfyRelationship](satModel)
-	if len(satFindAll) != len(satModel.Satisfies) {
-		t.Fatalf("expected satisfy FindAll (%d) to match model.Satisfies (%d)", len(satFindAll), len(satModel.Satisfies))
+	if len(satFindAll) != len(satModel.Satisfies()) {
+		t.Fatalf("expected satisfy FindAll (%d) to match model.Satisfies (%d)", len(satFindAll), len(satModel.Satisfies()))
 	}
 
 	verModel := mustParsePhase5File(t, "../validationdata/09-Verification/9-Verification-simplified.sysml")
 	verFindAll := FindAll[*VerifyRelationship](verModel)
-	if len(verFindAll) != len(verModel.Verifies) {
-		t.Fatalf("expected verify FindAll (%d) to match model.Verifies (%d)", len(verFindAll), len(verModel.Verifies))
+	if len(verFindAll) != len(verModel.Verifies()) {
+		t.Fatalf("expected verify FindAll (%d) to match model.Verifies() (%d)", len(verFindAll), len(verModel.Verifies()))
 	}
 }
 
@@ -200,7 +200,7 @@ package P {
 `
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %v", result.Errors)
+		t.Fatalf("parse failed: %v", result.Err())
 	}
 
 	reqs := FindAll[*Requirement](result.Model)
@@ -224,12 +224,12 @@ package P {
 
 func TestPhase234VerifyRelationshipUsesEnclosingVerification(t *testing.T) {
 	model := mustParsePhase5File(t, "../validationdata/09-Verification/9-Verification-simplified.sysml")
-	if len(model.Verifies) == 0 {
+	if len(model.Verifies()) == 0 {
 		t.Fatal("expected at least one verify relationship")
 	}
 
 	resolvedCount := 0
-	for _, rel := range model.Verifies {
+	for _, rel := range model.Verifies() {
 		if rel.Verifier.IsResolved() {
 			resolvedCount++
 		}

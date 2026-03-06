@@ -28,7 +28,7 @@ package Model {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %v", result.Errors)
+		t.Fatalf("parse failed: %v", result.Err())
 	}
 
 	views := FindAll[*View](result.Model)
@@ -98,7 +98,7 @@ package P {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %v", result.Errors)
+		t.Fatalf("parse failed: %v", result.Err())
 	}
 
 	concerns := FindAll[*Concern](result.Model)
@@ -144,7 +144,7 @@ package ASPICE_Toolchain_Model {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %v", result.Errors)
+		t.Fatalf("parse failed: %v", result.Err())
 	}
 
 	elements, err := ElementsByView(result.Model, "toolArchitecture")

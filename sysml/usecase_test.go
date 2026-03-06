@@ -129,7 +129,7 @@ func TestParseIncludeUseCaseUsage(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Parsing failed: %v", result.Errors)
+		t.Fatalf("Parsing failed: %v", result.Err())
 	}
 
 	// Verify use cases were parsed

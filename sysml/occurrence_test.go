@@ -4,6 +4,26 @@ import (
 	"testing"
 )
 
+// TestThenSuccessionInDefinitionBody verifies that `then X;` target succession
+// parses correctly inside a part definition body (Batmobile pattern).
+func TestThenSuccessionInDefinitionBody(t *testing.T) {
+	input := `
+part def Batmobile {
+    timeslice batmanDriving {
+        attribute speed : Real;
+    }
+    then charging;
+    timeslice charging {
+        attribute speed : Real;
+    }
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("expected parse to succeed, got: %s", result.Err())
+	}
+}
+
 func TestNewOccurrence(t *testing.T) {
 	loc := Location{Line: 10, Column: 5}
 	occ := NewOccurrence("MyOccurrence", loc, true, false)
@@ -252,15 +272,15 @@ func TestModelAddOccurrence(t *testing.T) {
 
 	model.AddOccurrence(occ)
 
-	if len(model.Occurrences) != 1 {
-		t.Errorf("Expected 1 occurrence in model, got %d", len(model.Occurrences))
+	if len(model.Occurrences()) != 1 {
+		t.Errorf("Expected 1 occurrence in model, got %d", len(model.Occurrences()))
 	}
 
 	if len(model.Elements) != 1 {
 		t.Errorf("Expected 1 element in model, got %d", len(model.Elements))
 	}
 
-	if model.Occurrences[0] != occ {
+	if model.Occurrences()[0] != occ {
 		t.Error("Occurrence not added correctly to model")
 	}
 }

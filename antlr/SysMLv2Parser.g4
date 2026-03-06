@@ -299,10 +299,10 @@ definitionBody
     ;
 
 definitionBodyItem
-    : definitionMember
+    : sourceSuccessionMember? occurrenceUsageMember actionTargetSuccessionMember*
     | variantUsageMember
     | nonOccurrenceUsageMember
-    | sourceSuccessionMember? occurrenceUsageMember
+    | definitionMember
     | endFeatureMember
     | aliasMember
     | import_
@@ -1584,13 +1584,13 @@ requirementBody
     ;
 
 requirementBodyItem
-    : definitionBodyItem
-    | subjectMember
+    : subjectMember
     | requirementConstraintMember
     | framedConcernMember
     | requirementVerificationMember
     | actorMember
     | stakeholderMember
+    | definitionBodyItem
     ;
 
 subjectMember
@@ -1798,6 +1798,7 @@ viewDefinitionBodyItem
     : definitionBodyItem
     | elementFilterMember
     | viewRenderingMember
+    | expose
     ;
 
 viewRenderingMember

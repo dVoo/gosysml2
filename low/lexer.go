@@ -2,6 +2,7 @@ package low
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/antlr4-go/antlr/v4"
 	"github.com/dVoo/gosysml2/internal/parser"
@@ -23,7 +24,7 @@ func NewLexer(input string) *Lexer {
 // NewLexerFromBytes creates a new lexer from byte slice.
 // This avoids a string copy when input is already in []byte form.
 func NewLexerFromBytes(input []byte) *Lexer {
-	stream := antlr.NewInputStream(string(input))
+	stream := antlr.NewInputStream(bytesToString(input))
 	return NewLexerFromStream(stream)
 }
 
@@ -106,4 +107,11 @@ func TokenName(tokenType int) string {
 		}
 	}
 	return name
+}
+
+func bytesToString(input []byte) string {
+	if len(input) == 0 {
+		return ""
+	}
+	return unsafe.String(unsafe.SliceData(input), len(input))
 }

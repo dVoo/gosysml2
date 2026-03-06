@@ -202,7 +202,7 @@ func TestParseCaseDefinition(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Parsing failed: %v", result.Errors)
+		t.Fatalf("Parsing failed: %v", result.Err())
 	}
 
 	cases := FindAll[*Case](result.Model)
@@ -228,7 +228,7 @@ func TestParseCaseUsage(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Parsing failed: %v", result.Errors)
+		t.Fatalf("Parsing failed: %v", result.Err())
 	}
 
 	cases := FindAll[*Case](result.Model)
@@ -258,7 +258,7 @@ func TestParseCaseWithSubject(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Parsing failed: %v", result.Errors)
+		t.Fatalf("Parsing failed: %v", result.Err())
 	}
 
 	cases := FindAll[*Case](result.Model)
@@ -285,7 +285,7 @@ func TestParseCaseWithActor(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Parsing failed: %v", result.Errors)
+		t.Fatalf("Parsing failed: %v", result.Err())
 	}
 
 	cases := FindAll[*Case](result.Model)
@@ -317,7 +317,7 @@ func TestParseCaseWithObjective(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Parsing failed: %v", result.Errors)
+		t.Fatalf("Parsing failed: %v", result.Err())
 	}
 
 	cases := FindAll[*Case](result.Model)
@@ -352,7 +352,7 @@ func TestCaseReferenceResolution(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Parsing failed: %v", result.Errors)
+		t.Fatalf("Parsing failed: %v", result.Err())
 	}
 
 	// Build index and resolve references
@@ -401,7 +401,7 @@ func TestParseCaseWithMultipleMembers(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Parsing failed: %v", result.Errors)
+		t.Fatalf("Parsing failed: %v", result.Err())
 	}
 
 	cases := FindAll[*Case](result.Model)
@@ -430,7 +430,7 @@ func TestParseCaseUsageWithType(t *testing.T) {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("Parsing failed: %v", result.Errors)
+		t.Fatalf("Parsing failed: %v", result.Err())
 	}
 
 	cases := FindAll[*Case](result.Model)

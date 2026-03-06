@@ -119,15 +119,15 @@ func TestModelAddDependency(t *testing.T) {
 
 	model.AddDependency(dep)
 
-	if len(model.Dependencies) != 1 {
-		t.Errorf("Expected 1 dependency in model, got %d", len(model.Dependencies))
+	if len(model.Dependencies()) != 1 {
+		t.Errorf("Expected 1 dependency in model, got %d", len(model.Dependencies()))
 	}
 
 	if len(model.Elements) != 1 {
 		t.Errorf("Expected 1 element in model, got %d", len(model.Elements))
 	}
 
-	if model.Dependencies[0] != dep {
+	if model.Dependencies()[0] != dep {
 		t.Error("Dependency not added correctly to model")
 	}
 }

@@ -7,7 +7,7 @@ It exposes:
 - high-level typed semantic model in `sysml`
 
 ## Current Version
-`v0.4.0` (source of truth: `VERSION`).
+`v0.5.0` (source of truth: `VERSION`).
 
 ## Canonical Entry Points
 - High-level parsing:
@@ -15,6 +15,10 @@ It exposes:
   - `sysml.ParseStringContext`, `sysml.ParseFileContext`, `sysml.ParseBytesContext`, `sysml.ParseReaderContext`
   - `sysml.ParseDir`
   - `sysml.ParseStringModel`, `sysml.ParseFileModel`
+  - cache-enabled parse options:
+    - `sysml.WithParseCache(cache)`
+    - `sysml.WithDefaultParseCache()`
+    - `sysml.WithParseCacheDir(dir)`
 - Low-level parsing:
   - `low.Parse`, `low.ParseBytes`, `low.ParseWithContext`
   - `low.Validate`, `low.ValidateBytes`
@@ -47,13 +51,37 @@ High-level parse returns `*sysml.ParseResult`:
 
 ## Options
 - `sysml.WithDiscardTree()`
+- `sysml.WithContentHash()`
 - `sysml.WithSource(source)`
 - `sysml.WithoutCompatibilityRewrites()`
+- `sysml.WithoutResolution()`
+- `sysml.WithoutModelBuild()`
 - `sysml.WithStandardLibrary()`
 - `sysml.WithLibraryPath(path)`
 - `sysml.WithLibraryRegistry(reg)`
+- `sysml.WithParseCache(cache)`
+- `sysml.WithDefaultParseCache()`
+- `sysml.WithParseCacheDir(dir)`
 - `low.WithParseTree(bool)`
 - `low.WithContext(ctx)`
+
+## Parse Cache API
+- `sysml.NewParseCache(opts...) (*ParseCache, error)`
+- `(*ParseCache).Dir() string`
+- `(*ParseCache).Clear() error`
+- `(*ParseCache).Close() error`
+- parse cache options:
+  - `sysml.WithCacheDir(dir)`
+  - `sysml.WithTemporaryCacheDir()`
+  - `sysml.WithCachePersistence(enabled)`
+
+## Optimized Interface Guidance
+- Prefer `sysml.ParseBytes` when the caller already has `[]byte`.
+- Prefer `sysml.ParseDir` plus `WithParseCache(...)` for repeated repository parses.
+- Use `Workers: 1` for deterministic streaming behavior.
+- Use `Workers: 0` for parallel throughput.
+- `ParseFile` and `ParseBytes` can reuse cache entries when given a stable filesystem source path.
+- `WithDefaultParseCache()` creates a disposable temp-backed cache handle for the parse option closure.
 
 ## Documentation Map
 - Quick start: `docs/QUICKSTART.md`
@@ -62,7 +90,7 @@ High-level parse returns `*sysml.ParseResult`:
 - Examples index: `docs/EXAMPLES.md`
 - Layer architecture: `docs/PARSER_LAYERS.md`
 - Implemented high-level datamodel: `docs/SYSML_DATA_MODEL.md`
-- Grammar docs: `docs/bnf/SysML-textual-bnf.kebnf`, `docs/bnf/KerML-textual-bnf.kebnf`
+- External grammar and release assets: `~/projects/SysML-v2-Release`
 
 ## Example Programs
 - `examples/basic/main.go`

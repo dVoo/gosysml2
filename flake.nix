@@ -3,7 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    opencode-flake.url = "github:anomalyco/opencode";  # Pin to matching version/commit from error
+    opencode-flake.url = "github:anomalyco/opencode/v1.2.19";
     claude-code.url = "github:sadjow/claude-code-nix";
     codex.url = "github:sadjow/codex-nix";
   };

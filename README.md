@@ -7,7 +7,7 @@ Go library for parsing SysML v2 and KerML textual models with two layers:
 - `low`: ANTLR-oriented low-level parser access
 - `sysml`: high-level typed model with reference resolution
 
-Current version: `v0.4.1` (from `VERSION`).
+Current version: `v0.5.0` (from `VERSION`).
 
 ## Quick Start
 
@@ -64,6 +64,28 @@ for r := range sysml.ParseDir(ctx, "./models", opts) {
 }
 ```
 
+For repeated repository parses, attach a cache handle:
+
+```go
+cache, err := sysml.NewParseCache(
+    sysml.WithCacheDir(".gosysml2-cache"),
+    sysml.WithCachePersistence(true),
+)
+if err != nil {
+    panic(err)
+}
+defer cache.Close()
+
+opts := sysml.DirOptions{
+    Workers: 0,
+    ParseOptions: []sysml.ParseOption{
+        sysml.WithParseCache(cache),
+        sysml.WithDiscardTree(),
+    },
+}
+_ = opts
+```
+
 Semantic role and type-name APIs (canonical for tooling):
 
 ```go
@@ -93,6 +115,10 @@ Reference docs:
 - [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)
 - [`llms.txt`](llms.txt) for AI/LLM agent context
 
+Additional release assets such as `validationdata/`, `libraries/`, and grammar
+BNF files can be found in the upstream SysML release repository:
+https://github.com/Systems-Modeling/SysML-v2-Release
+
 ## Repository Structure
 
 ```
@@ -101,10 +127,9 @@ Reference docs:
 ├── cmd/                    # Command-line tools
 ├── docs/                   # User and reference documentation
 ├── examples/               # Runnable examples
-├── libraries/              # SysML/KerML library models
 ├── low/                    # Low-level parser layer
-├── sysml/                  # High-level model layer
-└── validationdata/         # Validation corpus
+├── notes/                  # Local notes and scratch docs
+└── sysml/                  # High-level model layer
 ```
 
 ## Version Control (jj)

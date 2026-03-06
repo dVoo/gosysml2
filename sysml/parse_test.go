@@ -20,18 +20,18 @@ package TestPackage {
 	result := ParseString(input)
 
 	if !result.Success() {
-		t.Fatalf("parse failed: %s", result.Errors)
+		t.Fatalf("parse failed: %s", result.Err())
 	}
 
 	if result.Model == nil {
 		t.Fatal("model is nil")
 	}
 
-	if len(result.Model.Packages) != 1 {
-		t.Errorf("expected 1 package, got %d", len(result.Model.Packages))
+	if len(result.Model.Packages()) != 1 {
+		t.Errorf("expected 1 package, got %d", len(result.Model.Packages()))
 	}
 
-	pkg := result.Model.Packages[0]
+	pkg := result.Model.Packages()[0]
 	if pkg.Name() != "TestPackage" {
 		t.Errorf("expected package name 'TestPackage', got '%s'", pkg.Name())
 	}
@@ -52,11 +52,11 @@ package Broken {
 		t.Error("expected parse to fail")
 	}
 
-	if result.Errors == nil || !result.Errors.HasErrors() {
+	if result.ParseError == nil || !result.ParseError.HasErrors() {
 		t.Error("expected errors to be present")
 	}
 
-	t.Logf("Got expected errors: %s", result.Errors)
+	t.Logf("Got expected errors: %s", result.ParseError)
 }
 
 func TestValidate(t *testing.T) {
@@ -98,7 +98,7 @@ package P1 {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %s", result.Errors)
+		t.Fatalf("parse failed: %s", result.Err())
 	}
 
 	var visited []string
@@ -125,7 +125,7 @@ package TestPkg {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %s", result.Errors)
+		t.Fatalf("parse failed: %s", result.Err())
 	}
 
 	parts := FindByKind(result.Model, KindPart)
@@ -144,7 +144,7 @@ package P {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %s", result.Errors)
+		t.Fatalf("parse failed: %s", result.Err())
 	}
 
 	counter := NewCounter()
@@ -173,7 +173,7 @@ func TestEmptyInput(t *testing.T) {
 
 	// Empty input should parse successfully (empty namespace is valid)
 	if !result.Success() {
-		t.Logf("Parse result: %s", result.Errors)
+		t.Logf("Parse result: %s", result.Err())
 	}
 }
 
@@ -187,7 +187,7 @@ package VehicleReqs {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %s", result.Errors)
+		t.Fatalf("parse failed: %s", result.Err())
 	}
 
 	reqs := FindAll[*Requirement](result.Model)
@@ -229,7 +229,7 @@ package VehicleModel {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %s", result.Errors)
+		t.Fatalf("parse failed: %s", result.Err())
 	}
 
 	pkgs := FindAll[*Package](result.Model)
@@ -269,7 +269,7 @@ package HVAC {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %s", result.Errors)
+		t.Fatalf("parse failed: %s", result.Err())
 	}
 }
 
@@ -284,7 +284,7 @@ package VehicleModel {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %s", result.Errors)
+		t.Fatalf("parse failed: %s", result.Err())
 	}
 }
 
@@ -298,7 +298,7 @@ package P {
 `
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %s", result.Errors)
+		t.Fatalf("parse failed: %s", result.Err())
 	}
 
 	reqs := FindAll[*Requirement](result.Model)
@@ -324,7 +324,7 @@ package P {
 `
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %s", result.Errors)
+		t.Fatalf("parse failed: %s", result.Err())
 	}
 
 	reqs := FindAll[*Requirement](result.Model)
@@ -364,7 +364,7 @@ package P {
     }
 }
 `
-	normalized, _ := normalizeUnsupportedRequirementSyntax(input)
+	normalized, _, _ := normalizeUnsupportedRequirementSyntax(input)
 
 	contains := func(want string) {
 		t.Helper()
@@ -391,7 +391,7 @@ package P {
     }
 }
 `
-	normalized, _ := normalizeUnsupportedRequirementSyntax(input)
+	normalized, _, _ := normalizeUnsupportedRequirementSyntax(input)
 
 	contains := func(want string) {
 		t.Helper()
@@ -422,7 +422,7 @@ func TestCompatibilityGapFilesParse(t *testing.T) {
 		}
 		result := ParseFile(path)
 		if !result.Success() {
-			t.Fatalf("expected parse success for %s, got errors: %v", rel, result.Errors)
+			t.Fatalf("expected parse success for %s, got errors: %v", rel, result.Err())
 		}
 	}
 }
@@ -438,7 +438,7 @@ package P {
 `
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %s", result.Errors)
+		t.Fatalf("parse failed: %s", result.Err())
 	}
 
 	var actionDef *Item
@@ -487,7 +487,7 @@ package VehiclePkg {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %s", result.Errors)
+		t.Fatalf("parse failed: %s", result.Err())
 	}
 
 	parts := FindAll[*Part](result.Model)
@@ -530,7 +530,7 @@ package VehiclePkg {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %s", result.Errors)
+		t.Fatalf("parse failed: %s", result.Err())
 	}
 
 	var car *Part
@@ -584,7 +584,7 @@ package VehiclePkg {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %s", result.Errors)
+		t.Fatalf("parse failed: %s", result.Err())
 	}
 
 	var massAttr *Attribute
@@ -617,7 +617,7 @@ package VehiclePkg {
 
 	result := ParseString(input)
 	if !result.Success() {
-		t.Fatalf("parse failed: %s", result.Errors)
+		t.Fatalf("parse failed: %s", result.Err())
 	}
 
 	attrs := FindAll[*Attribute](result.Model)
@@ -648,9 +648,9 @@ package VehiclePkg {
 // TestNestedPartsParentChildRelationships verifies that nested parts
 // create proper parent-child relationships via Children()
 func TestNestedPartsParentChildRelationships(t *testing.T) {
-	result := ParseFile("../validationdata/01-Parts Tree/1a-Parts Tree.sysml")
+	result := ParseFile(externalTestPath(t, "../validationdata/01-Parts Tree/1a-Parts Tree.sysml"))
 	if !result.Success() {
-		t.Fatalf("Failed to parse file: %v", result.Errors)
+		t.Fatalf("Failed to parse file: %v", result.Err())
 	}
 
 	model := result.Model
@@ -738,9 +738,9 @@ func TestNestedPartsParentChildRelationships(t *testing.T) {
 // TestPartDefinitionVsUsageDistinction verifies that part definitions
 // and usages are properly distinguished via IsDefinition field
 func TestPartDefinitionVsUsageDistinction(t *testing.T) {
-	result := ParseFile("../validationdata/01-Parts Tree/1a-Parts Tree.sysml")
+	result := ParseFile(externalTestPath(t, "../validationdata/01-Parts Tree/1a-Parts Tree.sysml"))
 	if !result.Success() {
-		t.Fatalf("Failed to parse file: %v", result.Errors)
+		t.Fatalf("Failed to parse file: %v", result.Err())
 	}
 
 	model := result.Model
@@ -832,7 +832,7 @@ package Test {
 `
 	result := ParseString(simpleInput)
 	if !result.Success() {
-		t.Fatalf("Failed to parse simple input: %v", result.Errors)
+		t.Fatalf("Failed to parse simple input: %v", result.Err())
 	}
 
 	model := result.Model
@@ -844,9 +844,9 @@ package Test {
 	}
 
 	// Now test with the real file
-	result = ParseFile("../validationdata/01-Parts Tree/1a-Parts Tree.sysml")
+	result = ParseFile(externalTestPath(t, "../validationdata/01-Parts Tree/1a-Parts Tree.sysml"))
 	if !result.Success() {
-		t.Fatalf("Failed to parse file: %v", result.Errors)
+		t.Fatalf("Failed to parse file: %v", result.Err())
 	}
 
 	model = result.Model
@@ -902,9 +902,9 @@ package Test {
 // TestAttributeExtraction verifies that attributes are properly
 // extracted and accessible via Part.Attributes()
 func TestAttributeExtraction(t *testing.T) {
-	result := ParseFile("../validationdata/01-Parts Tree/1a-Parts Tree.sysml")
+	result := ParseFile(externalTestPath(t, "../validationdata/01-Parts Tree/1a-Parts Tree.sysml"))
 	if !result.Success() {
-		t.Fatalf("Failed to parse file: %v", result.Errors)
+		t.Fatalf("Failed to parse file: %v", result.Err())
 	}
 
 	model := result.Model
@@ -1010,9 +1010,9 @@ func TestAttributeExtraction(t *testing.T) {
 
 // TestParentRelationships verifies parent references are set correctly
 func TestParentRelationships(t *testing.T) {
-	result := ParseFile("../validationdata/01-Parts Tree/1a-Parts Tree.sysml")
+	result := ParseFile(externalTestPath(t, "../validationdata/01-Parts Tree/1a-Parts Tree.sysml"))
 	if !result.Success() {
-		t.Fatalf("Failed to parse file: %v", result.Errors)
+		t.Fatalf("Failed to parse file: %v", result.Err())
 	}
 
 	model := result.Model
@@ -1063,5 +1063,512 @@ func TestParentRelationships(t *testing.T) {
 		}
 	} else {
 		t.Errorf("frontAxleAssembly's parent should be a Part, got %T", faParent)
+	}
+}
+
+// TestItemUsageNesting verifies that item usages nested inside part defs
+// are parented to the part, not the package (regression for Bug A).
+func TestItemUsageNesting(t *testing.T) {
+	input := `
+package TestPkg {
+    part def Vehicle {
+        item payload : Cargo;
+        item nested1 {
+            attribute weight : Real;
+        }
+    }
+    item def Cargo;
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Err())
+	}
+
+	pkg := result.Model.FindPackage("TestPkg")
+	if pkg == nil {
+		t.Fatal("package TestPkg not found")
+	}
+
+	// Vehicle should be found
+	var vehicle *Part
+	for _, p := range pkg.Parts() {
+		if p.Name() == "Vehicle" {
+			vehicle = p
+			break
+		}
+	}
+	if vehicle == nil {
+		t.Fatal("Vehicle part def not found")
+	}
+
+	// Items should be children of Vehicle, not the package
+	found := 0
+	for _, child := range vehicle.Children() {
+		if item, ok := child.(*Item); ok {
+			found++
+			if item.Parent() != vehicle {
+				t.Errorf("item %q parent should be Vehicle, got %v", item.Name(), item.Parent())
+			}
+		}
+	}
+	if found < 2 {
+		t.Errorf("expected at least 2 items inside Vehicle, found %d", found)
+	}
+
+	// Items should NOT be direct children of the package
+	if len(pkg.Items()) > 1 {
+		names := make([]string, 0)
+		for _, item := range pkg.Items() {
+			names = append(names, item.Name())
+		}
+		t.Errorf("package should only have Cargo item def, got: %v", names)
+	}
+}
+
+// TestItemDefinitionNesting verifies item defs support nested children.
+func TestItemDefinitionNesting(t *testing.T) {
+	input := `
+package TestPkg {
+    item def Container {
+        attribute capacity : Integer;
+        item contents : Cargo;
+    }
+    item def Cargo;
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Err())
+	}
+
+	pkg := result.Model.FindPackage("TestPkg")
+	if pkg == nil {
+		t.Fatal("package TestPkg not found")
+	}
+
+	// Find Container item def
+	var container *Item
+	for _, item := range pkg.Items() {
+		if item.Name() == "Container" {
+			container = item
+			break
+		}
+	}
+	if container == nil {
+		t.Fatal("Container item def not found")
+	}
+
+	// Container should have children (attribute + item)
+	if len(container.Children()) < 2 {
+		t.Errorf("Container should have at least 2 children, got %d", len(container.Children()))
+	}
+	if len(container.Attributes()) < 1 {
+		t.Errorf("Container should have at least 1 attribute, got %d", len(container.Attributes()))
+	}
+	if len(container.Items()) < 1 {
+		t.Errorf("Container should have at least 1 nested item, got %d", len(container.Items()))
+	}
+}
+
+// TestEnumerationNesting verifies enum values are children of the enum, not the package.
+func TestEnumerationNesting(t *testing.T) {
+	input := `
+package TestPkg {
+    enum def Color {
+        enum Red;
+        enum Green;
+        enum Blue;
+    }
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Err())
+	}
+
+	pkg := result.Model.FindPackage("TestPkg")
+	if pkg == nil {
+		t.Fatal("package TestPkg not found")
+	}
+
+	if len(pkg.Enumerations()) != 1 {
+		t.Fatalf("expected 1 enumeration, got %d", len(pkg.Enumerations()))
+	}
+
+	colorEnum := pkg.Enumerations()[0]
+	if colorEnum.Name() != "Color" {
+		t.Errorf("expected enum name 'Color', got '%s'", colorEnum.Name())
+	}
+
+	// Values should be children of the enum
+	if len(colorEnum.Values()) != 3 {
+		t.Errorf("expected 3 enum values, got %d", len(colorEnum.Values()))
+	}
+	// Check parent of each value
+	for _, v := range colorEnum.Values() {
+		if v.Parent() != colorEnum {
+			t.Errorf("enum value %q parent should be Color enum, got %v", v.Name(), v.Parent())
+		}
+	}
+}
+
+// TestNestedStatesAndActions verifies that states and actions support nesting.
+func TestNestedStatesAndActions(t *testing.T) {
+	input := `
+package TestPkg {
+    state def OperatingStates {
+        state idle;
+        state running {
+            state warmup;
+        }
+    }
+    action def ProcessFlow {
+        action step1;
+        action step2;
+    }
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Err())
+	}
+
+	pkg := result.Model.FindPackage("TestPkg")
+	if pkg == nil {
+		t.Fatal("package TestPkg not found")
+	}
+
+	// Find OperatingStates
+	var opStates *State
+	for _, s := range pkg.States() {
+		if s.Name() == "OperatingStates" {
+			opStates = s
+			break
+		}
+	}
+	if opStates == nil {
+		t.Fatal("OperatingStates not found")
+	}
+
+	// Should have 2 nested states (idle, running)
+	if len(opStates.States()) != 2 {
+		t.Errorf("expected 2 nested states in OperatingStates, got %d", len(opStates.States()))
+	}
+
+	// running should have a nested warmup state
+	var running *State
+	for _, s := range opStates.States() {
+		if s.Name() == "running" {
+			running = s
+			break
+		}
+	}
+	if running == nil {
+		t.Fatal("running state not found")
+	}
+	if len(running.States()) != 1 {
+		t.Errorf("expected 1 nested state in running, got %d", len(running.States()))
+	}
+
+	// Find ProcessFlow
+	var processFlow *Action
+	for _, a := range pkg.Actions() {
+		if a.Name() == "ProcessFlow" {
+			processFlow = a
+			break
+		}
+	}
+	if processFlow == nil {
+		t.Fatal("ProcessFlow not found")
+	}
+
+	// Should have 2 nested actions
+	if len(processFlow.Actions()) != 2 {
+		t.Errorf("expected 2 nested actions in ProcessFlow, got %d", len(processFlow.Actions()))
+	}
+}
+
+// TestNestedConstraints verifies constraint nesting.
+func TestNestedConstraints(t *testing.T) {
+	input := `
+package TestPkg {
+    constraint def TempConstraint {
+        constraint maxTemp;
+    }
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Err())
+	}
+
+	pkg := result.Model.FindPackage("TestPkg")
+	if pkg == nil {
+		t.Fatal("package TestPkg not found")
+	}
+
+	if len(pkg.Constraints()) != 1 {
+		t.Fatalf("expected 1 constraint, got %d", len(pkg.Constraints()))
+	}
+
+	tempConstraint := pkg.Constraints()[0]
+	if len(tempConstraint.Constraints()) != 1 {
+		t.Errorf("expected 1 nested constraint, got %d", len(tempConstraint.Constraints()))
+	}
+}
+
+// TestInterfaceWithPorts verifies interface bodies can contain ports.
+func TestInterfaceWithPorts(t *testing.T) {
+	input := `
+package TestPkg {
+    interface def DataLink {
+        end port sender;
+        end port receiver;
+    }
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Err())
+	}
+
+	pkg := result.Model.FindPackage("TestPkg")
+	if pkg == nil {
+		t.Fatal("package TestPkg not found")
+	}
+
+	if len(pkg.Interfaces()) != 1 {
+		t.Fatalf("expected 1 interface, got %d", len(pkg.Interfaces()))
+	}
+
+	dataLink := pkg.Interfaces()[0]
+	if len(dataLink.Ports()) < 2 {
+		t.Errorf("expected at least 2 ports in DataLink, got %d", len(dataLink.Ports()))
+	}
+}
+
+// TestPartTypedChildTracking verifies Part tracks items, states, actions,
+// connections, constraints, requirements, enumerations, and flows via typed accessors.
+func TestPartTypedChildTracking(t *testing.T) {
+	input := `
+package TestPkg {
+    part def Vehicle {
+        attribute mass : Real;
+        part engine : Engine;
+        port fuelPort;
+        item cargo;
+        connection engineLink;
+        state operatingState;
+        action startEngine;
+        constraint safeSpeed;
+        requirement safetyReq;
+        enum def Color { enum red; }
+        flow fuelFlow;
+    }
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Err())
+	}
+
+	pkg := result.Model.FindPackage("TestPkg")
+	if pkg == nil {
+		t.Fatal("package TestPkg not found")
+	}
+	if len(pkg.Parts()) != 1 {
+		t.Fatalf("expected 1 part, got %d", len(pkg.Parts()))
+	}
+
+	vehicle := pkg.Parts()[0]
+
+	tests := []struct {
+		name  string
+		count int
+	}{
+		{"Attributes", len(vehicle.Attributes())},
+		{"Parts", len(vehicle.Parts())},
+		{"Ports", len(vehicle.Ports())},
+		{"Items", len(vehicle.Items())},
+		{"Connections", len(vehicle.Connections())},
+		{"States", len(vehicle.States())},
+		{"Actions", len(vehicle.Actions())},
+		{"Constraints", len(vehicle.Constraints())},
+		{"Requirements", len(vehicle.Requirements())},
+		{"Enumerations", len(vehicle.Enumerations())},
+		{"Flows", len(vehicle.Flows())},
+	}
+	for _, tt := range tests {
+		if tt.count < 1 {
+			t.Errorf("Part.%s(): expected >= 1, got %d", tt.name, tt.count)
+		}
+	}
+}
+
+// TestActionTypedChildTracking verifies Action tracks control nodes,
+// attributes, parts, items, constraints, and flows.
+func TestActionTypedChildTracking(t *testing.T) {
+	input := `
+package TestPkg {
+    action def ProcessOrder {
+        action validate;
+        action fulfill;
+        fork node;
+    }
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Err())
+	}
+
+	pkg := result.Model.FindPackage("TestPkg")
+	if pkg == nil {
+		t.Fatal("package TestPkg not found")
+	}
+	if len(pkg.Actions()) != 1 {
+		t.Fatalf("expected 1 action, got %d", len(pkg.Actions()))
+	}
+
+	processOrder := pkg.Actions()[0]
+	if len(processOrder.Actions()) < 2 {
+		t.Errorf("expected >= 2 nested actions, got %d", len(processOrder.Actions()))
+	}
+	if len(processOrder.ControlNodes()) < 1 {
+		t.Errorf("expected >= 1 control node, got %d", len(processOrder.ControlNodes()))
+	}
+}
+
+// TestControlNodeInsideAction verifies control nodes are parented to action, not package.
+func TestControlNodeInsideAction(t *testing.T) {
+	input := `
+package TestPkg {
+    action def Workflow {
+        fork node;
+        join node;
+        merge node;
+        decide node;
+    }
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Err())
+	}
+
+	pkg := result.Model.FindPackage("TestPkg")
+	if pkg == nil {
+		t.Fatal("package TestPkg not found")
+	}
+
+	workflow := pkg.Actions()[0]
+	if len(workflow.ControlNodes()) != 4 {
+		t.Errorf("expected 4 control nodes inside action, got %d", len(workflow.ControlNodes()))
+	}
+
+	// Control nodes should NOT appear as direct package children
+	for _, child := range pkg.Children() {
+		if child.Kind() == KindControlNode {
+			t.Errorf("control node %q should be inside action, not at package level", child.Name())
+		}
+	}
+}
+
+// TestCommentInsideElement verifies comments inside definitions are parented correctly.
+func TestCommentInsideElement(t *testing.T) {
+	input := `
+package TestPkg {
+    part def Vehicle {
+        comment /* A vehicle part */
+    }
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Err())
+	}
+
+	pkg := result.Model.FindPackage("TestPkg")
+	if pkg == nil {
+		t.Fatal("package TestPkg not found")
+	}
+
+	vehicle := pkg.Parts()[0]
+	hasComment := false
+	for _, child := range vehicle.Children() {
+		if child.Kind() == KindComment {
+			hasComment = true
+			break
+		}
+	}
+	if !hasComment {
+		t.Error("expected comment as child of Vehicle part def, not found")
+	}
+}
+
+// TestPortAttributeTracking verifies ports track nested attributes.
+func TestPortAttributeTracking(t *testing.T) {
+	input := `
+package TestPkg {
+    port def DataPort {
+        attribute dataRate;
+    }
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Err())
+	}
+
+	pkg := result.Model.FindPackage("TestPkg")
+	if pkg == nil {
+		t.Fatal("package TestPkg not found")
+	}
+
+	// Port definition should be found
+	ports := pkg.Children()
+	var dataPort *Port
+	for _, child := range ports {
+		if p, ok := child.(*Port); ok && p.Name() == "DataPort" {
+			dataPort = p
+			break
+		}
+	}
+	if dataPort == nil {
+		t.Fatal("DataPort not found")
+	}
+
+	if len(dataPort.Attributes()) != 1 {
+		t.Errorf("expected 1 attribute in DataPort, got %d", len(dataPort.Attributes()))
+	}
+}
+
+// TestStateTypedChildTracking verifies State tracks actions, attributes, and constraints.
+func TestStateTypedChildTracking(t *testing.T) {
+	input := `
+package TestPkg {
+    state def OperatingMode {
+        state idle;
+        state running;
+    }
+}
+`
+	result := ParseString(input)
+	if !result.Success() {
+		t.Fatalf("parse failed: %s", result.Err())
+	}
+
+	pkg := result.Model.FindPackage("TestPkg")
+	if pkg == nil {
+		t.Fatal("package TestPkg not found")
+	}
+	if len(pkg.States()) != 1 {
+		t.Fatalf("expected 1 state, got %d", len(pkg.States()))
+	}
+
+	opMode := pkg.States()[0]
+	if len(opMode.States()) != 2 {
+		t.Errorf("expected 2 nested states, got %d", len(opMode.States()))
 	}
 }

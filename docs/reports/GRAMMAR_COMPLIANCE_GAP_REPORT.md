@@ -2,11 +2,14 @@
 
 Date: 2026-02-18
 
+Note: the referenced BNF/KEBNF sources are maintained in the upstream SysML
+release repository: https://github.com/Systems-Modeling/SysML-v2-Release
+
 ## Scope checked
 
 - Grammar sources:
-  - `docs/bnf/SysML-textual-bnf.kebnf`
-  - `docs/bnf/KerML-textual-bnf.kebnf`
+  - SysML textual KEBNF from the SysML-v2-Release project
+  - KerML textual KEBNF from the SysML-v2-Release project
 - Parser entry path:
   - `sysml/parse.go:120` (`low.Parse`)
   - `low/parser.go:89` (`EntryRuleRootNamespace`)

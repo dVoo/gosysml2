@@ -25,9 +25,6 @@ func elementAt(model *Model, line, column int, includeUnnamed bool) Element {
 		if elem == nil {
 			continue
 		}
-		if !includeUnnamed && elem.Name() == "" {
-			continue
-		}
 		loc := elem.Location()
 		if !loc.Contains(line, column) {
 			continue
@@ -40,6 +37,9 @@ func elementAt(model *Model, line, column int, includeUnnamed bool) Element {
 		}
 	}
 
+	if best != nil && !includeUnnamed && best.Name() == "" {
+		return nil
+	}
 	return best
 }
 
