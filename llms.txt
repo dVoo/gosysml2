@@ -7,7 +7,7 @@ It exposes:
 - high-level typed semantic model in `sysml`
 
 ## Current Version
-`v0.5.0` (source of truth: `VERSION`).
+`v0.5.1` (source of truth: `VERSION`).
 
 ## Canonical Entry Points
 - High-level parsing:
